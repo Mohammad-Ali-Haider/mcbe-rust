@@ -1,0 +1,506 @@
+{
+  "version": 1,
+  "blocks": [
+    {
+      "id": "meadow",
+      "label": "Grass Block",
+      "color": [
+        114,
+        165,
+        85
+      ],
+      "side_color": [
+        151,
+        103,
+        75
+      ],
+      "pattern": "meadow",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "grass"
+      }
+    },
+    {
+      "id": "earth",
+      "label": "Dirt",
+      "color": [
+        151,
+        103,
+        75
+      ],
+      "pattern": "grain",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "dirt"
+      }
+    },
+    {
+      "id": "slate",
+      "label": "Stone",
+      "color": [
+        136,
+        154,
+        165
+      ],
+      "pattern": "grain",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "stone"
+      }
+    },
+    {
+      "id": "clay",
+      "label": "Bricks",
+      "color": [
+        201,
+        119,
+        91
+      ],
+      "pattern": "bricks",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "brick_block"
+      }
+    },
+    {
+      "id": "ivory",
+      "label": "Quartz Block",
+      "color": [
+        231,
+        220,
+        185
+      ],
+      "pattern": "grain",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "quartz_block"
+      }
+    },
+    {
+      "id": "moss",
+      "label": "Mossy Cobblestone",
+      "color": [
+        68,
+        116,
+        76
+      ],
+      "pattern": "grain",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "mossy_cobblestone"
+      }
+    },
+    {
+      "id": "basalt",
+      "label": "Deepslate",
+      "color": [
+        65,
+        79,
+        93
+      ],
+      "pattern": "grain",
+      "minecraft": {
+        "pack": "vanilla_1.17.0",
+        "block": "deepslate"
+      }
+    },
+    {
+      "id": "ember",
+      "label": "Block of Redstone",
+      "color": [
+        221,
+        116,
+        54
+      ],
+      "pattern": "grain",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "redstone_block"
+      }
+    },
+    {
+      "id": "azure",
+      "label": "Block of Diamond",
+      "color": [
+        70,
+        161,
+        184
+      ],
+      "pattern": "checker",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "diamond_block"
+      }
+    },
+    {
+      "id": "cobalt",
+      "label": "Block of Lapis Lazuli",
+      "color": [
+        72,
+        96,
+        168
+      ],
+      "pattern": "bricks",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "lapis_block"
+      }
+    },
+    {
+      "id": "plum",
+      "label": "Purpur Block",
+      "color": [
+        143,
+        91,
+        156
+      ],
+      "pattern": "grain",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "purpur_block"
+      }
+    },
+    {
+      "id": "sunstone",
+      "label": "Block of Gold",
+      "color": [
+        232,
+        181,
+        73
+      ],
+      "pattern": "checker",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "gold_block"
+      }
+    },
+    {
+      "id": "oak_planks",
+      "label": "Oak Planks",
+      "color": [
+        160,
+        128,
+        76
+      ],
+      "pattern": "bricks",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "planks"
+      }
+    },
+    {
+      "id": "sand",
+      "label": "Sand",
+      "color": [
+        220,
+        210,
+        164
+      ],
+      "pattern": "grain",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "sand"
+      }
+    },
+    {
+      "id": "cobblestone",
+      "label": "Cobblestone",
+      "color": [
+        127,
+        127,
+        127
+      ],
+      "pattern": "grain",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "cobblestone"
+      }
+    },
+    {
+      "id": "oak_log",
+      "label": "Oak Log",
+      "color": [
+        120,
+        90,
+        53
+      ],
+      "pattern": "grain",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "log"
+      }
+    },
+    {
+      "id": "crafting_table",
+      "label": "Crafting Table",
+      "color": [
+        155,
+        113,
+        61
+      ],
+      "pattern": "bricks",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "crafting_table"
+      }
+    },
+    {
+      "id": "sandstone",
+      "label": "Sandstone",
+      "color": [
+        220,
+        210,
+        164
+      ],
+      "pattern": "grain",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "sandstone"
+      }
+    },
+    {
+      "id": "stone_bricks",
+      "label": "Stone Bricks",
+      "color": [
+        127,
+        127,
+        127
+      ],
+      "pattern": "bricks",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "stonebrick"
+      }
+    },
+    {
+      "id": "oak_slab",
+      "label": "Oak Slab",
+      "color": [
+        160,
+        128,
+        76
+      ],
+      "pattern": "bricks",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "planks"
+      },
+      "geometry": {
+        "boxes": [
+          [
+            0,
+            0,
+            0,
+            1,
+            0.5,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "id": "stone_slab",
+      "label": "Stone Slab",
+      "color": [
+        136,
+        154,
+        165
+      ],
+      "pattern": "grain",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "stone"
+      },
+      "geometry": {
+        "boxes": [
+          [
+            0,
+            0,
+            0,
+            1,
+            0.5,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "id": "oak_stairs_north",
+      "label": "Oak Stairs North",
+      "color": [
+        160,
+        128,
+        76
+      ],
+      "pattern": "bricks",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "planks"
+      },
+      "geometry": {
+        "boxes": [
+          [
+            0,
+            0,
+            0,
+            1,
+            0.5,
+            1
+          ],
+          [
+            0,
+            0.5,
+            0.5,
+            1,
+            1,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "id": "oak_stairs_east",
+      "label": "Oak Stairs East",
+      "color": [
+        160,
+        128,
+        76
+      ],
+      "pattern": "bricks",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "planks"
+      },
+      "geometry": {
+        "boxes": [
+          [
+            0,
+            0,
+            0,
+            1,
+            0.5,
+            1
+          ],
+          [
+            0,
+            0.5,
+            0,
+            0.5,
+            1,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "id": "oak_stairs_south",
+      "label": "Oak Stairs South",
+      "color": [
+        160,
+        128,
+        76
+      ],
+      "pattern": "bricks",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "planks"
+      },
+      "geometry": {
+        "boxes": [
+          [
+            0,
+            0,
+            0,
+            1,
+            0.5,
+            1
+          ],
+          [
+            0,
+            0.5,
+            0,
+            1,
+            1,
+            0.5
+          ]
+        ]
+      }
+    },
+    {
+      "id": "oak_stairs_west",
+      "label": "Oak Stairs West",
+      "color": [
+        160,
+        128,
+        76
+      ],
+      "pattern": "bricks",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "planks"
+      },
+      "geometry": {
+        "boxes": [
+          [
+            0,
+            0,
+            0,
+            1,
+            0.5,
+            1
+          ],
+          [
+            0.5,
+            0.5,
+            0,
+            1,
+            1,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "id": "oak_window",
+      "label": "Oak Window Frame",
+      "color": [
+        160,
+        128,
+        76
+      ],
+      "pattern": "bricks",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "planks"
+      },
+      "geometry": {
+        "boxes": [
+          [
+            0,
+            0,
+            0,
+            0.2,
+            1,
+            1
+          ],
+          [
+            0.8,
+            0,
+            0,
+            1,
+            1,
+            1
+          ],
+          [
+            0.2,
+            0.8,
+            0,
+            0.8,
+            1,
+            1
+          ]
+        ]
+      }
+    }
+  ]
+}

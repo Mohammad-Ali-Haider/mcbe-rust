@@ -1,0 +1,23 @@
+[package]
+name = "mcbe-client"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "mcbe-client"
+path = "src/main.rs"
+
+[dependencies]
+mcbe-core = { path = "../mcbe-core" }
+serde.workspace = true
+serde_json.workspace = true
+flate2.workspace = true
+sha2.workspace = true
+winit = "=0.30.13"
+raw-window-handle = "0.6"
+wgpu = {version="=25.0.2",default-features=false,features=["dx12","wgsl"]}
+pollster = "=0.4.0"
+glam = "=0.30.10"
+bytemuck = {version="=1.25.0",features=["derive"]}
+windows-sys = { version = "=0.61.2", features = ["Win32_Graphics_Gdi", "Win32_Foundation", "Win32_Storage_FileSystem"] }

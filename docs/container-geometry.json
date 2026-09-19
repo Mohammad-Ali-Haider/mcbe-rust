@@ -1,0 +1,1930 @@
+{
+  "reference_sha256": "19c88569af2e4b7d984e999055a31cbcb0799dacf8bbbf7371eda42f5772a443",
+  "rows": [
+    {
+      "id": "minecraft:barrel",
+      "states": {
+        "facing_direction": 0,
+        "open_bit": false
+      },
+      "boxes": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "passable": false
+    },
+    {
+      "id": "minecraft:dispenser",
+      "states": {
+        "facing_direction": 0,
+        "triggered_bit": false
+      },
+      "boxes": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "passable": false
+    },
+    {
+      "id": "minecraft:hopper",
+      "states": {
+        "facing_direction": 0,
+        "toggle_bit": false
+      },
+      "boxes": [
+        [
+          0,
+          0.625,
+          0,
+          1,
+          1,
+          1
+        ],
+        [
+          0.25,
+          0.25,
+          0.25,
+          0.75,
+          0.625,
+          0.75
+        ],
+        [
+          0.375,
+          0,
+          0.375,
+          0.625,
+          0.25,
+          0.625
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0.625,
+          0,
+          0.125,
+          1,
+          1
+        ],
+        [
+          0.875,
+          0.625,
+          0,
+          1,
+          1,
+          1
+        ],
+        [
+          0.125,
+          0.625,
+          0,
+          0.875,
+          1,
+          0.125
+        ],
+        [
+          0.125,
+          0.625,
+          0.875,
+          0.875,
+          1,
+          1
+        ],
+        [
+          0.125,
+          0.625,
+          0.125,
+          0.875,
+          0.6875,
+          0.875
+        ],
+        [
+          0.25,
+          0.25,
+          0.25,
+          0.75,
+          0.625,
+          0.75
+        ],
+        [
+          0.375,
+          0,
+          0.375,
+          0.625,
+          0.25,
+          0.625
+        ]
+      ],
+      "passable": false
+    },
+    {
+      "id": "minecraft:chest",
+      "states": {
+        "facing_direction": 2,
+        "minecraft:cardinal_direction": "north"
+      },
+      "boxes": [
+        [
+          0.025,
+          0,
+          0.025,
+          0.975,
+          0.95,
+          0.975
+        ]
+      ],
+      "collision": [
+        [
+          0.025,
+          0,
+          0.025,
+          0.975,
+          0.95,
+          0.975
+        ]
+      ],
+      "passable": false
+    },
+    {
+      "id": "minecraft:barrel",
+      "states": {
+        "facing_direction": 0,
+        "open_bit": true
+      },
+      "boxes": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "fixed"
+    },
+    {
+      "id": "minecraft:barrel",
+      "states": {
+        "facing_direction": 1,
+        "open_bit": false
+      },
+      "boxes": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "fixed"
+    },
+    {
+      "id": "minecraft:barrel",
+      "states": {
+        "facing_direction": 1,
+        "open_bit": true
+      },
+      "boxes": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "fixed"
+    },
+    {
+      "id": "minecraft:barrel",
+      "states": {
+        "facing_direction": 2,
+        "open_bit": false
+      },
+      "boxes": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "fixed"
+    },
+    {
+      "id": "minecraft:barrel",
+      "states": {
+        "facing_direction": 2,
+        "open_bit": true
+      },
+      "boxes": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "fixed"
+    },
+    {
+      "id": "minecraft:barrel",
+      "states": {
+        "facing_direction": 3,
+        "open_bit": false
+      },
+      "boxes": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "fixed"
+    },
+    {
+      "id": "minecraft:barrel",
+      "states": {
+        "facing_direction": 3,
+        "open_bit": true
+      },
+      "boxes": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "fixed"
+    },
+    {
+      "id": "minecraft:barrel",
+      "states": {
+        "facing_direction": 4,
+        "open_bit": false
+      },
+      "boxes": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "fixed"
+    },
+    {
+      "id": "minecraft:barrel",
+      "states": {
+        "facing_direction": 4,
+        "open_bit": true
+      },
+      "boxes": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "fixed"
+    },
+    {
+      "id": "minecraft:barrel",
+      "states": {
+        "facing_direction": 5,
+        "open_bit": false
+      },
+      "boxes": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "fixed"
+    },
+    {
+      "id": "minecraft:barrel",
+      "states": {
+        "facing_direction": 5,
+        "open_bit": true
+      },
+      "boxes": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "fixed"
+    },
+    {
+      "id": "minecraft:dispenser",
+      "states": {
+        "facing_direction": 0,
+        "triggered_bit": true
+      },
+      "boxes": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "fixed"
+    },
+    {
+      "id": "minecraft:dispenser",
+      "states": {
+        "facing_direction": 1,
+        "triggered_bit": false
+      },
+      "boxes": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "fixed"
+    },
+    {
+      "id": "minecraft:dispenser",
+      "states": {
+        "facing_direction": 1,
+        "triggered_bit": true
+      },
+      "boxes": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "fixed"
+    },
+    {
+      "id": "minecraft:dispenser",
+      "states": {
+        "facing_direction": 2,
+        "triggered_bit": false
+      },
+      "boxes": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "fixed"
+    },
+    {
+      "id": "minecraft:dispenser",
+      "states": {
+        "facing_direction": 2,
+        "triggered_bit": true
+      },
+      "boxes": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "fixed"
+    },
+    {
+      "id": "minecraft:dispenser",
+      "states": {
+        "facing_direction": 3,
+        "triggered_bit": false
+      },
+      "boxes": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "fixed"
+    },
+    {
+      "id": "minecraft:dispenser",
+      "states": {
+        "facing_direction": 3,
+        "triggered_bit": true
+      },
+      "boxes": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "fixed"
+    },
+    {
+      "id": "minecraft:dispenser",
+      "states": {
+        "facing_direction": 4,
+        "triggered_bit": false
+      },
+      "boxes": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "fixed"
+    },
+    {
+      "id": "minecraft:dispenser",
+      "states": {
+        "facing_direction": 4,
+        "triggered_bit": true
+      },
+      "boxes": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "fixed"
+    },
+    {
+      "id": "minecraft:dispenser",
+      "states": {
+        "facing_direction": 5,
+        "triggered_bit": false
+      },
+      "boxes": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "fixed"
+    },
+    {
+      "id": "minecraft:dispenser",
+      "states": {
+        "facing_direction": 5,
+        "triggered_bit": true
+      },
+      "boxes": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "fixed"
+    },
+    {
+      "id": "minecraft:hopper",
+      "states": {
+        "toggle_bit": true,
+        "facing_direction": 0
+      },
+      "boxes": [
+        [
+          0,
+          0.625,
+          0,
+          1,
+          1,
+          1
+        ],
+        [
+          0.25,
+          0.25,
+          0.25,
+          0.75,
+          0.625,
+          0.75
+        ],
+        [
+          0.375,
+          0,
+          0.375,
+          0.625,
+          0.25,
+          0.625
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0.625,
+          0,
+          0.125,
+          1,
+          1
+        ],
+        [
+          0.875,
+          0.625,
+          0,
+          1,
+          1,
+          1
+        ],
+        [
+          0.125,
+          0.625,
+          0,
+          0.875,
+          1,
+          0.125
+        ],
+        [
+          0.125,
+          0.625,
+          0.875,
+          0.875,
+          1,
+          1
+        ],
+        [
+          0.125,
+          0.625,
+          0.125,
+          0.875,
+          0.6875,
+          0.875
+        ],
+        [
+          0.25,
+          0.25,
+          0.25,
+          0.75,
+          0.625,
+          0.75
+        ],
+        [
+          0.375,
+          0,
+          0.375,
+          0.625,
+          0.25,
+          0.625
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "down"
+    },
+    {
+      "id": "minecraft:hopper",
+      "states": {
+        "toggle_bit": false,
+        "facing_direction": 1
+      },
+      "boxes": [
+        [
+          0,
+          0.625,
+          0,
+          1,
+          1,
+          1
+        ],
+        [
+          0.25,
+          0.25,
+          0.25,
+          0.75,
+          0.625,
+          0.75
+        ],
+        [
+          0.375,
+          0,
+          0.375,
+          0.625,
+          0.25,
+          0.625
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0.625,
+          0,
+          0.125,
+          1,
+          1
+        ],
+        [
+          0.875,
+          0.625,
+          0,
+          1,
+          1,
+          1
+        ],
+        [
+          0.125,
+          0.625,
+          0,
+          0.875,
+          1,
+          0.125
+        ],
+        [
+          0.125,
+          0.625,
+          0.875,
+          0.875,
+          1,
+          1
+        ],
+        [
+          0.125,
+          0.625,
+          0.125,
+          0.875,
+          0.6875,
+          0.875
+        ],
+        [
+          0.25,
+          0.25,
+          0.25,
+          0.75,
+          0.625,
+          0.75
+        ],
+        [
+          0.375,
+          0,
+          0.375,
+          0.625,
+          0.25,
+          0.625
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "down"
+    },
+    {
+      "id": "minecraft:hopper",
+      "states": {
+        "toggle_bit": true,
+        "facing_direction": 1
+      },
+      "boxes": [
+        [
+          0,
+          0.625,
+          0,
+          1,
+          1,
+          1
+        ],
+        [
+          0.25,
+          0.25,
+          0.25,
+          0.75,
+          0.625,
+          0.75
+        ],
+        [
+          0.375,
+          0,
+          0.375,
+          0.625,
+          0.25,
+          0.625
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0.625,
+          0,
+          0.125,
+          1,
+          1
+        ],
+        [
+          0.875,
+          0.625,
+          0,
+          1,
+          1,
+          1
+        ],
+        [
+          0.125,
+          0.625,
+          0,
+          0.875,
+          1,
+          0.125
+        ],
+        [
+          0.125,
+          0.625,
+          0.875,
+          0.875,
+          1,
+          1
+        ],
+        [
+          0.125,
+          0.625,
+          0.125,
+          0.875,
+          0.6875,
+          0.875
+        ],
+        [
+          0.25,
+          0.25,
+          0.25,
+          0.75,
+          0.625,
+          0.75
+        ],
+        [
+          0.375,
+          0,
+          0.375,
+          0.625,
+          0.25,
+          0.625
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "down"
+    },
+    {
+      "id": "minecraft:hopper",
+      "states": {
+        "toggle_bit": false,
+        "facing_direction": 2
+      },
+      "boxes": [
+        [
+          0,
+          0.625,
+          0,
+          1,
+          1,
+          1
+        ],
+        [
+          0.25,
+          0.25,
+          0.25,
+          0.75,
+          0.625,
+          0.75
+        ],
+        [
+          0.375,
+          0.25,
+          0,
+          0.625,
+          0.5,
+          0.25
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0.625,
+          0,
+          0.125,
+          1,
+          1
+        ],
+        [
+          0.875,
+          0.625,
+          0,
+          1,
+          1,
+          1
+        ],
+        [
+          0.125,
+          0.625,
+          0,
+          0.875,
+          1,
+          0.125
+        ],
+        [
+          0.125,
+          0.625,
+          0.875,
+          0.875,
+          1,
+          1
+        ],
+        [
+          0.125,
+          0.625,
+          0.125,
+          0.875,
+          0.6875,
+          0.875
+        ],
+        [
+          0.25,
+          0.25,
+          0.25,
+          0.75,
+          0.625,
+          0.75
+        ],
+        [
+          0.375,
+          0.25,
+          0,
+          0.625,
+          0.5,
+          0.25
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "north"
+    },
+    {
+      "id": "minecraft:hopper",
+      "states": {
+        "toggle_bit": true,
+        "facing_direction": 2
+      },
+      "boxes": [
+        [
+          0,
+          0.625,
+          0,
+          1,
+          1,
+          1
+        ],
+        [
+          0.25,
+          0.25,
+          0.25,
+          0.75,
+          0.625,
+          0.75
+        ],
+        [
+          0.375,
+          0.25,
+          0,
+          0.625,
+          0.5,
+          0.25
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0.625,
+          0,
+          0.125,
+          1,
+          1
+        ],
+        [
+          0.875,
+          0.625,
+          0,
+          1,
+          1,
+          1
+        ],
+        [
+          0.125,
+          0.625,
+          0,
+          0.875,
+          1,
+          0.125
+        ],
+        [
+          0.125,
+          0.625,
+          0.875,
+          0.875,
+          1,
+          1
+        ],
+        [
+          0.125,
+          0.625,
+          0.125,
+          0.875,
+          0.6875,
+          0.875
+        ],
+        [
+          0.25,
+          0.25,
+          0.25,
+          0.75,
+          0.625,
+          0.75
+        ],
+        [
+          0.375,
+          0.25,
+          0,
+          0.625,
+          0.5,
+          0.25
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "north"
+    },
+    {
+      "id": "minecraft:hopper",
+      "states": {
+        "toggle_bit": false,
+        "facing_direction": 3
+      },
+      "boxes": [
+        [
+          0,
+          0.625,
+          0,
+          1,
+          1,
+          1
+        ],
+        [
+          0.25,
+          0.25,
+          0.25,
+          0.75,
+          0.625,
+          0.75
+        ],
+        [
+          0.375,
+          0.25,
+          0.75,
+          0.625,
+          0.5,
+          1
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0.625,
+          0,
+          0.125,
+          1,
+          1
+        ],
+        [
+          0.875,
+          0.625,
+          0,
+          1,
+          1,
+          1
+        ],
+        [
+          0.125,
+          0.625,
+          0,
+          0.875,
+          1,
+          0.125
+        ],
+        [
+          0.125,
+          0.625,
+          0.875,
+          0.875,
+          1,
+          1
+        ],
+        [
+          0.125,
+          0.625,
+          0.125,
+          0.875,
+          0.6875,
+          0.875
+        ],
+        [
+          0.25,
+          0.25,
+          0.25,
+          0.75,
+          0.625,
+          0.75
+        ],
+        [
+          0.375,
+          0.25,
+          0.75,
+          0.625,
+          0.5,
+          1
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "south"
+    },
+    {
+      "id": "minecraft:hopper",
+      "states": {
+        "toggle_bit": true,
+        "facing_direction": 3
+      },
+      "boxes": [
+        [
+          0,
+          0.625,
+          0,
+          1,
+          1,
+          1
+        ],
+        [
+          0.25,
+          0.25,
+          0.25,
+          0.75,
+          0.625,
+          0.75
+        ],
+        [
+          0.375,
+          0.25,
+          0.75,
+          0.625,
+          0.5,
+          1
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0.625,
+          0,
+          0.125,
+          1,
+          1
+        ],
+        [
+          0.875,
+          0.625,
+          0,
+          1,
+          1,
+          1
+        ],
+        [
+          0.125,
+          0.625,
+          0,
+          0.875,
+          1,
+          0.125
+        ],
+        [
+          0.125,
+          0.625,
+          0.875,
+          0.875,
+          1,
+          1
+        ],
+        [
+          0.125,
+          0.625,
+          0.125,
+          0.875,
+          0.6875,
+          0.875
+        ],
+        [
+          0.25,
+          0.25,
+          0.25,
+          0.75,
+          0.625,
+          0.75
+        ],
+        [
+          0.375,
+          0.25,
+          0.75,
+          0.625,
+          0.5,
+          1
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "south"
+    },
+    {
+      "id": "minecraft:hopper",
+      "states": {
+        "toggle_bit": false,
+        "facing_direction": 4
+      },
+      "boxes": [
+        [
+          0,
+          0.625,
+          0,
+          1,
+          1,
+          1
+        ],
+        [
+          0.25,
+          0.25,
+          0.25,
+          0.75,
+          0.625,
+          0.75
+        ],
+        [
+          0,
+          0.25,
+          0.375,
+          0.25,
+          0.5,
+          0.625
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0.625,
+          0,
+          0.125,
+          1,
+          1
+        ],
+        [
+          0.875,
+          0.625,
+          0,
+          1,
+          1,
+          1
+        ],
+        [
+          0.125,
+          0.625,
+          0,
+          0.875,
+          1,
+          0.125
+        ],
+        [
+          0.125,
+          0.625,
+          0.875,
+          0.875,
+          1,
+          1
+        ],
+        [
+          0.125,
+          0.625,
+          0.125,
+          0.875,
+          0.6875,
+          0.875
+        ],
+        [
+          0.25,
+          0.25,
+          0.25,
+          0.75,
+          0.625,
+          0.75
+        ],
+        [
+          0,
+          0.25,
+          0.375,
+          0.25,
+          0.5,
+          0.625
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "west"
+    },
+    {
+      "id": "minecraft:hopper",
+      "states": {
+        "toggle_bit": true,
+        "facing_direction": 4
+      },
+      "boxes": [
+        [
+          0,
+          0.625,
+          0,
+          1,
+          1,
+          1
+        ],
+        [
+          0.25,
+          0.25,
+          0.25,
+          0.75,
+          0.625,
+          0.75
+        ],
+        [
+          0,
+          0.25,
+          0.375,
+          0.25,
+          0.5,
+          0.625
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0.625,
+          0,
+          0.125,
+          1,
+          1
+        ],
+        [
+          0.875,
+          0.625,
+          0,
+          1,
+          1,
+          1
+        ],
+        [
+          0.125,
+          0.625,
+          0,
+          0.875,
+          1,
+          0.125
+        ],
+        [
+          0.125,
+          0.625,
+          0.875,
+          0.875,
+          1,
+          1
+        ],
+        [
+          0.125,
+          0.625,
+          0.125,
+          0.875,
+          0.6875,
+          0.875
+        ],
+        [
+          0.25,
+          0.25,
+          0.25,
+          0.75,
+          0.625,
+          0.75
+        ],
+        [
+          0,
+          0.25,
+          0.375,
+          0.25,
+          0.5,
+          0.625
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "west"
+    },
+    {
+      "id": "minecraft:hopper",
+      "states": {
+        "toggle_bit": false,
+        "facing_direction": 5
+      },
+      "boxes": [
+        [
+          0,
+          0.625,
+          0,
+          1,
+          1,
+          1
+        ],
+        [
+          0.25,
+          0.25,
+          0.25,
+          0.75,
+          0.625,
+          0.75
+        ],
+        [
+          0.75,
+          0.25,
+          0.375,
+          1,
+          0.5,
+          0.625
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0.625,
+          0,
+          0.125,
+          1,
+          1
+        ],
+        [
+          0.875,
+          0.625,
+          0,
+          1,
+          1,
+          1
+        ],
+        [
+          0.125,
+          0.625,
+          0,
+          0.875,
+          1,
+          0.125
+        ],
+        [
+          0.125,
+          0.625,
+          0.875,
+          0.875,
+          1,
+          1
+        ],
+        [
+          0.125,
+          0.625,
+          0.125,
+          0.875,
+          0.6875,
+          0.875
+        ],
+        [
+          0.25,
+          0.25,
+          0.25,
+          0.75,
+          0.625,
+          0.75
+        ],
+        [
+          0.75,
+          0.25,
+          0.375,
+          1,
+          0.5,
+          0.625
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "east"
+    },
+    {
+      "id": "minecraft:hopper",
+      "states": {
+        "toggle_bit": true,
+        "facing_direction": 5
+      },
+      "boxes": [
+        [
+          0,
+          0.625,
+          0,
+          1,
+          1,
+          1
+        ],
+        [
+          0.25,
+          0.25,
+          0.25,
+          0.75,
+          0.625,
+          0.75
+        ],
+        [
+          0.75,
+          0.25,
+          0.375,
+          1,
+          0.5,
+          0.625
+        ]
+      ],
+      "collision": [
+        [
+          0,
+          0.625,
+          0,
+          0.125,
+          1,
+          1
+        ],
+        [
+          0.875,
+          0.625,
+          0,
+          1,
+          1,
+          1
+        ],
+        [
+          0.125,
+          0.625,
+          0,
+          0.875,
+          1,
+          0.125
+        ],
+        [
+          0.125,
+          0.625,
+          0.875,
+          0.875,
+          1,
+          1
+        ],
+        [
+          0.125,
+          0.625,
+          0.125,
+          0.875,
+          0.6875,
+          0.875
+        ],
+        [
+          0.25,
+          0.25,
+          0.25,
+          0.75,
+          0.625,
+          0.75
+        ],
+        [
+          0.75,
+          0.25,
+          0.375,
+          1,
+          0.5,
+          0.625
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "east"
+    },
+    {
+      "id": "minecraft:chest",
+      "states": {
+        "facing_direction": 3,
+        "minecraft:cardinal_direction": "south"
+      },
+      "boxes": [
+        [
+          0.025,
+          0,
+          0.025,
+          0.975,
+          0.95,
+          0.975
+        ]
+      ],
+      "collision": [
+        [
+          0.025,
+          0,
+          0.025,
+          0.975,
+          0.95,
+          0.975
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "fixed"
+    },
+    {
+      "id": "minecraft:chest",
+      "states": {
+        "facing_direction": 5,
+        "minecraft:cardinal_direction": "east"
+      },
+      "boxes": [
+        [
+          0.025,
+          0,
+          0.025,
+          0.975,
+          0.95,
+          0.975
+        ]
+      ],
+      "collision": [
+        [
+          0.025,
+          0,
+          0.025,
+          0.975,
+          0.95,
+          0.975
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "fixed"
+    },
+    {
+      "id": "minecraft:chest",
+      "states": {
+        "facing_direction": 4,
+        "minecraft:cardinal_direction": "west"
+      },
+      "boxes": [
+        [
+          0.025,
+          0,
+          0.025,
+          0.975,
+          0.95,
+          0.975
+        ]
+      ],
+      "collision": [
+        [
+          0.025,
+          0,
+          0.025,
+          0.975,
+          0.95,
+          0.975
+        ]
+      ],
+      "passable": false,
+      "shape_candidate": "fixed"
+    }
+  ],
+  "state_training_capture_sha256": "032f6fde899aa5995cec7f800517792ead5162daae252a0cf8db3498523b7ebf"
+}

@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "recipes": [
+    {"id":"oak_planks","pattern":[["oak_log"]],"result":"oak_planks","count":4},
+    {"id":"crafting_table","pattern":[["oak_planks","oak_planks"],["oak_planks","oak_planks"]],"result":"crafting_table","count":1},
+    {"id":"sandstone","pattern":[["sand","sand"],["sand","sand"]],"result":"sandstone","count":1},
+    {"id":"stone_bricks","pattern":[["slate","slate"],["slate","slate"]],"result":"stone_bricks","count":4}
+  ]
+}
