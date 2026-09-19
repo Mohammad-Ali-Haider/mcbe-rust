@@ -3,6 +3,7 @@ mod engine;
 mod engine_assets;
 mod engine_blocks;
 mod engine_crafting;
+mod engine_font;
 mod engine_geometry;
 mod engine_gpu;
 mod engine_gpu_ui;
@@ -15,6 +16,7 @@ mod engine_meshing;
 mod engine_player;
 mod engine_save_study;
 mod engine_saving;
+mod engine_startup;
 mod engine_stream;
 mod engine_stream_study;
 mod engine_ui;
@@ -42,6 +44,12 @@ use winit::{
 };
 
 struct App {
+    startup: Option<engine_startup::Service>,
+    startup_close_test: bool,
+    startup_error_test: bool,
+    startup_retry_test: bool,
+    startup_controls_verified: bool,
+    startup_error_frames: usize,
     v1_test: bool,
     v1_report: Option<serde_json::Value>,
     load_test: bool,
@@ -122,6 +130,12 @@ impl App {
             palette.pointer = [240., 135.];
         }
         Ok(Self {
+            startup: None,
+            startup_close_test: false,
+            startup_error_test: false,
+            startup_retry_test: false,
+            startup_controls_verified: false,
+            startup_error_frames: 0,
             v1_test: false,
             v1_report: None,
             load_test: false,
@@ -208,7 +222,19 @@ impl App {
             }
         }
     }
+    fn startup_blocked(&self) -> bool {
+        self.startup.as_ref().is_some_and(|s| s.blocked())
+    }
+    fn startup_running(&self) -> bool {
+        self.startup.as_ref().is_some_and(|s| s.running())
+    }
     fn engine_key(&mut self, code: KeyCode) -> Result<bool> {
+        if self.startup_blocked()
+            && !matches!(code, KeyCode::F3 | KeyCode::F4 | KeyCode::F7 | KeyCode::F11)
+        {
+            return Ok(true);
+        }
+
         if self.client.scene.engine.is_none() || code == KeyCode::F11 {
             return Ok(false);
         }
@@ -670,6 +696,26 @@ impl App {
         }
     }
     fn redraw(&mut self) -> Result<()> {
+        if let Some(startup) = &mut self.startup {
+            if startup.poll(&mut self.client, self.close_after_save)? {
+                self.simulation_previous = self.client.actor.position;
+                self.keys.clear();
+                self.accumulator = 0.;
+                self.previous = Instant::now();
+                self.frames = 0;
+                self.palette = engine_ui::Palette::default();
+                let player = &self.client.scene.engine.as_ref().unwrap().player;
+                if player.cursor.is_some() || player.crafting.iter().any(Option::is_some) {
+                    self.palette.open = true;
+                    self.palette.viewport = [480., 270.];
+                    self.palette.pointer = [240., 135.];
+                }
+                self.notice = None;
+            } else if startup.blocked() {
+                self.notice = Some(startup.message());
+            }
+        }
+
         self.poll_saves()?;
         self.poll_loads()?;
         if self.load_test && !self.load_close_test {
@@ -859,6 +905,7 @@ impl App {
         self.previous = now;
         if self.window.as_ref().is_some_and(|w| w.has_focus())
             && !self.smoke
+            && !self.startup_blocked()
             && !self.inventory_open
             && !self.palette.open
             && !self.close_after_save
@@ -957,6 +1004,7 @@ impl App {
         }
         let save_active = self.save_busy();
         let load_active = self.load_busy();
+        let startup_blocked = self.startup_blocked();
         if let Some(gpu) = &mut self.gpu {
             let size = self.window.as_ref().unwrap().inner_size();
             if size.width == 0 || size.height == 0 {
@@ -996,7 +1044,24 @@ impl App {
                 previous.y + (current.y - previous.y) * lerp + self.client.movement.eye_height(),
                 previous.z + (current.z - previous.z) * lerp,
             ];
-            let capture = if self.smoke && self.frames + 1 >= self.frame_limit {
+            let capture = if self.smoke
+                && self
+                    .startup
+                    .as_ref()
+                    .is_some_and(|s| s.blocked() && s.presented == 0)
+            {
+                self.capture_out.as_ref().map(|o| o.join("startup.png"))
+            } else if (self.startup_error_test || self.startup_retry_test)
+                && self.startup_error_frames == 3
+            {
+                self.capture_out.as_ref().map(|o| {
+                    o.join(if self.startup_retry_test {
+                        "startup-error.png"
+                    } else {
+                        "gpu.png"
+                    })
+                })
+            } else if self.smoke && !startup_blocked && self.frames + 1 >= self.frame_limit {
                 self.capture_out.as_ref().map(|o| o.join("gpu.png"))
             } else {
                 None
@@ -1005,6 +1070,7 @@ impl App {
                 &self.client,
                 &self.palette,
                 engine_gpu::Frame {
+                    startup: startup_blocked,
                     wire: self.wireframe,
                     debug: self.debug,
                     notice: self.notice.as_deref(),
@@ -1016,6 +1082,21 @@ impl App {
                 self.frames += 1;
                 self.saving_frames += usize::from(save_active);
                 self.loading_frames += usize::from(load_active);
+                if let Some(startup) = &mut self.startup {
+                    if startup.blocked() {
+                        startup.presented += 1;
+                        if startup.error.is_some() {
+                            self.startup_error_frames += 1;
+                        }
+                    }
+                    if startup.blocked()
+                        && !startup.running()
+                        && startup.error.is_none()
+                        && !self.close_after_save
+                    {
+                        startup.start()?;
+                    }
+                }
             }
             if presented && self.mesh_toggle_test && [1, 3, 5].contains(&self.frames) {
                 self.mesh_toggle_trace.push(serde_json::json!({"frame":self.frames,"greedy":gpu.stats.greedy_meshing,"mesh_quads":gpu.stats.mesh_quads,"exposed_faces":gpu.stats.exposed_faces,"mesh_rebuilds":gpu.stats.mesh_rebuilds}));
@@ -1089,9 +1170,9 @@ impl ApplicationHandler for App {
         }
         let attributes = Window::default_attributes()
             .with_title(if self.client.scene.engine.is_some() {
-                "Blockwork | Blockwork Version 1 | Checkpoint 44"
+                format!("Blockwork | Checkpoint {}", engine::CHECKPOINT)
             } else {
-                "MCBE Reconstruction | Rust research client"
+                "MCBE Reconstruction | Rust research client".to_owned()
             })
             .with_inner_size(winit::dpi::LogicalSize::new(1100.0, 680.0))
             .with_maximized(true);
@@ -1128,6 +1209,35 @@ impl ApplicationHandler for App {
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         // Automated fixtures drive the same controllers explicitly. Physical input
         // must not move their cameras, edit worlds or capture the user's cursor.
+        if self.startup_blocked() {
+            if !self.smoke
+                && let WindowEvent::KeyboardInput { event: key, .. } = &event
+                && key.state == ElementState::Pressed
+                && !key.repeat
+            {
+                if key.physical_key == PhysicalKey::Code(KeyCode::Escape) {
+                    self.window_event(event_loop, _id, WindowEvent::CloseRequested);
+                    return;
+                }
+                if key.physical_key == PhysicalKey::Code(KeyCode::Enter)
+                    && self.startup.as_ref().is_some_and(|s| s.error.is_some())
+                {
+                    if let Err(e) = self.startup.as_mut().unwrap().start() {
+                        self.error = Some(e.to_string());
+                        event_loop.exit();
+                    }
+                    return;
+                }
+            }
+            if matches!(
+                &event,
+                WindowEvent::MouseInput { .. }
+                    | WindowEvent::MouseWheel { .. }
+                    | WindowEvent::CursorMoved { .. }
+            ) {
+                return;
+            }
+        }
         if self.smoke
             && matches!(
                 &event,
@@ -1152,6 +1262,14 @@ impl ApplicationHandler for App {
         }
         match event {
             WindowEvent::CloseRequested => {
+                if self.startup_running() {
+                    self.startup.as_mut().unwrap().cancel();
+                    self.close_after_save = true;
+                    self.close_requested_busy = true;
+                    self.capture(false);
+                    return;
+                }
+
                 let loading = self.load_busy();
                 if loading {
                     self.loader.as_mut().unwrap().cancel();
@@ -1393,6 +1511,74 @@ impl ApplicationHandler for App {
                     self.error = Some(e.to_string());
                     event_loop.exit();
                 }
+                if self.smoke
+                    && !self.startup_controls_verified
+                    && self.startup_running()
+                    && self.startup.as_ref().unwrap().presented == 1
+                {
+                    let instance = self.client.scene.engine.as_ref().unwrap().instance;
+                    let controls = (|| -> Result<()> {
+                        for key in [
+                            KeyCode::F5,
+                            KeyCode::F6,
+                            KeyCode::F9,
+                            KeyCode::F10,
+                            KeyCode::KeyR,
+                            KeyCode::KeyT,
+                            KeyCode::KeyF,
+                            KeyCode::KeyN,
+                            KeyCode::KeyE,
+                        ] {
+                            self.engine_key(key)?;
+                        }
+                        for key in [
+                            KeyCode::F4,
+                            KeyCode::F4,
+                            KeyCode::F7,
+                            KeyCode::F7,
+                            KeyCode::F7,
+                        ] {
+                            self.engine_key(key)?;
+                        }
+                        if self.save_busy()
+                            || self.load_busy()
+                            || self.palette.open
+                            || self.client.pending_edits() != 0
+                            || self.client.scene.engine.as_ref().unwrap().instance != instance
+                            || self.client.movement != Default::default()
+                        {
+                            return Err("Startup controls mutated the placeholder".into());
+                        }
+                        self.startup_controls_verified = true;
+                        Ok(())
+                    })();
+                    if let Err(e) = controls {
+                        self.error = Some(e.to_string());
+                        event_loop.exit();
+                    }
+                }
+                if self.startup_retry_test
+                    && self.startup_error_frames >= 4
+                    && self.startup.as_ref().is_some_and(|s| s.error.is_some())
+                {
+                    let repair = (|| -> Result<()> {
+                        let path = self.capture_out.as_ref().unwrap().join("retry-blocks.json");
+                        std::fs::write(
+                            path,
+                            serde_json::to_vec(&engine_blocks::Registry::built_in())?,
+                        )?;
+                        self.startup.as_mut().unwrap().start()?;
+                        self.startup_error_frames = 0;
+                        Ok(())
+                    })();
+                    if let Err(e) = repair {
+                        self.error = Some(e.to_string());
+                        event_loop.exit();
+                    }
+                }
+                if self.startup_close_test && self.frames == 1 && !self.close_after_save {
+                    self.window_event(event_loop, _id, WindowEvent::CloseRequested);
+                }
                 if self.load_close_test && self.frames == 1 && !self.close_after_save {
                     if let Err(e) = self.engine_key(KeyCode::F10) {
                         self.error = Some(e.to_string());
@@ -1420,12 +1606,22 @@ impl ApplicationHandler for App {
                     }
                     self.window_event(event_loop, _id, WindowEvent::CloseRequested);
                 }
-                if self.close_after_save && !self.save_busy() && !self.load_busy() {
+                if self.close_after_save
+                    && !self.save_busy()
+                    && !self.load_busy()
+                    && !self.startup_running()
+                {
                     self.close_completed = true;
                     event_loop.exit();
                 }
+                if self.smoke && self.startup_error_test && self.startup_error_frames >= 4 {
+                    self.frame_limit = self.frames;
+                }
                 if self.smoke
-                    && self.frames >= self.frame_limit
+                    && (self.frames >= self.frame_limit
+                        || (self.startup_error_test && self.startup_error_frames >= 4))
+                    && (!self.startup_blocked()
+                        || (self.startup_error_test && self.startup_error_frames >= 4))
                     && !self.save_busy()
                     && !self.load_busy()
                 {
@@ -1465,6 +1661,7 @@ impl ApplicationHandler for App {
     }
     fn device_event(&mut self, _event_loop: &ActiveEventLoop, _id: DeviceId, event: DeviceEvent) {
         if !self.smoke
+            && !self.startup_blocked()
             && self.captured
             && let DeviceEvent::MouseMotion { delta: (x, y) } = event
         {
@@ -1996,6 +2193,12 @@ fn main() -> Result<()> {
     }
     let inventory_start = inventory_start || mode.as_deref() == Some("--inventory-smoke");
     let app = App {
+        startup: None,
+        startup_close_test: false,
+        startup_error_test: false,
+        startup_retry_test: false,
+        startup_controls_verified: false,
+        startup_error_frames: 0,
         v1_test: false,
         v1_report: None,
         load_test: false,
@@ -2081,6 +2284,19 @@ fn run_window(mut app: App, out: Option<PathBuf>) -> Result<()> {
         return Err(error.into());
     }
     if let Some(out) = out {
+        if let Some(startup) = &app.startup {
+            let geometry = if startup.ready {
+                Some(app.gpu.as_ref().unwrap().verify_geometry(&app.client)?)
+            } else {
+                None
+            };
+            std::fs::write(
+                out.join("startup-native.json"),
+                serde_json::to_vec_pretty(
+                    &serde_json::json!({"checkpoint":engine::CHECKPOINT,"complete":startup.counters.completed==startup.counters.jobs&&!startup.running(),"ready":startup.ready,"error":startup.error,"counters":startup.counters,"loading_presented_frames":startup.presented,"phases":startup.phase_trace,"close_test":app.startup_close_test,"close_completed":app.close_completed,"error_test":app.startup_error_test,"retry_test":app.startup_retry_test,"blocked_controls_verified":app.startup_controls_verified,"geometry":geometry,"player":app.client.actor.position,"movement":app.client.movement,"blocks":app.client.scene.engine.as_ref().unwrap().blocks.len(),"saved_world":app.client.last_save,"pending_edits":app.client.pending_edits()}),
+                )?,
+            )?;
+        }
         if app.v1_test {
             let geometry = app.gpu.as_ref().unwrap().verify_geometry(&app.client)?;
             std::fs::write(

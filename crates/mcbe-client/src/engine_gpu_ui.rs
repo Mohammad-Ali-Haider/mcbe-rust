@@ -49,6 +49,7 @@ pub struct Atlas {
     icons: Vec<Sprite>,
 }
 pub struct Context<'a> {
+    pub startup: bool,
     pub loading: bool,
     pub width: u32,
     pub height: u32,
@@ -174,6 +175,9 @@ impl Atlas {
             a.cross = Some(a.add(&src.icons)?.crop(0, 0, 16, 16));
             a.panel = Some(a.add(&src.panel)?);
             a.cell = Some(a.add(&src.cell)?);
+        }
+        if a.font.is_none() {
+            a.font = Some(a.add(&crate::engine_font::texture())?);
         }
         for i in 0..client.scene.engine.as_ref().unwrap().registry.blocks.len() {
             let mut pixels = vec![0; 32 * 32];
@@ -339,6 +343,35 @@ impl Atlas {
             height,
             white: self.white,
         };
+        if ctx.startup {
+            c.rect([0., 0., width, height], [0.035, 0.05, 0.065, 1.]);
+            let panel_width = (width - 24.).clamp(100., 440.);
+            let left = (width - panel_width) / 2.;
+            let top = (height / 2. - 52.).max(12.);
+            c.rect(
+                [left - 8., top - 8., panel_width + 16., 112.],
+                [0.09, 0.12, 0.15, 1.],
+            );
+            self.text(&mut c, left, top, "BLOCKWORK", [0.55, 1., 0.72, 1.]);
+            let message = ctx.notice.unwrap_or("Opening world...");
+            let mut line = String::new();
+            let mut y = top + 20.;
+            for ch in message.chars() {
+                if self.label_width(&line) + 6. > panel_width || ch == '|' {
+                    self.text(&mut c, left, y, &line, [1.; 4]);
+                    line.clear();
+                    y += 12.;
+                }
+                if y > top + 84. {
+                    break;
+                }
+                if ch != '|' {
+                    line.push(ch);
+                }
+            }
+            self.text(&mut c, left, y, &line, [1.; 4]);
+            return c.vertices;
+        }
         let state = client.scene.engine.as_ref().unwrap();
         let player = &state.player;
         let x = (width - 182.) / 2.;

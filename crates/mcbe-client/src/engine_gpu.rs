@@ -34,6 +34,7 @@ struct Camera {
 }
 #[derive(PartialEq, Eq)]
 struct UiKey {
+    startup: bool,
     movement: crate::engine_player::Movement,
     size: [u32; 2],
     scale: u32,
@@ -93,6 +94,7 @@ pub struct Statistics {
     pub last_frame_ms: f64,
 }
 pub struct Frame<'a> {
+    pub startup: bool,
     pub wire: bool,
     pub debug: bool,
     pub notice: Option<&'a str>,
@@ -773,6 +775,7 @@ impl Renderer {
         self.stats.submitted_vertices = keys.iter().map(|p| self.meshes[p].vertices as usize).sum();
         let state = client.scene.engine.as_ref().unwrap();
         let key = UiKey {
+            startup: frame.startup,
             movement: client.movement,
             size: [self.config.width, self.config.height],
             scale: self.stats.gui_scale.to_bits(),
@@ -827,6 +830,7 @@ impl Renderer {
                 client,
                 palette,
                 Context {
+                    startup: frame.startup,
                     loading: !self.stats.meshes_ready,
                     width: self.config.width,
                     height: self.config.height,

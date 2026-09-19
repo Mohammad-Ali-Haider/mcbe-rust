@@ -17,7 +17,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-pub const CHECKPOINT: u32 = 44;
+pub const CHECKPOINT: u32 = 45;
 pub const BOUNDS: Bounds = Bounds {
     min: [-40, 0, -40],
     max: [40, 40, 40],
@@ -918,7 +918,7 @@ pub fn launch(args: &[String]) -> Result<()> {
             "--engine-naive" => {},
             "--engine-stream" | "--engine-finite" | "--engine-sync-mesh" => {},
             "--engine-continue" => resume = true,
-            "--engine-home" | "--engine-load" | "--engine-study" | "--engine-v1-study" | "--engine-v1-smoke" | "--engine-v1-wire-smoke" | "--engine-v1-fly-smoke" | "--engine-v1-noclip-smoke" | "--engine-v1-sneak-smoke" | "--engine-loading-study" | "--engine-loading-smoke" | "--engine-loading-close-smoke" | "--engine-save-study" | "--engine-save-smoke" | "--engine-save-close-smoke" | "--engine-async-smoke" | "--engine-stream-profile" | "--engine-stream-study" | "--engine-stream-smoke" | "--engine-stream-wire-smoke" | "--engine-smoke" | "--engine-palette-smoke" | "--engine-wire-smoke" | "--engine-window-smoke" | "--engine-edit-smoke" | "--engine-benchmark" | "--engine-profile" | "--engine-render-smoke" | "--engine-mesh-smoke" | "--engine-camera" | "--engine-inventory-study" | "--engine-inventory-smoke" | "--engine-seed" | "--engine-blocks" | "--engine-pack-root" => {
+            "--engine-home" | "--engine-load" | "--engine-study" | "--engine-startup-retry-smoke" | "--engine-startup-smoke" | "--engine-startup-close-smoke" | "--engine-startup-error-smoke" | "--engine-v1-study" | "--engine-v1-smoke" | "--engine-v1-wire-smoke" | "--engine-v1-fly-smoke" | "--engine-v1-noclip-smoke" | "--engine-v1-sneak-smoke" | "--engine-loading-study" | "--engine-loading-smoke" | "--engine-loading-close-smoke" | "--engine-save-study" | "--engine-save-smoke" | "--engine-save-close-smoke" | "--engine-async-smoke" | "--engine-stream-profile" | "--engine-stream-study" | "--engine-stream-smoke" | "--engine-stream-wire-smoke" | "--engine-smoke" | "--engine-palette-smoke" | "--engine-wire-smoke" | "--engine-window-smoke" | "--engine-edit-smoke" | "--engine-benchmark" | "--engine-profile" | "--engine-render-smoke" | "--engine-mesh-smoke" | "--engine-camera" | "--engine-inventory-study" | "--engine-inventory-smoke" | "--engine-seed" | "--engine-blocks" | "--engine-pack-root" => {
                 let flag = &args[i]; i+=1; let value = args.get(i).ok_or("Engine option requires a value")?;
                 match flag.as_str() {
                     "--engine-home" => home=PathBuf::from(value),
@@ -934,60 +934,55 @@ pub fn launch(args: &[String]) -> Result<()> {
         }
         i += 1;
     }
-    if source.is_none() && resume && home.join("saves").is_dir() {
-        source = fs::read_dir(home.join("saves"))?
-            .filter_map(|e| e.ok())
-            .filter(|e| {
-                e.path().extension().is_some_and(|s| s == "blockworld") && e.path().is_file()
-            })
-            .max_by_key(|e| (e.metadata().and_then(|m| m.modified()).ok(), e.file_name()))
-            .map(|e| e.path());
-    }
-    let new_world = source.is_none();
-    let mut client = match source {
-        Some(path) => load(&path)?,
-        None => {
-            let local = home.join("assets/blocks.json");
-            let registry = if local.is_file() {
-                Registry::read(&local)?
-            } else {
-                Registry::built_in()
-            };
-            let streamed = !args.iter().any(|a| a == "--engine-finite")
-                && (out.is_none()
-                    || args.iter().any(|a| {
-                        a == "--engine-stream"
-                            || a.starts_with("--engine-save-")
-                            || a.starts_with("--engine-loading-")
-                            || a.starts_with("--engine-v1-")
-                            || a == "--engine-async-smoke"
-                            || a.starts_with("--engine-stream-")
-                    }));
-            if streamed {
-                crate::engine_stream::generate(seed, registry)?
-            } else {
-                generate_with_registry(seed, registry)?
-            }
-        }
+    let startup_test = args.iter().any(|a| a.starts_with("--engine-startup-"));
+    let streamed = !args.iter().any(|a| a == "--engine-finite")
+        && (out.is_none()
+            || startup_test
+            || args.iter().any(|a| {
+                a == "--engine-stream"
+                    || a.starts_with("--engine-save-")
+                    || a.starts_with("--engine-loading-")
+                    || a.starts_with("--engine-v1-")
+                    || a == "--engine-async-smoke"
+                    || a.starts_with("--engine-stream-")
+            }));
+    let options = crate::engine_startup::Options {
+        home: home.clone(),
+        source,
+        definitions,
+        original,
+        pack_root,
+        resume,
+        streamed,
+        seed,
     };
-    if new_world {
-        let path = home.join("assets/recipes.json");
-        if path.is_file() {
-            let recipes = crate::engine_crafting::Recipes::read(&path)?;
-            recipes.validate_registry(&client.scene.engine.as_ref().unwrap().registry)?;
-            client.scene.engine.as_mut().unwrap().recipes = recipes;
+    let background = out.is_none() || startup_test;
+    let client = if background {
+        crate::engine_startup::placeholder()?
+    } else {
+        options.prepare(&Default::default())?
+    };
+    let mut app = App::new(client, home, false, smoke)?;
+    if background {
+        app.startup = Some(crate::engine_startup::Service::new(options));
+        app.notice = Some("Opening Blockwork... | Escape close".into());
+    }
+    if startup_test {
+        let destination = out.as_ref().ok_or("Startup proof output missing")?;
+        if destination.exists() {
+            return Err("Fresh startup proof directory required".into());
+        }
+        fs::create_dir_all(destination)?;
+        app.frame_limit = 180;
+        app.startup_close_test = args.iter().any(|a| a == "--engine-startup-close-smoke");
+        app.startup_error_test = args.iter().any(|a| a == "--engine-startup-error-smoke");
+        app.startup_retry_test = args.iter().any(|a| a == "--engine-startup-retry-smoke");
+        if app.startup_retry_test {
+            let path = destination.join("retry-blocks.json");
+            fs::write(&path, b"invalid JSON")?;
+            app.startup.as_mut().unwrap().options.definitions = Some(path);
         }
     }
-    if let Some(path) = definitions {
-        apply_registry(&mut client, Registry::read(&path)?)?;
-    }
-    if !original {
-        client.engine_assets = Some(crate::engine_assets::load(
-            &client.scene.engine.as_ref().unwrap().registry,
-            &pack_root,
-        )?);
-    }
-    let mut app = App::new(client, home, false, smoke)?;
     app.naive_mesh = args.iter().any(|a| a == "--engine-naive");
     app.sync_mesh = args.iter().any(|a| a == "--engine-sync-mesh");
     if args.iter().any(|a| a == "--engine-mesh-smoke") {
@@ -1004,7 +999,9 @@ pub fn launch(args: &[String]) -> Result<()> {
         app.frame_limit = 4;
     }
     if let Some(out) = &out {
-        if args.iter().any(|a| a.starts_with("--engine-v1-")) {
+        if startup_test {
+            // The production startup service is exercised inside the native event loop.
+        } else if args.iter().any(|a| a.starts_with("--engine-v1-")) {
             crate::engine_v1_study::verify(&mut app, out)?;
             app.v1_test = smoke;
             app.frame_limit = 180;
