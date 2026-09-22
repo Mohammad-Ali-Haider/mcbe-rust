@@ -126,11 +126,18 @@ pub struct Counters {
     pub off_thread: bool,
     pub worker_ms: f64,
     pub apply_ms: f64,
+    pub graphics_prepare_ms: f64,
+    pub graphics_bytes: usize,
+    pub graphics_writes: usize,
+    pub graphics_cancelled: bool,
 }
 struct Finished {
     result: std::result::Result<Box<Client>, String>,
     off_thread: bool,
     milliseconds: f64,
+    graphics_ms: f64,
+    graphics_bytes: usize,
+    graphics_writes: usize,
 }
 pub struct Service {
     pub options: Options,
@@ -139,6 +146,7 @@ pub struct Service {
     retire: Option<mpsc::SyncSender<Option<Box<Client>>>>,
     thread: Option<thread::JoinHandle<()>>,
     pub ready: bool,
+    pub graphics_ready: bool,
     pub error: Option<String>,
     pub counters: Counters,
     pub presented: usize,
@@ -153,6 +161,7 @@ impl Service {
             retire: None,
             thread: None,
             ready: false,
+            graphics_ready: false,
             error: None,
             counters: Default::default(),
             presented: 0,
@@ -160,7 +169,7 @@ impl Service {
         }
     }
     pub fn blocked(&self) -> bool {
-        !self.ready
+        !self.ready || !self.graphics_ready
     }
     pub fn running(&self) -> bool {
         self.receiver.is_some()
@@ -172,13 +181,18 @@ impl Service {
         if let Some(error) = &self.error {
             return format!("Could not open world | Enter retry | Escape close | {error}");
         }
+        if self.ready {
+            return "Uploading graphics... | Escape close".into();
+        }
         let phase = match self.phase() {
             0 => "Opening Blockwork",
             1 => "Finding saved world",
             2 => "Preparing terrain",
             3 => "Reading block definitions",
             4 => "Loading local textures",
-            _ => "Checking prepared world",
+            5 => "Checking prepared world",
+            6 => "Preparing textured models",
+            _ => "Preparing graphics",
         };
         format!("{phase}... | Escape close")
     }
@@ -199,14 +213,48 @@ impl Service {
                 .name("blockwork-startup".into())
                 .spawn(move || {
                     let start = Instant::now();
+                    let mut graphics_ms = 0.;
+                    let mut graphics_bytes = 0;
+                    let mut graphics_writes = 0;
                     let result = options
                         .prepare(&progress)
+                        .and_then(|client| {
+                            progress.phase(6)?;
+                            let graphics_start = Instant::now();
+                            let prepared = crate::engine_texture::Prepared::build(&client)?;
+                            graphics_ms = graphics_start.elapsed().as_secs_f64() * 1000.;
+                            graphics_bytes = prepared
+                                .steps
+                                .iter()
+                                .map(|s| s.bytes(&prepared.atlas).len())
+                                .sum();
+                            graphics_writes = prepared.steps.len();
+                            *client.engine_gpu_prepared.borrow_mut() = Some(prepared);
+                            progress.phase(7)?;
+                            if let Some((path, expected)) =
+                                &client.scene.engine.as_ref().unwrap().loaded
+                            {
+                                use sha2::{Digest, Sha256};
+                                if fs::metadata(path)?.len() > 32 * 1024 * 1024
+                                    || format!("{:x}", Sha256::digest(fs::read(path)?)) != *expected
+                                {
+                                    return Err(
+                                        "Loaded save changed on disk during graphics preparation"
+                                            .into(),
+                                    );
+                                }
+                            }
+                            Ok(client)
+                        })
                         .map(Box::new)
                         .map_err(|e| e.to_string());
                     let finished = Finished {
                         result,
                         off_thread: thread::current().id() != caller,
                         milliseconds: start.elapsed().as_secs_f64() * 1000.,
+                        graphics_ms,
+                        graphics_bytes,
+                        graphics_writes,
                     };
                     if sender.send(finished).is_ok() {
                         let _ = garbage.recv();
@@ -238,6 +286,9 @@ impl Service {
         self.counters.completed += 1;
         self.counters.off_thread = finished.off_thread;
         self.counters.worker_ms += finished.milliseconds;
+        self.counters.graphics_prepare_ms += finished.graphics_ms;
+        self.counters.graphics_bytes += finished.graphics_bytes;
+        self.counters.graphics_writes += finished.graphics_writes;
         let mut retired = None;
         let mut applied = false;
         if closing || self.progress.cancelled.load(Ordering::Acquire) {

@@ -19,6 +19,7 @@ mod engine_saving;
 mod engine_startup;
 mod engine_stream;
 mod engine_stream_study;
+mod engine_texture;
 mod engine_ui;
 mod engine_v1_study;
 mod inventory_persistence;
@@ -46,6 +47,9 @@ use winit::{
 struct App {
     startup: Option<engine_startup::Service>,
     startup_close_test: bool,
+    startup_gpu_close_test: bool,
+    startup_gpu_frames: usize,
+    startup_gpu_controls_verified: bool,
     startup_error_test: bool,
     startup_retry_test: bool,
     startup_controls_verified: bool,
@@ -132,6 +136,9 @@ impl App {
         Ok(Self {
             startup: None,
             startup_close_test: false,
+            startup_gpu_close_test: false,
+            startup_gpu_frames: 0,
+            startup_gpu_controls_verified: false,
             startup_error_test: false,
             startup_retry_test: false,
             startup_controls_verified: false,
@@ -324,7 +331,7 @@ impl App {
                     gpu.stats.gui_scale + 1.
                 };
             }
-            if self.palette.open {
+            if self.palette.open && !self.startup_blocked() {
                 let (position, viewport) = self.inventory_pointer();
                 self.palette.move_pointer(&self.client, position, viewport);
             }
@@ -710,7 +717,7 @@ impl App {
                     self.palette.viewport = [480., 270.];
                     self.palette.pointer = [240., 135.];
                 }
-                self.notice = None;
+                self.notice = Some("Uploading graphics... | Escape close".into());
             } else if startup.blocked() {
                 self.notice = Some(startup.message());
             }
@@ -1051,6 +1058,16 @@ impl App {
                     .is_some_and(|s| s.blocked() && s.presented == 0)
             {
                 self.capture_out.as_ref().map(|o| o.join("startup.png"))
+            } else if self.smoke
+                && self
+                    .startup
+                    .as_ref()
+                    .is_some_and(|s| s.ready && !s.graphics_ready)
+                && self.startup_gpu_frames == 0
+            {
+                self.capture_out
+                    .as_ref()
+                    .map(|o| o.join("graphics-upload.png"))
             } else if (self.startup_error_test || self.startup_retry_test)
                 && self.startup_error_frames == 3
             {
@@ -1083,11 +1100,19 @@ impl App {
                 self.saving_frames += usize::from(save_active);
                 self.loading_frames += usize::from(load_active);
                 if let Some(startup) = &mut self.startup {
+                    if startup.ready && !startup.graphics_ready {
+                        self.startup_gpu_frames += 1;
+                    }
                     if startup.blocked() {
                         startup.presented += 1;
                         if startup.error.is_some() {
                             self.startup_error_frames += 1;
                         }
+                    }
+                    if startup.ready && !startup.graphics_ready && !gpu.texture_pending() {
+                        startup.graphics_ready = true;
+                        self.frames = 0;
+                        self.notice = None;
                     }
                     if startup.blocked()
                         && !startup.running()
@@ -1262,6 +1287,15 @@ impl ApplicationHandler for App {
         }
         match event {
             WindowEvent::CloseRequested => {
+                if self.startup_blocked() && self.startup.as_ref().is_some_and(|s| s.ready) {
+                    self.startup.as_mut().unwrap().counters.graphics_cancelled = true;
+                    if let Some(gpu) = &mut self.gpu {
+                        gpu.cancel_texture_upload();
+                    }
+                    self.close_completed = true;
+                    event_loop.exit();
+                    return;
+                }
                 if self.startup_running() {
                     self.startup.as_mut().unwrap().cancel();
                     self.close_after_save = true;
@@ -1575,6 +1609,61 @@ impl ApplicationHandler for App {
                         self.error = Some(e.to_string());
                         event_loop.exit();
                     }
+                }
+                if self.smoke
+                    && !self.startup_gpu_controls_verified
+                    && self.gpu.as_ref().is_some_and(|g| g.texture_pending())
+                {
+                    let before = self.client.scene.engine.as_ref().unwrap().player.clone();
+                    let open = self.palette.open;
+                    let pointer = self.palette.pointer;
+                    let controls = (|| -> Result<()> {
+                        for key in [
+                            KeyCode::F5,
+                            KeyCode::F6,
+                            KeyCode::F9,
+                            KeyCode::F10,
+                            KeyCode::KeyF,
+                            KeyCode::KeyN,
+                            KeyCode::KeyE,
+                            KeyCode::F4,
+                            KeyCode::F4,
+                            KeyCode::F7,
+                            KeyCode::F7,
+                            KeyCode::F7,
+                        ] {
+                            self.engine_key(key)?;
+                        }
+                        if self.save_busy()
+                            || self.load_busy()
+                            || self.palette.open != open
+                            || self.palette.pointer != pointer
+                            || self
+                                .client
+                                .scene
+                                .engine
+                                .as_ref()
+                                .unwrap()
+                                .player
+                                .changed_slots(&before)
+                                != 0
+                        {
+                            return Err(
+                                "Graphics upload controls mutated the prepared world".into()
+                            );
+                        }
+                        self.startup_gpu_controls_verified = true;
+                        Ok(())
+                    })();
+                    if let Err(e) = controls {
+                        self.error = Some(e.to_string());
+                        event_loop.exit();
+                    }
+                }
+                if self.startup_gpu_close_test
+                    && self.gpu.as_ref().is_some_and(|g| g.texture_pending())
+                {
+                    self.window_event(event_loop, _id, WindowEvent::CloseRequested);
                 }
                 if self.startup_close_test && self.frames == 1 && !self.close_after_save {
                     self.window_event(event_loop, _id, WindowEvent::CloseRequested);
@@ -2195,6 +2284,9 @@ fn main() -> Result<()> {
     let app = App {
         startup: None,
         startup_close_test: false,
+        startup_gpu_close_test: false,
+        startup_gpu_frames: 0,
+        startup_gpu_controls_verified: false,
         startup_error_test: false,
         startup_retry_test: false,
         startup_controls_verified: false,
@@ -2285,7 +2377,7 @@ fn run_window(mut app: App, out: Option<PathBuf>) -> Result<()> {
     }
     if let Some(out) = out {
         if let Some(startup) = &app.startup {
-            let geometry = if startup.ready {
+            let geometry = if startup.graphics_ready {
                 Some(app.gpu.as_ref().unwrap().verify_geometry(&app.client)?)
             } else {
                 None
@@ -2293,7 +2385,7 @@ fn run_window(mut app: App, out: Option<PathBuf>) -> Result<()> {
             std::fs::write(
                 out.join("startup-native.json"),
                 serde_json::to_vec_pretty(
-                    &serde_json::json!({"checkpoint":engine::CHECKPOINT,"complete":startup.counters.completed==startup.counters.jobs&&!startup.running(),"ready":startup.ready,"error":startup.error,"counters":startup.counters,"loading_presented_frames":startup.presented,"phases":startup.phase_trace,"close_test":app.startup_close_test,"close_completed":app.close_completed,"error_test":app.startup_error_test,"retry_test":app.startup_retry_test,"blocked_controls_verified":app.startup_controls_verified,"geometry":geometry,"player":app.client.actor.position,"movement":app.client.movement,"blocks":app.client.scene.engine.as_ref().unwrap().blocks.len(),"saved_world":app.client.last_save,"pending_edits":app.client.pending_edits()}),
+                    &serde_json::json!({"checkpoint":engine::CHECKPOINT,"complete":startup.counters.completed==startup.counters.jobs&&!startup.running(),"ready":!startup.blocked(),"cpu_ready":startup.ready,"graphics_ready":startup.graphics_ready,"graphics_presented_frames":app.startup_gpu_frames,"graphics_controls_verified":app.startup_gpu_controls_verified,"error":startup.error,"counters":startup.counters,"loading_presented_frames":startup.presented,"phases":startup.phase_trace,"close_test":app.startup_close_test,"gpu_close_test":app.startup_gpu_close_test,"close_completed":app.close_completed,"error_test":app.startup_error_test,"retry_test":app.startup_retry_test,"blocked_controls_verified":app.startup_controls_verified,"geometry":geometry,"player":app.client.actor.position,"movement":app.client.movement,"blocks":app.client.scene.engine.as_ref().unwrap().blocks.len(),"saved_world":app.client.last_save,"pending_edits":app.client.pending_edits()}),
                 )?,
             )?;
         }

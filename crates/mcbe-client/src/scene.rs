@@ -430,6 +430,7 @@ pub struct Input {
     pub sneak: bool,
 }
 pub struct Client {
+    pub engine_gpu_prepared: std::cell::RefCell<Option<crate::engine_texture::Prepared>>,
     pub movement: crate::engine_player::Movement,
     pub engine_render_cache: std::cell::RefCell<Option<crate::render::EngineCache>>,
     pub engine_cache_enabled: bool,
@@ -490,6 +491,7 @@ impl Client {
                 .ok_or("Source world has no supported persistent cube material")?
         };
         Ok(Self {
+            engine_gpu_prepared: std::cell::RefCell::new(None),
             movement: Default::default(),
             scene,
             engine_assets: None,

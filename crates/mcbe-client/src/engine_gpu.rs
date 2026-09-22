@@ -52,6 +52,14 @@ struct UiKey {
 }
 #[derive(Serialize)]
 pub struct Statistics {
+    pub texture_stage_frames: usize,
+    pub texture_stage_bytes: usize,
+    pub texture_stage_writes: usize,
+    pub max_texture_stage_bytes: usize,
+    pub max_texture_stage_writes: usize,
+    pub max_texture_stage_ms: f64,
+    pub texture_stages_completed: usize,
+    pub texture_stages_cancelled: usize,
     pub ui_uploads: usize,
     pub texture_uploads: usize,
     pub range_culled_chunks: usize,
@@ -101,7 +109,15 @@ pub struct Frame<'a> {
     pub eye: [f32; 3],
     pub capture: Option<&'a Path>,
 }
+struct Upload {
+    prepared: crate::engine_texture::Prepared,
+    terrain: wgpu::Texture,
+    ui: wgpu::Texture,
+    cursor: usize,
+    staged: bool,
+}
 pub struct Renderer {
+    uploading: Option<Upload>,
     mesher: crate::engine_meshing::Scheduler,
     async_requested: bool,
     pub collect_timings: bool,
@@ -256,6 +272,14 @@ impl Renderer {
         });
         let depth = depth(&device, config.width, config.height);
         let stats = Statistics {
+            texture_stage_frames: 0,
+            texture_stage_bytes: 0,
+            texture_stage_writes: 0,
+            max_texture_stage_bytes: 0,
+            max_texture_stage_writes: 0,
+            max_texture_stage_ms: 0.,
+            texture_stages_completed: 0,
+            texture_stages_cancelled: 0,
             ui_uploads: 0,
             texture_uploads: 0,
             range_culled_chunks: 0,
@@ -298,6 +322,7 @@ impl Renderer {
             last_frame_ms: 0.,
         };
         Ok(Self {
+            uploading: None,
             mesher: crate::engine_meshing::Scheduler::new()?,
             async_requested: true,
             collect_timings: false,
@@ -357,101 +382,149 @@ impl Renderer {
             f64::from(self.config.height) / f64::from(self.stats.gui_scale),
         )
     }
-    fn textures(&mut self, client: &Client) -> Result<()> {
-        let state = client.scene.engine.as_ref().unwrap();
-        let layers = state.registry.blocks.len() as u32 * 6;
-        if layers > self.device.limits().max_texture_array_layers {
-            return Err("GPU texture-array limit exceeded by registry".into());
+    pub fn texture_pending(&self) -> bool {
+        self.uploading.is_some()
+    }
+    pub fn cancel_texture_upload(&mut self) {
+        if self.uploading.take().is_some_and(|p| p.staged) {
+            self.stats.texture_stages_cancelled += 1;
         }
-        let terrain = self.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Minecraft terrain layers"),
-            size: wgpu::Extent3d {
-                width: 32,
-                height: 32,
-                depth_or_array_layers: layers,
-            },
-            mip_level_count: 6,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
-        for layer in 0..layers {
-            let id = (layer / 6) as u16;
-            let face = (layer % 6) as usize;
-            let mut rgba = Vec::with_capacity(32 * 32 * 4);
-            for y in 0..32 {
-                for x in 0..32 {
-                    let u = (x as f64 + 0.5) / 32.;
-                    let v = (y as f64 + 0.5) / 32.;
-                    let rgb = client
-                        .engine_assets
-                        .as_ref()
-                        .and_then(|a| {
-                            a.color(
-                                &state.registry,
-                                id,
-                                face,
-                                u,
-                                if face <= 1 { v } else { 1. - v },
-                            )
-                        })
-                        .unwrap_or_else(|| {
-                            crate::engine::color(state.registry.get(id), face, u, v)
-                        });
-                    rgba.extend([rgb[0] as u8, rgb[1] as u8, rgb[2] as u8, 255]);
-                }
-            }
-            let mut width = 32u32;
-            for mip in 0..6 {
-                self.queue.write_texture(
-                    wgpu::TexelCopyTextureInfo {
-                        texture: &terrain,
-                        mip_level: mip,
-                        origin: wgpu::Origin3d {
-                            x: 0,
-                            y: 0,
-                            z: layer,
-                        },
-                        aspect: wgpu::TextureAspect::All,
-                    },
-                    &rgba,
-                    wgpu::TexelCopyBufferLayout {
-                        offset: 0,
-                        bytes_per_row: Some(width * 4),
-                        rows_per_image: Some(width),
-                    },
-                    wgpu::Extent3d {
-                        width,
-                        height: width,
-                        depth_or_array_layers: 1,
-                    },
-                );
-                if width > 1 {
-                    let next = width / 2;
-                    let mut reduced = vec![0; (next * next * 4) as usize];
-                    for y in 0..next {
-                        for x in 0..next {
-                            for channel in 0..4 {
-                                let sum: u32 = [(0, 0), (1, 0), (0, 1), (1, 1)]
-                                    .iter()
-                                    .map(|(dx, dy)| {
-                                        u32::from(
-                                            rgba[(((y * 2 + dy) * width + x * 2 + dx) * 4 + channel)
-                                                as usize],
-                                        )
-                                    })
-                                    .sum();
-                                reduced[((y * next + x) * 4 + channel) as usize] = (sum / 4) as u8;
-                            }
-                        }
-                    }
-                    rgba = reduced;
-                    width = next;
-                }
-            }
+    }
+    fn textures(&mut self, client: &Client) -> Result<bool> {
+        use crate::engine_texture::{Prepared, Step};
+        let started = Instant::now();
+        if self
+            .uploading
+            .as_ref()
+            .is_some_and(|p| !p.prepared.matches(client))
+        {
+            self.cancel_texture_upload();
         }
+        if self.uploading.is_none() {
+            let owned = client.engine_gpu_prepared.borrow_mut().take();
+            let staged = owned.as_ref().is_some_and(|p| p.matches(client));
+            let prepared = if let Some(p) = owned.filter(|p| p.matches(client)) {
+                p
+            } else {
+                Prepared::build(client)?
+            };
+            if prepared.layers > self.device.limits().max_texture_array_layers {
+                return Err("GPU texture-array limit exceeded by registry".into());
+            }
+            let terrain = self.device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("Minecraft terrain layers"),
+                size: wgpu::Extent3d {
+                    width: 32,
+                    height: 32,
+                    depth_or_array_layers: prepared.layers,
+                },
+                mip_level_count: 6,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            });
+            let ui = self.device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("local HUD sprite atlas"),
+                size: wgpu::Extent3d {
+                    width: prepared.atlas.size,
+                    height: prepared.atlas.size,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            });
+            self.uploading = Some(Upload {
+                prepared,
+                terrain,
+                ui,
+                cursor: 0,
+                staged,
+            });
+        }
+        let pending = self.uploading.as_mut().unwrap();
+        let staged = pending.staged;
+        let batch = if staged {
+            pending.prepared.batch(pending.cursor)
+        } else {
+            pending.cursor..pending.prepared.steps.len()
+        };
+        if batch.is_empty() {
+            return Err("Texture copy cannot fit the upload budget".into());
+        }
+        let writes = batch.len();
+        let mut bytes = 0;
+        for i in batch.clone() {
+            let step = &pending.prepared.steps[i];
+            let payload = step.bytes(&pending.prepared.atlas);
+            bytes += payload.len();
+            let (texture, mip, origin, width, height) = match step {
+                Step::Terrain {
+                    layer, mip, width, ..
+                } => (
+                    &pending.terrain,
+                    *mip,
+                    wgpu::Origin3d {
+                        x: 0,
+                        y: 0,
+                        z: *layer,
+                    },
+                    *width,
+                    *width,
+                ),
+                Step::Ui { row, rows } => (
+                    &pending.ui,
+                    0,
+                    wgpu::Origin3d {
+                        x: 0,
+                        y: *row,
+                        z: 0,
+                    },
+                    pending.prepared.atlas.size,
+                    *rows,
+                ),
+            };
+            self.queue.write_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture,
+                    mip_level: mip,
+                    origin,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                payload,
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(width * 4),
+                    rows_per_image: Some(height),
+                },
+                wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+            );
+        }
+        pending.cursor = batch.end;
+        if staged {
+            self.stats.texture_stage_frames += 1;
+            self.stats.texture_stage_writes += writes;
+            self.stats.texture_stage_bytes += bytes;
+            self.stats.max_texture_stage_bytes = self.stats.max_texture_stage_bytes.max(bytes);
+            self.stats.max_texture_stage_writes = self.stats.max_texture_stage_writes.max(writes);
+        }
+        if pending.cursor < pending.prepared.steps.len() {
+            self.stats.max_texture_stage_ms = self
+                .stats
+                .max_texture_stage_ms
+                .max(started.elapsed().as_secs_f64() * 1000.);
+            return Ok(false);
+        }
+        let pending = self.uploading.take().unwrap();
         let sampler = self.device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("pixel textures with mipmaps"),
             address_mode_u: wgpu::AddressMode::Repeat,
@@ -467,7 +540,7 @@ impl Renderer {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&terrain.create_view(
+                    resource: wgpu::BindingResource::TextureView(&pending.terrain.create_view(
                         &wgpu::TextureViewDescriptor {
                             dimension: Some(wgpu::TextureViewDimension::D2Array),
                             ..Default::default()
@@ -484,40 +557,6 @@ impl Renderer {
                 },
             ],
         }));
-        let atlas = Atlas::build(client)?;
-        let texture = self.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("local HUD sprite atlas"),
-            size: wgpu::Extent3d {
-                width: atlas.size,
-                height: atlas.size,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
-        self.queue.write_texture(
-            wgpu::TexelCopyTextureInfo {
-                texture: &texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            &atlas.rgba,
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(atlas.size * 4),
-                rows_per_image: Some(atlas.size),
-            },
-            wgpu::Extent3d {
-                width: atlas.size,
-                height: atlas.size,
-                depth_or_array_layers: 1,
-            },
-        );
         let sampler = self.device.create_sampler(&wgpu::SamplerDescriptor {
             mag_filter: wgpu::FilterMode::Nearest,
             min_filter: wgpu::FilterMode::Nearest,
@@ -530,7 +569,7 @@ impl Renderer {
                 wgpu::BindGroupEntry {
                     binding: 0,
                     resource: wgpu::BindingResource::TextureView(
-                        &texture.create_view(&Default::default()),
+                        &pending.ui.create_view(&Default::default()),
                     ),
                 },
                 wgpu::BindGroupEntry {
@@ -539,10 +578,17 @@ impl Renderer {
                 },
             ],
         }));
-        self.atlas = Some(atlas);
+        self.atlas = Some(pending.prepared.atlas);
         self.stats.texture_uploads += 1;
         self.ui_key = None;
-        Ok(())
+        if staged {
+            self.stats.texture_stages_completed += 1;
+            self.stats.max_texture_stage_ms = self
+                .stats
+                .max_texture_stage_ms
+                .max(started.elapsed().as_secs_f64() * 1000.);
+        }
+        Ok(true)
     }
     fn upload(&mut self, key: [i32; 3], mesh: engine_mesh::ChunkMesh) {
         self.stats.mesh_rebuilds += 1;
@@ -583,7 +629,10 @@ impl Renderer {
         let all = remap || self.mesh_mode_dirty;
         self.stats.async_meshing = state.stream.is_some() && self.async_requested;
         if remap {
-            self.textures(client)?;
+            if !self.textures(client)? {
+                self.stats.meshes_ready = false;
+                return Ok(());
+            }
             self.meshes.clear();
         }
         if all {
@@ -701,7 +750,7 @@ impl Renderer {
         self.sync(client, frame.eye)?;
         // A requested verification capture waits for complete, current geometry.
         // No surface is presented or counted while this final capture is pending.
-        if frame.capture.is_some() && !self.stats.meshes_ready {
+        if frame.capture.is_some() && !self.stats.meshes_ready && !frame.startup {
             return Ok(false);
         }
         let surface = match self.surface.get_current_texture() {

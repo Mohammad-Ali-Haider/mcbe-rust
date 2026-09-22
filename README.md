@@ -4,7 +4,7 @@
 The user changed the goal on 2026-10-14; exact Minecraft cloning is no longer
 required. Earlier Bedrock research is retained as a reusable reference.
 
-**Checkpoint 45 is runnable now, building on Blockwork Version 1.0.** Double-click `Run-engine.cmd` for the
+**Checkpoint 46 is runnable now, building on Blockwork Version 1.0.** Double-click `Run-engine.cmd` for the
 Blockwork GPU engine: actual local Minecraft block textures, native window
 resolution, F4 wireframes, a compact HUD, player inventory and 2×2 crafting.
 A/D and horizontal mouse direction are corrected. Shift sneaks, F toggles
@@ -20,7 +20,10 @@ The current scene keeps rendering while movement and editing pause.
 Streamed CPU meshes build on a worker; F2 compares async/sync scheduling.
 The native loading screen now appears before terrain, save discovery and local
 texture decoding run on a startup worker. Failed launches retain retry/close
-controls. See [visible startup](docs/engine-startup.md).
+controls. Mipmaps and UI icons also prepare on the worker; startup texture
+copies are bounded per render pass and the loading screen stays active until
+graphics are ready. See [bounded graphics uploads](docs/engine-texture-uploads.md)
+and [visible startup](docs/engine-startup.md).
 The generated demo uses about 92% fewer triangles with merged faces.
 It opens maximized; F11 toggles fullscreen and F7 changes GUI scale.
 `New-engine-world.cmd` starts fresh with generated column streaming; F10 visits
