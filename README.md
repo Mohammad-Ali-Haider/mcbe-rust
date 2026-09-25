@@ -7,7 +7,7 @@ required. Earlier Bedrock research is retained as a reusable reference.
 **Checkpoint 48 is runnable now, building on Blockwork Version 1.0.** Double-click `Run-engine.cmd` for the
 Blockwork GPU engine: actual local Minecraft block textures, native window
 resolution, F4 wireframes, a compact HUD, player inventory and 2×2 crafting.
-A/D and horizontal mouse direction are corrected. Shift sneaks, F toggles
+A/D and horizontal mouse direction are corrected. Shift sneaks, double-tap Space (or F) toggles
 collision flight, and N toggles noclip. E opens inventory; right-click splits
 stacks and Shift-click moves them. JSON cuboid models include slabs, four
 oriented stairs and a window frame with a real gap. The exported

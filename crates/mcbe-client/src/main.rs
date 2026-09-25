@@ -51,6 +51,7 @@ use winit::{
 };
 
 struct App {
+    flight_tap: engine_player::FlightTap,
     settings_test: bool,
     settings_stage: u8,
     settings_trace: Vec<serde_json::Value>,
@@ -207,6 +208,7 @@ impl App {
             frame_limit: 3,
             capture_out: None,
             simulation_previous: client.actor.position,
+            flight_tap: Default::default(),
             settings_test: false,
             settings_stage: 0,
             settings_trace: Vec::new(),
@@ -284,6 +286,34 @@ impl App {
     fn startup_running(&self) -> bool {
         self.startup.as_ref().is_some_and(|s| s.running())
     }
+    fn jump_event(&mut self, pressed: bool, repeat: bool, now: Instant) -> Result<()> {
+        if self.client.scene.engine.is_none()
+            || self.startup_blocked()
+            || self.load_busy()
+            || self.close_after_save
+            || self.menu.open()
+            || self.palette.open
+            || self.inventory_open
+        {
+            self.flight_tap.reset();
+        } else if self.flight_tap.event(pressed, repeat, now) {
+            self.toggle_flight()?;
+        }
+        Ok(())
+    }
+    fn toggle_flight(&mut self) -> Result<()> {
+        let next = if self.client.movement.mode == engine_player::Mode::Walking {
+            engine_player::Mode::Flying
+        } else {
+            engine_player::Mode::Walking
+        };
+        engine_player::mode(&mut self.client, next)?;
+        self.notice = Some(format!(
+            "Movement: {:?} | Double-tap Space / F fly | N noclip | Space up / Shift down",
+            next
+        ));
+        Ok(())
+    }
     fn engine_key(&mut self, code: KeyCode) -> Result<bool> {
         if self.startup_blocked()
             && !matches!(code, KeyCode::F3 | KeyCode::F4 | KeyCode::F7 | KeyCode::F11)
@@ -352,17 +382,16 @@ impl App {
             return Ok(true);
         }
         if matches!(code, KeyCode::KeyF | KeyCode::KeyN) && !self.palette.open {
+            self.flight_tap.reset();
+            if code == KeyCode::KeyF {
+                self.toggle_flight()?;
+                return Ok(true);
+            }
             let current = self.client.movement.mode;
-            let next = if code == KeyCode::KeyN {
-                if current == engine_player::Mode::Noclip {
-                    engine_player::Mode::Flying
-                } else {
-                    engine_player::Mode::Noclip
-                }
-            } else if current == engine_player::Mode::Walking {
+            let next = if current == engine_player::Mode::Noclip {
                 engine_player::Mode::Flying
             } else {
-                engine_player::Mode::Walking
+                engine_player::Mode::Noclip
             };
             engine_player::mode(&mut self.client, next)?;
             self.notice = Some(format!(
@@ -471,7 +500,7 @@ impl App {
                 self.notice = if self.notice.is_some() {
                     None
                 } else {
-                    Some("WASD move | Space jump/up | Shift sneak/down | F fly | N noclip | E blocks | F5 save | F9 reload | F4 wireframe | F11 fullscreen".into())
+                    Some("WASD move | Space jump/up | Double-tap Space / F fly | Shift sneak/down | N noclip | E blocks | F5 save | F9 reload | F4 wireframe | F11 fullscreen".into())
                 };
                 Ok(true)
             }
@@ -762,6 +791,9 @@ impl App {
         Ok(())
     }
     fn capture(&mut self, value: bool) {
+        if !value {
+            self.flight_tap.reset();
+        }
         let Some(window) = &self.window else {
             return;
         };
@@ -1492,6 +1524,15 @@ impl ApplicationHandler for App {
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 if let PhysicalKey::Code(code) = event.physical_key {
+                    if code == KeyCode::Space
+                        && let Err(e) = self.jump_event(
+                            event.state == ElementState::Pressed,
+                            event.repeat,
+                            Instant::now(),
+                        )
+                    {
+                        self.notice = Some(e.to_string());
+                    }
                     if self.palette.open
                         && !self.load_busy()
                         && self.palette.search
@@ -2531,6 +2572,7 @@ fn main() -> Result<()> {
         simulation_previous: client.actor.position,
         settings: Default::default(),
         menu: Default::default(),
+        flight_tap: Default::default(),
         settings_test: false,
         settings_stage: 0,
         settings_trace: Vec::new(),
@@ -2656,4 +2698,82 @@ fn run_window(mut app: App, out: Option<PathBuf>) -> Result<()> {
         )?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod flight_input_tests {
+    use super::*;
+    fn app() -> App {
+        App::new(
+            engine::generate(360036).unwrap(),
+            PathBuf::from("work"),
+            false,
+            true,
+        )
+        .unwrap()
+    }
+    fn press(app: &mut App, now: Instant) {
+        app.jump_event(true, false, now).unwrap();
+        app.jump_event(false, false, now + Duration::from_millis(10))
+            .unwrap();
+    }
+    #[test]
+    fn double_jump_toggles_flight_both_ways_and_single_space_still_jumps() {
+        let mut app = app();
+        let now = Instant::now();
+        press(&mut app, now);
+        assert_eq!(app.client.movement.mode, engine_player::Mode::Walking);
+        app.client.actor.on_ground = true;
+        let y = app.client.actor.position.y;
+        app.client
+            .tick(Input {
+                jump: true,
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(app.client.actor.position.y > y);
+        press(&mut app, now + Duration::from_millis(100));
+        assert_eq!(app.client.movement.mode, engine_player::Mode::Flying);
+        let y = app.client.actor.position.y;
+        app.client
+            .tick(Input {
+                jump: true,
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(app.client.actor.position.y > y);
+        app.jump_event(true, true, now + Duration::from_millis(130))
+            .unwrap();
+        assert_eq!(app.client.movement.mode, engine_player::Mode::Flying);
+        press(&mut app, now + Duration::from_millis(150));
+        assert_eq!(app.client.movement.mode, engine_player::Mode::Flying);
+        press(&mut app, now + Duration::from_millis(200));
+        assert_eq!(app.client.movement.mode, engine_player::Mode::Walking);
+        app.engine_key(KeyCode::KeyF).unwrap();
+        assert_eq!(app.client.movement.mode, engine_player::Mode::Flying);
+        app.engine_key(KeyCode::KeyF).unwrap();
+        assert_eq!(app.client.movement.mode, engine_player::Mode::Walking);
+    }
+    #[test]
+    fn menus_focus_loss_and_manual_shortcut_clear_pending_jump_taps() {
+        let mut app = app();
+        let now = Instant::now();
+        press(&mut app, now);
+        app.capture(false); // Same reset used when focus is lost, including before a window exists.
+        press(&mut app, now + Duration::from_millis(50));
+        assert_eq!(app.client.movement.mode, engine_player::Mode::Walking);
+        app.menu.page = engine_settings::Page::Pause;
+        press(&mut app, now + Duration::from_millis(100));
+        app.menu.page = engine_settings::Page::Closed;
+        press(&mut app, now + Duration::from_millis(150));
+        assert_eq!(app.client.movement.mode, engine_player::Mode::Walking);
+        app.palette.open = true;
+        press(&mut app, now + Duration::from_millis(170));
+        app.palette.open = false;
+        press(&mut app, now + Duration::from_millis(200));
+        assert_eq!(app.client.movement.mode, engine_player::Mode::Walking);
+        app.engine_key(KeyCode::KeyF).unwrap();
+        press(&mut app, now + Duration::from_millis(220));
+        assert_eq!(app.client.movement.mode, engine_player::Mode::Flying);
+    }
 }

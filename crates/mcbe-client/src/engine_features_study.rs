@@ -80,6 +80,24 @@ pub fn prepare(app: &mut App, out: &Path, settings: bool) -> Result<()> {
     app.client.set_spawn(Vec3::new(0.5, 4., -10.5))?;
     app.client.yaw = 0.;
     app.client.pitch = -0.02;
+    // Exercise the production Space-press controller before the native gallery.
+    let now = std::time::Instant::now();
+    for ms in [0, 100, 150, 200] {
+        app.jump_event(true, false, now + std::time::Duration::from_millis(ms))?;
+        app.jump_event(
+            false,
+            false,
+            now + std::time::Duration::from_millis(ms + 10),
+        )?;
+        let expected = if (100..200).contains(&ms) {
+            Mode::Flying
+        } else {
+            Mode::Walking
+        };
+        if app.client.movement.mode != expected {
+            return Err("Double-tap Space flight toggle failed".into());
+        }
+    }
     app.engine_key(KeyCode::KeyF)?;
     let old = app.client.actor.position;
     app.client.tick(Input {
@@ -135,7 +153,7 @@ pub fn prepare(app: &mut App, out: &Path, settings: bool) -> Result<()> {
     fs::write(
         out.join("features.json"),
         serde_json::to_vec_pretty(
-            &json!({"complete":true,"checkpoint":engine::CHECKPOINT,"registry_blocks":registry.blocks.len(),"models":names,"saved_world":saved,"walk_sprint":0.28,"flight_sprint":0.8,"variant_save_roundtrip":true,"settings_persisted":settings}),
+            &json!({"complete":true,"checkpoint":engine::CHECKPOINT,"registry_blocks":registry.blocks.len(),"models":names,"saved_world":saved,"walk_sprint":0.28,"flight_sprint":0.8,"double_jump_flight_toggle":true,"variant_save_roundtrip":true,"settings_persisted":settings}),
         )?,
     )?;
     app.notice = None;

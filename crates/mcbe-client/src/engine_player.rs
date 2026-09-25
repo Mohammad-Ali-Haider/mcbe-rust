@@ -2,6 +2,39 @@
 use crate::scene::{Client, Input, Result};
 use mcbe_core::motion::{Body, SolidScene, Vec3};
 use serde::{Deserialize, Serialize};
+use std::time::{Duration, Instant};
+
+/// Only distinct presses count; a held key and OS repeat cannot toggle flight.
+#[derive(Default)]
+pub struct FlightTap {
+    last_press: Option<Instant>,
+    held: bool,
+}
+impl FlightTap {
+    pub fn reset(&mut self) {
+        *self = Self::default();
+    }
+    pub fn event(&mut self, pressed: bool, repeat: bool, now: Instant) -> bool {
+        if !pressed {
+            self.held = false;
+            return false;
+        }
+        if repeat || self.held {
+            return false;
+        }
+        self.held = true;
+        if self
+            .last_press
+            .take()
+            .is_some_and(|last| now.saturating_duration_since(last) <= Duration::from_millis(250))
+        {
+            true
+        } else {
+            self.last_press = Some(now);
+            false
+        }
+    }
+}
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Mode {
@@ -173,6 +206,32 @@ pub fn tick(client: &mut Client, input: Input) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn double_tap_requires_two_distinct_presses_and_consumes_each_pair() {
+        let mut tap = FlightTap::default();
+        let now = Instant::now();
+        assert!(!tap.event(true, false, now));
+        assert!(!tap.event(true, true, now + Duration::from_millis(50)));
+        assert!(!tap.event(true, false, now + Duration::from_millis(80)));
+        assert!(!tap.event(false, false, now + Duration::from_millis(100)));
+        assert!(tap.event(true, false, now + Duration::from_millis(250)));
+        tap.event(false, false, now + Duration::from_millis(260));
+        assert!(!tap.event(true, false, now + Duration::from_millis(280)));
+        tap.event(false, false, now + Duration::from_millis(300));
+        assert!(tap.event(true, false, now + Duration::from_millis(320)));
+    }
+    #[test]
+    fn slow_presses_and_reset_cannot_complete_an_old_pair() {
+        let mut tap = FlightTap::default();
+        let now = Instant::now();
+        tap.event(true, false, now);
+        tap.event(false, false, now);
+        assert!(!tap.event(true, false, now + Duration::from_millis(251)));
+        tap.reset();
+        assert!(!tap.event(true, false, now + Duration::from_millis(300)));
+        tap.event(false, false, now + Duration::from_millis(310));
+        assert!(tap.event(true, false, now + Duration::from_millis(400)));
+    }
     fn client() -> Client {
         let mut c = crate::engine::generate(360036).unwrap();
         c.set_spawn(Vec3::new(0.5, 4., -9.5)).unwrap();
