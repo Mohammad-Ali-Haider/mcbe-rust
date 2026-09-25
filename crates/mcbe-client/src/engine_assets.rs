@@ -15,6 +15,7 @@ use std::{
 };
 pub const DEFAULT_ROOT: &str = r"C:\XboxGames\Minecraft for Windows\Content\data\resource_packs";
 pub struct Assets {
+    pub preview: crate::engine_preview::Model,
     pub inventory: BTreeMap<&'static str, Texture>,
     pub root: PathBuf,
     pub materials: HashMap<(BlockId, usize), Material>,
@@ -91,6 +92,11 @@ pub fn load(registry: &Registry, root: &Path) -> Result<Assets> {
         inventory_textures.push(json!({"key":key,"path":path,"origins":source.origins,"width":decoded.width,"height":decoded.height,"rgba_sha256":format!("{:x}",Sha256::digest(&decoded.rgba))}));
         inventory.insert(key, decoded);
     }
+    let model_source = base.read("models/mobs.json")?;
+    let model_json = mcbe_core::resources::json(&model_source.bytes)?;
+    let skin = &inventory["skin"];
+    let preview = crate::engine_preview::Model::parse(&model_json, [skin.width, skin.height])?;
+    let preview_provenance = json!({"path":"models/mobs.json","origins":model_source.origins,"cubes":preview.cubes,"model":"geometry.humanoid.custom:geometry.humanoid","skin_size":[skin.width,skin.height]});
     let common_source = base.read("ui/ui_common.json")?;
     let common = mcbe_core::resources::json(&common_source.bytes)?;
     let inventory_source = base.read("ui/inventory_screen.json")?;
@@ -132,8 +138,9 @@ pub fn load(registry: &Registry, root: &Path) -> Result<Assets> {
             .iter()
             .map(|(p, h)| (p.to_string_lossy().into_owned(), h.clone())),
     );
-    let provenance = json!({"source_root":root,"source_hashes":source_hashes,"bindings":bindings,"hud_origins":hud.origins,"hotbar_slot_size":[20,22],"selection_size":[24,24],"inventory_textures":inventory_textures,"inventory_origins":inventory_source.origins,"common_origins":common_source.origins,"desktop_panel_size":[176,166],"desktop_content_size":[326,166],"inventory_slot_size":[18,18],"crafting_grid_size":[36,36],"grass_biome":"minecraft:plains","scope":"Exact decoded local texture pixels and inspected HUD/inventory dimensions; full native lighting, model UVs, live 3D player preview and interface behavior require separate visual checks"});
+    let provenance = json!({"preview_model":preview_provenance,"source_root":root,"source_hashes":source_hashes,"bindings":bindings,"hud_origins":hud.origins,"hotbar_slot_size":[20,22],"selection_size":[24,24],"inventory_textures":inventory_textures,"inventory_origins":inventory_source.origins,"common_origins":common_source.origins,"desktop_panel_size":[176,166],"desktop_content_size":[326,166],"inventory_slot_size":[18,18],"crafting_grid_size":[36,36],"grass_biome":"minecraft:plains","scope":"Exact decoded local texture pixels and inspected HUD/inventory dimensions; full native lighting, model UVs, live 3D player preview and interface behavior require separate visual checks"});
     Ok(Assets {
+        preview,
         inventory,
         root: root.to_path_buf(),
         materials,

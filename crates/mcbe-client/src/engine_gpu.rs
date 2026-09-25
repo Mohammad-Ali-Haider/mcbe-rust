@@ -52,6 +52,9 @@ struct UiKey {
 }
 #[derive(Serialize)]
 pub struct Statistics {
+    pub preview_uploads: usize,
+    pub preview_vertices: usize,
+    pub preview_draws: usize,
     pub texture_stage_frames: usize,
     pub texture_stage_bytes: usize,
     pub texture_stage_writes: usize,
@@ -117,6 +120,10 @@ struct Upload {
     staged: bool,
 }
 pub struct Renderer {
+    preview_pipeline: wgpu::RenderPipeline,
+    preview_buffer: wgpu::Buffer,
+    preview_mesh: Option<crate::engine_preview::Mesh>,
+    ui_preview_at: Option<u32>,
     uploading: Option<Upload>,
     mesher: crate::engine_meshing::Scheduler,
     async_requested: bool,
@@ -226,9 +233,35 @@ impl Renderer {
             label:Some("culled terrain"),layout:None,vertex:wgpu::VertexState{module:&world_shader,entry_point:Some("vs"),compilation_options:Default::default(),buffers:&[wgpu::VertexBufferLayout{array_stride:std::mem::size_of::<Vertex>()as u64,step_mode:wgpu::VertexStepMode::Vertex,attributes:&wgpu::vertex_attr_array![0=>Float32x3,1=>Float32x2,2=>Uint32,3=>Float32,4=>Float32x3]}]},
             primitive:wgpu::PrimitiveState{cull_mode:Some(wgpu::Face::Back),..Default::default()},depth_stencil:Some(wgpu::DepthStencilState{format:wgpu::TextureFormat::Depth32Float,depth_write_enabled:true,depth_compare:wgpu::CompareFunction::Less,stencil:Default::default(),bias:Default::default()}),multisample:Default::default(),fragment:Some(wgpu::FragmentState{module:&world_shader,entry_point:Some("fs"),compilation_options:Default::default(),targets:&[Some(wgpu::ColorTargetState{format:config.format,blend:None,write_mask:wgpu::ColorWrites::ALL})]}),multiview:None,cache:None,
         });
+        let ui_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("shared HUD and preview atlas"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+        });
+        let ui_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("shared HUD and preview layout"),
+            bind_group_layouts: &[&ui_layout],
+            push_constant_ranges: &[],
+        });
         let ui_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("batched native-size HUD"),
-            layout: None,
+            layout: Some(&ui_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &ui_shader,
                 entry_point: Some("vs"),
@@ -255,6 +288,54 @@ impl Renderer {
             multiview: None,
             cache: None,
         });
+        let preview_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("inventory player shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("engine_preview.wgsl").into()),
+        });
+        let preview_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("depth-tested inventory player"),
+            layout: Some(&ui_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &preview_shader,
+                entry_point: Some("vs"),
+                compilation_options: Default::default(),
+                buffers: &[wgpu::VertexBufferLayout {
+                    array_stride: std::mem::size_of::<crate::engine_preview::Vertex>() as u64,
+                    step_mode: wgpu::VertexStepMode::Vertex,
+                    attributes: &wgpu::vertex_attr_array![0=>Float32x3,1=>Float32x2,2=>Float32x4],
+                }],
+            },
+            primitive: wgpu::PrimitiveState {
+                cull_mode: Some(wgpu::Face::Back),
+                ..Default::default()
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth32Float,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: Default::default(),
+                bias: Default::default(),
+            }),
+            multisample: Default::default(),
+            fragment: Some(wgpu::FragmentState {
+                module: &preview_shader,
+                entry_point: Some("fs"),
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            multiview: None,
+            cache: None,
+        });
+        let preview_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("bounded inventory player mesh"),
+            size: (32 * 36 * std::mem::size_of::<crate::engine_preview::Vertex>()) as u64,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
         if let Some(error) = device.pop_error_scope().await {
             return Err(format!("GPU pipeline validation: {error}").into());
         }
@@ -272,6 +353,9 @@ impl Renderer {
         });
         let depth = depth(&device, config.width, config.height);
         let stats = Statistics {
+            preview_uploads: 0,
+            preview_vertices: 0,
+            preview_draws: 0,
             texture_stage_frames: 0,
             texture_stage_bytes: 0,
             texture_stage_writes: 0,
@@ -322,6 +406,10 @@ impl Renderer {
             last_frame_ms: 0.,
         };
         Ok(Self {
+            preview_pipeline,
+            preview_buffer,
+            preview_mesh: None,
+            ui_preview_at: None,
             uploading: None,
             mesher: crate::engine_meshing::Scheduler::new()?,
             async_requested: true,
@@ -384,6 +472,12 @@ impl Renderer {
     }
     pub fn texture_pending(&self) -> bool {
         self.uploading.is_some()
+    }
+    pub fn preview_pose(&self) -> Option<[f32; 2]> {
+        self.preview_mesh.as_ref().map(|m| m.head_angles)
+    }
+    pub fn preview_observation(&self) -> serde_json::Value {
+        self.preview_mesh.as_ref().map_or(serde_json::Value::Null,|m|serde_json::json!({"rectangle":m.rectangle,"head_angles":m.head_angles,"vertices":m.vertices,"skin":self.atlas.as_ref().and_then(|a|a.preview_skin()),"depth_test":true,"alpha_test":true,"scissored":true,"foreground_after_preview":true}))
     }
     pub fn cancel_texture_upload(&mut self) {
         if self.uploading.take().is_some_and(|p| p.staged) {
@@ -875,7 +969,7 @@ impl Renderer {
                 self.stats.mesh_jobs_in_flight,
                 self.stats.mesh_pending_chunks
             );
-            let vertices = self.atlas.as_ref().unwrap().compose(
+            let composition = self.atlas.as_ref().unwrap().compose(
                 client,
                 palette,
                 Context {
@@ -890,6 +984,30 @@ impl Renderer {
                     notice: frame.notice,
                 },
             );
+            self.ui_preview_at = composition.preview_at;
+            self.preview_mesh = if !frame.startup {
+                self.atlas.as_ref().unwrap().preview(
+                    client,
+                    palette,
+                    [
+                        self.config.width as f32 / self.stats.gui_scale,
+                        self.config.height as f32 / self.stats.gui_scale,
+                    ],
+                )
+            } else {
+                None
+            };
+            self.stats.preview_vertices =
+                self.preview_mesh.as_ref().map_or(0, |m| m.vertices.len());
+            if let Some(mesh) = &self.preview_mesh {
+                self.queue.write_buffer(
+                    &self.preview_buffer,
+                    0,
+                    bytemuck::cast_slice(&mesh.vertices),
+                );
+                self.stats.preview_uploads += 1;
+            }
+            let vertices = composition.vertices;
             if vertices.len() > 65536 {
                 return Err("HUD batch overflow".into());
             }
@@ -960,7 +1078,68 @@ impl Renderer {
             pass.set_pipeline(&self.ui_pipeline);
             pass.set_bind_group(0, self.ui_bind.as_ref().unwrap(), &[]);
             pass.set_vertex_buffer(0, self.ui_buffer.slice(..));
-            pass.draw(0..self.ui_vertices, 0..1);
+            pass.draw(
+                0..if self.preview_mesh.is_some() {
+                    self.ui_preview_at.unwrap_or(self.ui_vertices)
+                } else {
+                    self.ui_vertices
+                },
+                0..1,
+            );
+        }
+        if let Some(mesh) = &self.preview_mesh {
+            let [x, y, w, h] = mesh.rectangle.map(|v| v * self.stats.gui_scale);
+            let left = (x.floor().max(0.) as u32).min(self.config.width);
+            let top = (y.floor().max(0.) as u32).min(self.config.height);
+            let right = ((x + w).ceil().max(0.) as u32).min(self.config.width);
+            let bottom = ((y + h).ceil().max(0.) as u32).min(self.config.height);
+            if right > left && bottom > top {
+                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("inventory player depth and alpha"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                        view: &self.depth,
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(1.),
+                            store: wgpu::StoreOp::Discard,
+                        }),
+                        stencil_ops: None,
+                    }),
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+                pass.set_pipeline(&self.preview_pipeline);
+                pass.set_bind_group(0, self.ui_bind.as_ref().unwrap(), &[]);
+                pass.set_scissor_rect(left, top, right - left, bottom - top);
+                pass.set_vertex_buffer(0, self.preview_buffer.slice(..));
+                pass.draw(0..mesh.vertices.len() as u32, 0..1);
+                self.stats.preview_draws += 1;
+            }
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("inventory foreground and cursor"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+            pass.set_pipeline(&self.ui_pipeline);
+            pass.set_bind_group(0, self.ui_bind.as_ref().unwrap(), &[]);
+            pass.set_vertex_buffer(0, self.ui_buffer.slice(..));
+            pass.draw(self.ui_preview_at.unwrap_or(0)..self.ui_vertices, 0..1);
         }
         let readback = if frame.capture.is_some() {
             if !self.config.usage.contains(wgpu::TextureUsages::COPY_SRC) {

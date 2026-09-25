@@ -14,6 +14,7 @@ mod engine_loading_study;
 mod engine_mesh;
 mod engine_meshing;
 mod engine_player;
+mod engine_preview;
 mod engine_save_study;
 mod engine_saving;
 mod engine_startup;
@@ -45,6 +46,8 @@ use winit::{
 };
 
 struct App {
+    preview_test: Option<String>,
+    preview_trace: Vec<serde_json::Value>,
     startup: Option<engine_startup::Service>,
     startup_close_test: bool,
     startup_gpu_close_test: bool,
@@ -134,6 +137,8 @@ impl App {
             palette.pointer = [240., 135.];
         }
         Ok(Self {
+            preview_test: None,
+            preview_trace: Vec::new(),
             startup: None,
             startup_close_test: false,
             startup_gpu_close_test: false,
@@ -703,6 +708,26 @@ impl App {
         }
     }
     fn redraw(&mut self) -> Result<()> {
+        if self.preview_test.as_deref() == Some("live") && [20, 40].contains(&self.frames) {
+            let [left, top] = engine_ui::Palette::origin(self.palette.viewport);
+            let pointer = [
+                if self.frames == 20 {
+                    left - 90.
+                } else {
+                    left + 416.
+                },
+                top + 50.,
+            ];
+            self.palette
+                .move_pointer(&self.client, pointer, self.palette.viewport);
+        }
+
+        if self.frames == 0
+            && self.preview_test.as_deref() == Some("scaled")
+            && let Some(gpu) = &mut self.gpu
+        {
+            gpu.stats.gui_scale = 3.;
+        }
         if let Some(startup) = &mut self.startup {
             if startup.poll(&mut self.client, self.close_after_save)? {
                 self.simulation_previous = self.client.actor.position;
@@ -1051,7 +1076,17 @@ impl App {
                 previous.y + (current.y - previous.y) * lerp + self.client.movement.eye_height(),
                 previous.z + (current.z - previous.z) * lerp,
             ];
-            let capture = if self.smoke
+            let capture = if self.preview_test.as_deref() == Some("live")
+                && [0, 20, 40].contains(&self.frames)
+            {
+                self.capture_out.as_ref().map(|o| {
+                    o.join(match self.frames {
+                        0 => "player-initial.png",
+                        20 => "player-left.png",
+                        _ => "player-right.png",
+                    })
+                })
+            } else if self.smoke
                 && self
                     .startup
                     .as_ref()
@@ -1097,6 +1132,11 @@ impl App {
             )?;
             if presented {
                 self.frames += 1;
+                if self.preview_test.as_deref() == Some("live")
+                    && [1, 21, 41, 60].contains(&self.frames)
+                {
+                    self.preview_trace.push(serde_json::json!({"frame":self.frames,"head_angles":gpu.preview_pose(),"ui_uploads":gpu.stats.ui_uploads,"preview_uploads":gpu.stats.preview_uploads,"mesh_rebuilds":gpu.stats.mesh_rebuilds,"texture_uploads":gpu.stats.texture_uploads}));
+                }
                 self.saving_frames += usize::from(save_active);
                 self.loading_frames += usize::from(load_active);
                 if let Some(startup) = &mut self.startup {
@@ -2282,6 +2322,8 @@ fn main() -> Result<()> {
     }
     let inventory_start = inventory_start || mode.as_deref() == Some("--inventory-smoke");
     let app = App {
+        preview_test: None,
+        preview_trace: Vec::new(),
         startup: None,
         startup_close_test: false,
         startup_gpu_close_test: false,
@@ -2450,7 +2492,7 @@ fn run_window(mut app: App, out: Option<PathBuf>) -> Result<()> {
             std::fs::write(
                 out.join("gpu.json"),
                 serde_json::to_vec_pretty(
-                    &serde_json::json!({"complete":app.close_completed||app.frames>=app.frame_limit,"statistics":gpu.stats,"saving":app.saving_observation(),"loading":app.loading_observation(),"timing":timing,"wireframe":app.wireframe,"palette_open":app.palette.open,"window_transitions":app.window_transitions,"live_edit_test":app.edit_test,"pending_edits":app.client.pending_edits(),"inventory_save_mesh_check":app.inventory_mesh_check,"mesh_toggle_trace":app.mesh_toggle_trace,"streaming":engine_stream::observation(&app.client),"stream_trace":app.stream_trace,"profile_seconds":app.profile_seconds,"profile_elapsed_seconds":app.profile_started.map(|t|t.elapsed().as_secs_f32()),"target":app.client.target()?.map(|h|[h.position.x,h.position.y,h.position.z]),"uncapped_event_loop":true,"back_face_culling":true,"frustum_culling":true,"internal_faces_removed":true,"depth_testing":true,"dirty_chunk_rebuilds":true}),
+                    &serde_json::json!({"complete":app.close_completed||app.frames>=app.frame_limit,"statistics":gpu.stats,"player_preview":gpu.preview_observation(),"preview_case":app.preview_test,"preview_trace":app.preview_trace,"saving":app.saving_observation(),"loading":app.loading_observation(),"timing":timing,"wireframe":app.wireframe,"palette_open":app.palette.open,"window_transitions":app.window_transitions,"live_edit_test":app.edit_test,"pending_edits":app.client.pending_edits(),"inventory_save_mesh_check":app.inventory_mesh_check,"mesh_toggle_trace":app.mesh_toggle_trace,"streaming":engine_stream::observation(&app.client),"stream_trace":app.stream_trace,"profile_seconds":app.profile_seconds,"profile_elapsed_seconds":app.profile_started.map(|t|t.elapsed().as_secs_f32()),"target":app.client.target()?.map(|h|[h.position.x,h.position.y,h.position.z]),"uncapped_event_loop":true,"back_face_culling":true,"frustum_culling":true,"internal_faces_removed":true,"depth_testing":true,"dirty_chunk_rebuilds":true}),
                 )?,
             )?;
         }

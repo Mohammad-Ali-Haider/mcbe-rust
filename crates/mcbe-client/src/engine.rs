@@ -17,7 +17,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-pub const CHECKPOINT: u32 = 46;
+pub const CHECKPOINT: u32 = 47;
 pub const BOUNDS: Bounds = Bounds {
     min: [-40, 0, -40],
     max: [40, 40, 40],
@@ -910,6 +910,7 @@ pub fn launch(args: &[String]) -> Result<()> {
     let mut smoke = false;
     let mut seed = 360036u64;
     let mut camera = 0u8;
+    let mut preview_case = "neutral".to_owned();
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -918,7 +919,7 @@ pub fn launch(args: &[String]) -> Result<()> {
             "--engine-naive" => {},
             "--engine-stream" | "--engine-finite" | "--engine-sync-mesh" => {},
             "--engine-continue" => resume = true,
-            "--engine-home" | "--engine-load" | "--engine-study" | "--engine-startup-gpu-close-smoke" | "--engine-startup-retry-smoke" | "--engine-startup-smoke" | "--engine-startup-close-smoke" | "--engine-startup-error-smoke" | "--engine-v1-study" | "--engine-v1-smoke" | "--engine-v1-wire-smoke" | "--engine-v1-fly-smoke" | "--engine-v1-noclip-smoke" | "--engine-v1-sneak-smoke" | "--engine-loading-study" | "--engine-loading-smoke" | "--engine-loading-close-smoke" | "--engine-save-study" | "--engine-save-smoke" | "--engine-save-close-smoke" | "--engine-async-smoke" | "--engine-stream-profile" | "--engine-stream-study" | "--engine-stream-smoke" | "--engine-stream-wire-smoke" | "--engine-smoke" | "--engine-palette-smoke" | "--engine-wire-smoke" | "--engine-window-smoke" | "--engine-edit-smoke" | "--engine-benchmark" | "--engine-profile" | "--engine-render-smoke" | "--engine-mesh-smoke" | "--engine-camera" | "--engine-inventory-study" | "--engine-inventory-smoke" | "--engine-seed" | "--engine-blocks" | "--engine-pack-root" => {
+            "--engine-home" | "--engine-load" | "--engine-study" | "--engine-preview-smoke" | "--engine-preview-case" | "--engine-startup-gpu-close-smoke" | "--engine-startup-retry-smoke" | "--engine-startup-smoke" | "--engine-startup-close-smoke" | "--engine-startup-error-smoke" | "--engine-v1-study" | "--engine-v1-smoke" | "--engine-v1-wire-smoke" | "--engine-v1-fly-smoke" | "--engine-v1-noclip-smoke" | "--engine-v1-sneak-smoke" | "--engine-loading-study" | "--engine-loading-smoke" | "--engine-loading-close-smoke" | "--engine-save-study" | "--engine-save-smoke" | "--engine-save-close-smoke" | "--engine-async-smoke" | "--engine-stream-profile" | "--engine-stream-study" | "--engine-stream-smoke" | "--engine-stream-wire-smoke" | "--engine-smoke" | "--engine-palette-smoke" | "--engine-wire-smoke" | "--engine-window-smoke" | "--engine-edit-smoke" | "--engine-benchmark" | "--engine-profile" | "--engine-render-smoke" | "--engine-mesh-smoke" | "--engine-camera" | "--engine-inventory-study" | "--engine-inventory-smoke" | "--engine-seed" | "--engine-blocks" | "--engine-pack-root" => {
                 let flag = &args[i]; i+=1; let value = args.get(i).ok_or("Engine option requires a value")?;
                 match flag.as_str() {
                     "--engine-home" => home=PathBuf::from(value),
@@ -926,6 +927,7 @@ pub fn launch(args: &[String]) -> Result<()> {
                     "--engine-pack-root" => pack_root=PathBuf::from(value),
                     "--engine-load" => source=Some(PathBuf::from(value)),
                     "--engine-seed" => seed=value.parse()?,
+                    "--engine-preview-case" => preview_case=value.clone(),
                     "--engine-camera" => { camera=value.parse()?; if camera>3 { return Err("Engine camera must be 0..3".into()); } },
                     _ => { out=Some(PathBuf::from(value)); smoke = !flag.ends_with("-study"); },
                 }
@@ -1000,7 +1002,45 @@ pub fn launch(args: &[String]) -> Result<()> {
         app.frame_limit = 4;
     }
     if let Some(out) = &out {
-        if startup_test {
+        if args.iter().any(|a| a == "--engine-preview-smoke") {
+            if out.exists() {
+                return Err("Fresh preview proof directory required".into());
+            }
+            fs::create_dir_all(out)?;
+            app.engine_key(winit::keyboard::KeyCode::KeyE)?;
+            let [left, top] = crate::engine_ui::Palette::origin(app.palette.viewport);
+            let point = match preview_case.as_str() {
+                "left" => [left - 90., top + 50.],
+                "right" => [left + 416., top + 50.],
+                "up" => [left + 202., top - 90.],
+                "down" => [left + 202., top + 256.],
+                "neutral" | "held" | "scaled" | "sneak" | "live" => [left + 202., top + 25.5],
+                _ => return Err("Unknown player preview case".into()),
+            };
+            app.palette
+                .move_pointer(&app.client, point, app.palette.viewport);
+            if preview_case == "held" {
+                let id = app
+                    .client
+                    .scene
+                    .engine
+                    .as_ref()
+                    .unwrap()
+                    .registry
+                    .find("oak_log")?;
+                app.client.scene.engine.as_mut().unwrap().player.cursor =
+                    Some(crate::engine_inventory::Stack { id, count: 3 });
+            }
+            if preview_case == "sneak" {
+                app.client.tick(Input {
+                    sneak: true,
+                    ..Default::default()
+                })?;
+            }
+            app.preview_test = Some(preview_case);
+            app.frame_limit = 60;
+            app.notice = None;
+        } else if startup_test {
             // The production startup service is exercised inside the native event loop.
         } else if args.iter().any(|a| a.starts_with("--engine-v1-")) {
             crate::engine_v1_study::verify(&mut app, out)?;

@@ -251,7 +251,7 @@ impl Palette {
     }
     pub fn move_pointer(&mut self, client: &Client, position: [f32; 2], viewport: [f32; 2]) {
         let target = self.hit(client, position, viewport);
-        if self.hover != target || (target.is_some() && self.pointer != position) {
+        if self.hover != target || self.pointer != position {
             self.revision = self.revision.wrapping_add(1);
         }
         self.pointer = position;
@@ -604,5 +604,19 @@ mod tests {
                     .unwrap()
             )
         );
+    }
+    #[test]
+    fn pointer_motion_outside_slots_invalidates_the_live_preview() {
+        let client = crate::engine::generate(47).unwrap();
+        let mut palette = Palette::default();
+        palette.move_pointer(&client, [-40., -40.], [480., 270.]);
+        let revision = palette.revision;
+        assert!(palette.hover.is_none());
+        palette.move_pointer(&client, [-80., -40.], [480., 270.]);
+        assert!(palette.hover.is_none());
+        assert!(palette.revision > revision);
+        let revision = palette.revision;
+        palette.move_pointer(&client, [-80., -40.], [480., 270.]);
+        assert_eq!(palette.revision, revision);
     }
 }

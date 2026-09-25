@@ -59,7 +59,12 @@ pub struct Context<'a> {
     pub statistics: &'a str,
     pub notice: Option<&'a str>,
 }
+pub struct Composition {
+    pub vertices: Vec<Vertex>,
+    pub preview_at: Option<u32>,
+}
 struct Canvas {
+    preview_at: Option<u32>,
     vertices: Vec<Vertex>,
     width: f32,
     height: f32,
@@ -300,44 +305,45 @@ impl Atlas {
         if let Some(border) = self.inventory.get("preview_border") {
             c.quad(*border, [x + 25., y + 7., 54., 72.], [1.; 4]);
         }
-        if let Some(skin) = self.inventory.get("skin") {
-            let x = x + 36.;
-            let y = y + 11.;
-            let modern = skin.h >= 64;
-            for (src, dst) in [
-                ([8, 8, 8, 8], [x + 8., y, 16., 16.]),
-                ([20, 20, 8, 12], [x + 8., y + 16., 16., 24.]),
-                ([44, 20, 4, 12], [x, y + 16., 8., 24.]),
-                (
-                    if modern {
-                        [36, 52, 4, 12]
-                    } else {
-                        [44, 20, 4, 12]
-                    },
-                    [x + 24., y + 16., 8., 24.],
-                ),
-                ([4, 20, 4, 12], [x + 8., y + 40., 8., 24.]),
-                (
-                    if modern {
-                        [20, 52, 4, 12]
-                    } else {
-                        [4, 20, 4, 12]
-                    },
-                    [x + 16., y + 40., 8., 24.],
-                ),
-            ] {
-                c.quad(skin.crop(src[0], src[1], src[2], src[3]), dst, [1.; 4]);
-            }
-            c.quad(skin.crop(40, 8, 8, 8), [x + 8., y, 16., 16.], [1.; 4]);
-        }
+        c.preview_at = Some(c.vertices.len() as u32);
     }
-    pub fn compose(&self, client: &Client, palette: &Palette, ctx: Context<'_>) -> Vec<Vertex> {
+    pub fn preview(
+        &self,
+        client: &Client,
+        palette: &Palette,
+        viewport: [f32; 2],
+    ) -> Option<crate::engine_preview::Mesh> {
+        if !palette.open {
+            return None;
+        }
+        let assets = client.engine_assets.as_ref()?;
+        let sprite = self.inventory.get("skin")?;
+        let [left, top] = Palette::origin(viewport);
+        let right = left + 150.;
+        Some(assets.preview.mesh(
+            [right + 26., top + 8., 52., 70.],
+            palette.pointer,
+            viewport,
+            [
+                sprite.x as f32,
+                sprite.y as f32,
+                sprite.w as f32,
+                sprite.h as f32,
+            ],
+            client.movement.crouched,
+        ))
+    }
+    pub fn preview_skin(&self) -> Option<[u32; 4]> {
+        self.inventory.get("skin").map(|s| [s.x, s.y, s.w, s.h])
+    }
+    pub fn compose(&self, client: &Client, palette: &Palette, ctx: Context<'_>) -> Composition {
         use crate::engine_inventory::Slot;
         use crate::engine_ui::Target;
         let width = ctx.width as f32 / ctx.scale;
         let height = ctx.height as f32 / ctx.scale;
         let viewport = [width, height];
         let mut c = Canvas {
+            preview_at: None,
             vertices: Vec::new(),
             width,
             height,
@@ -370,7 +376,10 @@ impl Atlas {
                 }
             }
             self.text(&mut c, left, y, &line, [1.; 4]);
-            return c.vertices;
+            return Composition {
+                vertices: c.vertices,
+                preview_at: None,
+            };
         }
         let state = client.scene.engine.as_ref().unwrap();
         let player = &state.player;
@@ -601,6 +610,9 @@ impl Atlas {
                 );
             }
         }
-        c.vertices
+        Composition {
+            vertices: c.vertices,
+            preview_at: c.preview_at,
+        }
     }
 }
