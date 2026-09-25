@@ -17,7 +17,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-pub const CHECKPOINT: u32 = 47;
+pub const CHECKPOINT: u32 = 48;
 pub const BOUNDS: Bounds = Bounds {
     min: [-40, 0, -40],
     max: [40, 40, 40],
@@ -845,7 +845,7 @@ pub fn apply_registry(client: &mut Client, registry: Registry) -> Result<()> {
         let low = [p.x - half, p.y, p.z - half];
         let high = [p.x + half, p.y + client.actor.body.height, p.z + half];
         if blocks.iter().any(|(p, id)| {
-            geometry.boxes(*id).iter().any(|b| {
+            geometry.collision(*id).iter().any(|b| {
                 (0..3).all(|a| low[a] < p[a] as f32 + b[a + 3] && high[a] > p[a] as f32 + b[a])
             })
         }) {
@@ -890,7 +890,14 @@ pub fn reload_definitions(client: &mut Client, path: &Path) -> Result<()> {
         Some(a) => Some(crate::engine_assets::load(&registry, &a.root)?),
         None => None,
     };
+    let home = client
+        .owned_materials
+        .as_ref()
+        .map(|a| a.root.as_path())
+        .unwrap_or(path.parent().unwrap().parent().unwrap_or(Path::new(".")));
+    let owned = crate::engine_materials::load(&registry, home)?;
     apply_registry(client, registry)?;
+    client.owned_materials = Some(owned);
     client.scene.engine.as_mut().unwrap().recipes = recipes;
     client.engine_assets = assets;
     Ok(())
@@ -919,7 +926,7 @@ pub fn launch(args: &[String]) -> Result<()> {
             "--engine-naive" => {},
             "--engine-stream" | "--engine-finite" | "--engine-sync-mesh" => {},
             "--engine-continue" => resume = true,
-            "--engine-home" | "--engine-load" | "--engine-study" | "--engine-preview-smoke" | "--engine-preview-case" | "--engine-startup-gpu-close-smoke" | "--engine-startup-retry-smoke" | "--engine-startup-smoke" | "--engine-startup-close-smoke" | "--engine-startup-error-smoke" | "--engine-v1-study" | "--engine-v1-smoke" | "--engine-v1-wire-smoke" | "--engine-v1-fly-smoke" | "--engine-v1-noclip-smoke" | "--engine-v1-sneak-smoke" | "--engine-loading-study" | "--engine-loading-smoke" | "--engine-loading-close-smoke" | "--engine-save-study" | "--engine-save-smoke" | "--engine-save-close-smoke" | "--engine-async-smoke" | "--engine-stream-profile" | "--engine-stream-study" | "--engine-stream-smoke" | "--engine-stream-wire-smoke" | "--engine-smoke" | "--engine-palette-smoke" | "--engine-wire-smoke" | "--engine-window-smoke" | "--engine-edit-smoke" | "--engine-benchmark" | "--engine-profile" | "--engine-render-smoke" | "--engine-mesh-smoke" | "--engine-camera" | "--engine-inventory-study" | "--engine-inventory-smoke" | "--engine-seed" | "--engine-blocks" | "--engine-pack-root" => {
+            "--engine-home" | "--engine-load" | "--engine-study" | "--engine-features-smoke" | "--engine-settings-smoke" | "--engine-preview-smoke" | "--engine-preview-case" | "--engine-startup-gpu-close-smoke" | "--engine-startup-retry-smoke" | "--engine-startup-smoke" | "--engine-startup-close-smoke" | "--engine-startup-error-smoke" | "--engine-v1-study" | "--engine-v1-smoke" | "--engine-v1-wire-smoke" | "--engine-v1-fly-smoke" | "--engine-v1-noclip-smoke" | "--engine-v1-sneak-smoke" | "--engine-loading-study" | "--engine-loading-smoke" | "--engine-loading-close-smoke" | "--engine-save-study" | "--engine-save-smoke" | "--engine-save-close-smoke" | "--engine-async-smoke" | "--engine-stream-profile" | "--engine-stream-study" | "--engine-stream-smoke" | "--engine-stream-wire-smoke" | "--engine-smoke" | "--engine-palette-smoke" | "--engine-wire-smoke" | "--engine-window-smoke" | "--engine-edit-smoke" | "--engine-benchmark" | "--engine-profile" | "--engine-render-smoke" | "--engine-mesh-smoke" | "--engine-camera" | "--engine-inventory-study" | "--engine-inventory-smoke" | "--engine-seed" | "--engine-blocks" | "--engine-pack-root" => {
                 let flag = &args[i]; i+=1; let value = args.get(i).ok_or("Engine option requires a value")?;
                 match flag.as_str() {
                     "--engine-home" => home=PathBuf::from(value),
@@ -965,6 +972,12 @@ pub fn launch(args: &[String]) -> Result<()> {
         options.prepare(&Default::default())?
     };
     let mut app = App::new(client, home, false, smoke)?;
+    if !smoke {
+        match crate::engine_settings::Settings::read(&app.root) {
+            Ok(s) => app.settings = s,
+            Err(e) => app.notice = Some(format!("Settings: {e}")),
+        }
+    }
     if background {
         app.startup = Some(crate::engine_startup::Service::new(options));
         app.notice = Some("Opening Blockwork... | Escape close".into());
@@ -1002,7 +1015,16 @@ pub fn launch(args: &[String]) -> Result<()> {
         app.frame_limit = 4;
     }
     if let Some(out) = &out {
-        if args.iter().any(|a| a == "--engine-preview-smoke") {
+        if args
+            .iter()
+            .any(|a| a == "--engine-features-smoke" || a == "--engine-settings-smoke")
+        {
+            crate::engine_features_study::prepare(
+                &mut app,
+                out,
+                args.iter().any(|a| a == "--engine-settings-smoke"),
+            )?;
+        } else if args.iter().any(|a| a == "--engine-preview-smoke") {
             if out.exists() {
                 return Err("Fresh preview proof directory required".into());
             }
@@ -1385,15 +1407,8 @@ mod tests {
             .as_ref()
             .unwrap()
             .registry
-            .find("stone_slab")
+            .find("stone_slab_upper")
             .unwrap();
-        let mut registry = c.scene.engine.as_ref().unwrap().registry.clone();
-        registry.blocks[usize::from(slab)]
-            .geometry
-            .as_mut()
-            .unwrap()
-            .boxes = vec![[0., 0.5, 0., 1., 1., 1.]];
-        apply_registry(&mut c, registry).unwrap();
         c.tick(Input {
             sneak: true,
             ..Default::default()
@@ -1590,6 +1605,13 @@ mod tests {
         let mut client = generate(38).unwrap();
         let mut registry = client.scene.engine.as_ref().unwrap().registry.clone();
         registry.blocks.push(crate::engine_blocks::Block {
+            texture_files: None,
+            placement: None,
+            collision: None,
+            render_layer: crate::engine_blocks::RenderLayer::Opaque,
+            cull_group: None,
+            hidden: false,
+            face_textures: None,
             geometry: None,
             id: "carried_only".into(),
             label: "Carried Only".into(),

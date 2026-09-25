@@ -7,9 +7,14 @@ struct Out{@builtin(position) position:vec4<f32>,@location(0) uv:vec2<f32>,@loca
     var o:Out;o.position=camera.matrix*vec4(position,1.);o.uv=uv;o.layer=layer;o.shade=shade;o.bary=bary;o.world=position;return o;
 }
 @fragment fn fs(i:Out)->@location(0) vec4<f32>{
-    let layer=i.layer&0x7fffffffu;
+    let layer=i.layer&0x1fffffffu;
     let custom=(i.layer&0x80000000u)!=0u;
-    var rgb=textureSample(terrain,terrain_sampler,i.uv,i32(layer)).rgb*i.shade;
+    let texel=textureSample(terrain,terrain_sampler,i.uv,i32(layer));
+    let cutout=(i.layer&0x20000000u)!=0u;
+    let blended=(i.layer&0x40000000u)!=0u;
+    if cutout && texel.a<0.5 {discard;}
+    if blended && texel.a<0.004 {discard;}
+    var rgb=texel.rgb*i.shade;
     if camera.settings.x>0.5 {
         let edge=min(min(i.bary.x,i.bary.y),i.bary.z);let thickness=max(max(fwidth(i.bary.x),fwidth(i.bary.y)),fwidth(i.bary.z));
         if edge<thickness*0.8 {rgb=vec3(0.05,0.9,0.3);}
@@ -25,5 +30,5 @@ struct Out{@builtin(position) position:vec4<f32>,@location(0) uv:vec2<f32>,@loca
     }
     let fog_distance=select(distance(i.world,camera.eye.xyz),distance(i.world.xz,camera.eye.xz),camera.settings.w>0.5);
     let fog=clamp((fog_distance-camera.settings.y)/(camera.settings.z-camera.settings.y),0.,1.);rgb=mix(rgb,vec3(0.62,0.77,0.89),fog);
-    return vec4(rgb,1.);
+    return vec4(rgb,select(1.,texel.a,blended));
 }

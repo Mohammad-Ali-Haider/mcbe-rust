@@ -38,17 +38,25 @@ pub fn load(registry: &Registry, root: &Path) -> Result<Assets> {
     let mut materials = HashMap::new();
     let mut bindings = Vec::new();
     for (index, b) in registry.blocks.iter().enumerate() {
-        if let Some(binding) = &b.minecraft {
-            if !packs.contains_key(&binding.pack) {
-                packs.insert(binding.pack.clone(), Pack::open(&root.join(&binding.pack))?);
-            }
-            let pack = packs.get_mut(&binding.pack).unwrap();
+        if b.minecraft.is_some() || b.face_textures.is_some() {
             for (face, name) in ["up", "down", "north", "south", "east", "west"]
                 .iter()
                 .enumerate()
             {
+                let binding = b
+                    .face_textures
+                    .as_ref()
+                    .map(|f| &f[face])
+                    .or(b.minecraft.as_ref())
+                    .unwrap();
+                if !packs.contains_key(&binding.pack) {
+                    packs.insert(binding.pack.clone(), Pack::open(&root.join(&binding.pack))?);
+                }
+                let pack = packs.get_mut(&binding.pack).unwrap();
+
                 let material = mcbe_core::textures::block_material(pack, &binding.block, name, 0)?;
-                if binding.block != "grass"
+                if b.render_layer == crate::engine_blocks::RenderLayer::Opaque
+                    && binding.block != "grass"
                     && material.texture.rgba.chunks_exact(4).any(|p| p[3] != 255)
                 {
                     return Err(

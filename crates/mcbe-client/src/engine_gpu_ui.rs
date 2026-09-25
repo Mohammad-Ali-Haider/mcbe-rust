@@ -49,6 +49,9 @@ pub struct Atlas {
     icons: Vec<Sprite>,
 }
 pub struct Context<'a> {
+    pub menu: &'a crate::engine_settings::Menu,
+    pub settings: &'a crate::engine_settings::Settings,
+    pub fullscreen: bool,
     pub startup: bool,
     pub loading: bool,
     pub width: u32,
@@ -376,6 +379,60 @@ impl Atlas {
                 }
             }
             self.text(&mut c, left, y, &line, [1.; 4]);
+            return Composition {
+                vertices: c.vertices,
+                preview_at: None,
+            };
+        }
+        if ctx.menu.open() {
+            use crate::engine_settings::{Menu, Page};
+            c.rect([0., 0., width, height], [0., 0., 0., 0.65]);
+            let [left, top] = Menu::origin(viewport);
+            c.rect([left - 10., top - 10., 360., 288.], [0.09, 0.10, 0.11, 1.]);
+            let title = if ctx.menu.page == Page::Pause {
+                "Game Menu"
+            } else {
+                "Settings"
+            };
+            self.text(&mut c, left + 8., top + 8., title, [1.; 4]);
+            let streamed = client.scene.engine.as_ref().unwrap().stream.is_some();
+            for (i, label) in ctx
+                .menu
+                .labels(ctx.settings, streamed, ctx.fullscreen)
+                .iter()
+                .enumerate()
+            {
+                let y = top + 34. + i as f32 * 23.;
+                let active = ctx.menu.selected == i;
+                c.rect(
+                    [left, y, 340., 20.],
+                    if active {
+                        [0.28, 0.55, 0.24, 1.]
+                    } else {
+                        [0.27, 0.28, 0.29, 1.]
+                    },
+                );
+                c.rect([left, y + 18., 340., 2.], [0.04, 0.05, 0.04, 1.]);
+                self.text(&mut c, left + 20., y + 6., label, [1.; 4]);
+                if ctx.menu.page == Page::Settings && i < 6 {
+                    self.text(&mut c, left + 6., y + 6., "-", [1.; 4]);
+                    self.text(&mut c, left + 328., y + 6., "+", [1.; 4]);
+                }
+            }
+            self.text(
+                &mut c,
+                left + 3.,
+                top + 250.,
+                "Arrows / Click: change     Esc: back",
+                [0.8, 0.8, 0.8, 1.],
+            );
+            self.text(
+                &mut c,
+                left + 3.,
+                top + 262.,
+                "F: fly  Ctrl: sprint  Space / Shift: up / down",
+                [0.65, 0.8, 0.65, 1.],
+            );
             return Composition {
                 vertices: c.vertices,
                 preview_at: None,

@@ -3,6 +3,7 @@ mod engine;
 mod engine_assets;
 mod engine_blocks;
 mod engine_crafting;
+mod engine_features_study;
 mod engine_font;
 mod engine_geometry;
 mod engine_gpu;
@@ -11,16 +12,20 @@ mod engine_inventory;
 mod engine_inventory_study;
 mod engine_loading;
 mod engine_loading_study;
+mod engine_materials;
 mod engine_mesh;
 mod engine_meshing;
+mod engine_placement;
 mod engine_player;
 mod engine_preview;
 mod engine_save_study;
 mod engine_saving;
+mod engine_settings;
 mod engine_startup;
 mod engine_stream;
 mod engine_stream_study;
 mod engine_texture;
+mod engine_transparency;
 mod engine_ui;
 mod engine_v1_study;
 mod inventory_persistence;
@@ -46,6 +51,11 @@ use winit::{
 };
 
 struct App {
+    settings_test: bool,
+    settings_stage: u8,
+    settings_trace: Vec<serde_json::Value>,
+    settings: engine_settings::Settings,
+    menu: engine_settings::Menu,
     preview_test: Option<String>,
     preview_trace: Vec<serde_json::Value>,
     startup: Option<engine_startup::Service>,
@@ -197,6 +207,11 @@ impl App {
             frame_limit: 3,
             capture_out: None,
             simulation_previous: client.actor.position,
+            settings_test: false,
+            settings_stage: 0,
+            settings_trace: Vec::new(),
+            settings: Default::default(),
+            menu: Default::default(),
             palette,
             cursor: (0., 0.),
             debug: false,
@@ -234,6 +249,35 @@ impl App {
             }
         }
     }
+    fn settings_action(&mut self, action: engine_settings::Action) -> Result<()> {
+        use engine_settings::Action;
+        match action {
+            Action::Changed => {
+                engine_stream::set_radius(&mut self.client, self.settings.render_distance)?;
+                if let Some(gpu) = &mut self.gpu {
+                    gpu.stats.gui_scale = self.settings.gui_scale as f32;
+                    gpu.set_vsync(self.settings.vsync);
+                }
+                if !self.smoke {
+                    self.settings.write(&self.root)?;
+                }
+            }
+            Action::Resume => {
+                self.capture(!self.smoke);
+                self.previous = Instant::now();
+            }
+            Action::Save => {
+                self.request_save()?;
+                self.menu.page = engine_settings::Page::Closed;
+                self.menu.revision += 1;
+            }
+            Action::Fullscreen => self.toggle_fullscreen(),
+            Action::None => {}
+        }
+        self.keys.clear();
+        self.accumulator = 0.;
+        Ok(())
+    }
     fn startup_blocked(&self) -> bool {
         self.startup.as_ref().is_some_and(|s| s.blocked())
     }
@@ -260,6 +304,23 @@ impl App {
             self.deferred = None;
             self.capture(false);
             self.notice = Some("Preparation cancelled; current world retained".into());
+            return Ok(true);
+        }
+        if !self.load_busy()
+            && !self.startup_blocked()
+            && (self.menu.open() || (code == KeyCode::Escape && !self.palette.open))
+        {
+            if code == KeyCode::F11 {
+                self.toggle_fullscreen();
+                return Ok(true);
+            }
+            let action = if self.menu.open() {
+                self.menu.key(&mut self.settings, code)
+            } else {
+                self.menu.escape()
+            };
+            self.capture(false);
+            self.settings_action(action)?;
             return Ok(true);
         }
         if matches!(code, KeyCode::KeyR | KeyCode::KeyT)
@@ -339,6 +400,12 @@ impl App {
             if self.palette.open && !self.startup_blocked() {
                 let (position, viewport) = self.inventory_pointer();
                 self.palette.move_pointer(&self.client, position, viewport);
+            }
+            if let Some(gpu) = &self.gpu {
+                self.settings.gui_scale = gpu.stats.gui_scale as u32;
+            }
+            if !self.smoke && !self.startup_blocked() {
+                self.settings.write(&self.root)?;
             }
             return Ok(true);
         }
@@ -426,13 +493,17 @@ impl App {
     }
     fn inventory_pointer(&self) -> ([f32; 2], [f32; 2]) {
         if let Some(gpu) = &self.gpu {
-            let (w, h) = gpu.logical_size();
+            let scale = if self.menu.open() {
+                gpu.menu_scale()
+            } else {
+                gpu.stats.gui_scale
+            };
             (
+                [self.cursor.0 as f32 / scale, self.cursor.1 as f32 / scale],
                 [
-                    self.cursor.0 as f32 / gpu.stats.gui_scale,
-                    self.cursor.1 as f32 / gpu.stats.gui_scale,
+                    gpu.stats.width as f32 / scale,
+                    gpu.stats.height as f32 / scale,
                 ],
-                [w as f32, h as f32],
             )
         } else {
             let size = self.window.as_ref().map(|w| w.inner_size()).unwrap_or(
@@ -708,6 +779,13 @@ impl App {
         }
     }
     fn redraw(&mut self) -> Result<()> {
+        if !self.smoke && !self.startup_blocked() && self.client.scene.engine.is_some() {
+            engine_stream::set_radius(&mut self.client, self.settings.render_distance)?;
+            if let Some(gpu) = &mut self.gpu {
+                gpu.stats.gui_scale = self.settings.gui_scale as f32;
+                gpu.set_vsync(self.settings.vsync);
+            }
+        }
         if self.preview_test.as_deref() == Some("live") && [20, 40].contains(&self.frames) {
             let [left, top] = engine_ui::Palette::origin(self.palette.viewport);
             let pointer = [
@@ -922,6 +1000,32 @@ impl App {
             }
         }
         self.client.sync_region()?;
+        if self.settings_test {
+            let o = engine_stream::observation(&self.client);
+            let settled = o["resident_columns"] == o["wanted_columns"] && o["queued_jobs"] == 0;
+            if self.frames > 5 && settled && self.gpu.as_ref().is_some_and(|g| g.stats.meshes_ready)
+            {
+                if self.settings_stage == 0 {
+                    self.settings_trace.push(serde_json::json!({"stage":"expanded","stream":o,"position":self.client.actor.position}));
+                    self.settings_stage = 1;
+                    for _ in 0..6 {
+                        self.engine_key(KeyCode::ArrowLeft)?;
+                    }
+                } else if self.settings_stage == 1 {
+                    self.settings_trace.push(serde_json::json!({"stage":"reduced","stream":o,"position":self.client.actor.position}));
+                    if let Some(gpu) = &self.gpu {
+                        let proof = gpu.verify_geometry(&self.client)?;
+                        if proof["all_vertex_bytes_match"] != true {
+                            return Err("Settings eviction left stale GPU geometry".into());
+                        }
+                        self.settings_trace.push(proof);
+                    }
+                    self.settings_stage = 2;
+                    self.frame_limit = self.frames + 1;
+                }
+            }
+        }
+
         if self.stream_test && self.frames + 1 >= self.frame_limit {
             let stream = engine_stream::observation(&self.client);
             if stream["resident_columns"] != stream["wanted_columns"] || stream["queued_jobs"] != 0
@@ -940,6 +1044,7 @@ impl App {
             && !self.startup_blocked()
             && !self.inventory_open
             && !self.palette.open
+            && !self.menu.open()
             && !self.close_after_save
             && !self.load_busy()
         {
@@ -957,6 +1062,8 @@ impl App {
                     jump: self.keys.contains(&KeyCode::Space),
                     sneak: self.keys.contains(&KeyCode::ShiftLeft)
                         || self.keys.contains(&KeyCode::ShiftRight),
+                    sprint: self.keys.contains(&KeyCode::ControlLeft)
+                        || self.keys.contains(&KeyCode::ControlRight),
                 })?;
                 self.accumulator -= 0.05;
             }
@@ -1122,6 +1229,12 @@ impl App {
                 &self.client,
                 &self.palette,
                 engine_gpu::Frame {
+                    menu: &self.menu,
+                    settings: &self.settings,
+                    fullscreen: self
+                        .window
+                        .as_ref()
+                        .is_some_and(|w| w.fullscreen().is_some()),
                     startup: startup_blocked,
                     wire: self.wireframe,
                     debug: self.debug,
@@ -1247,6 +1360,10 @@ impl ApplicationHandler for App {
                 if self.client.scene.engine.is_some() {
                     match engine_gpu::Renderer::new(window.clone()) {
                         Ok(mut gpu) => {
+                            if !self.smoke {
+                                gpu.stats.gui_scale = self.settings.gui_scale as f32;
+                                gpu.set_vsync(self.settings.vsync);
+                            }
                             gpu.set_greedy(!self.naive_mesh);
                             gpu.set_async(!self.sync_mesh);
                             gpu.collect_timings = self.smoke;
@@ -1523,6 +1640,16 @@ impl ApplicationHandler for App {
                 button,
                 ..
             } => {
+                if self.menu.open() {
+                    if button == MouseButton::Left {
+                        let (p, v) = self.inventory_pointer();
+                        let action = self.menu.click(&mut self.settings, p, v);
+                        if let Err(e) = self.settings_action(action) {
+                            self.notice = Some(e.to_string());
+                        }
+                    }
+                    return;
+                }
                 if self.palette.open {
                     if matches!(button, MouseButton::Left | MouseButton::Right) {
                         let (position, viewport) = self.inventory_pointer();
@@ -1758,6 +1885,7 @@ impl ApplicationHandler for App {
                 }
             }
             WindowEvent::ModifiersChanged(mods) => self.modifiers = mods.state(),
+            WindowEvent::MouseWheel { .. } if self.menu.open() => {}
             WindowEvent::MouseWheel { delta, .. } => {
                 if let Some(state) = &mut self.client.scene.engine {
                     let y = match delta {
@@ -1780,6 +1908,10 @@ impl ApplicationHandler for App {
             }
             WindowEvent::CursorMoved { position, .. } => {
                 self.cursor = (position.x, position.y);
+                if self.menu.open() {
+                    let (p, v) = self.inventory_pointer();
+                    self.menu.hover(p, v);
+                }
                 if self.palette.open {
                     let (position, viewport) = self.inventory_pointer();
                     self.palette.move_pointer(&self.client, position, viewport);
@@ -1792,9 +1924,14 @@ impl ApplicationHandler for App {
         if !self.smoke
             && !self.startup_blocked()
             && self.captured
+            && !self.menu.open()
             && let DeviceEvent::MouseMotion { delta: (x, y) } = event
         {
-            self.client.look(x as f32 * 0.0025, y as f32 * 0.0025);
+            let sensitivity = self.settings.sensitivity as f32 / 100.;
+            self.client.look(
+                x as f32 * 0.0025 * sensitivity,
+                y as f32 * 0.0025 * sensitivity,
+            );
         }
     }
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
@@ -1804,8 +1941,18 @@ impl ApplicationHandler for App {
         {
             let size = w.inner_size();
             if size.width > 0 && size.height > 0 {
-                w.request_redraw();
-                event_loop.set_control_flow(ControlFlow::Poll);
+                let now = Instant::now();
+                if self.smoke || self.settings.frame_limit == 0 {
+                    w.request_redraw();
+                    event_loop.set_control_flow(ControlFlow::Poll);
+                } else if now >= self.next_frame {
+                    w.request_redraw();
+                    self.next_frame =
+                        now + Duration::from_secs_f64(1. / self.settings.frame_limit as f64);
+                    event_loop.set_control_flow(ControlFlow::WaitUntil(self.next_frame));
+                } else {
+                    event_loop.set_control_flow(ControlFlow::WaitUntil(self.next_frame));
+                }
                 return;
             }
         }
@@ -2382,6 +2529,11 @@ fn main() -> Result<()> {
         frame_limit: 3,
         capture_out: None,
         simulation_previous: client.actor.position,
+        settings: Default::default(),
+        menu: Default::default(),
+        settings_test: false,
+        settings_stage: 0,
+        settings_trace: Vec::new(),
         palette: engine_ui::Palette::default(),
         cursor: (0., 0.),
         debug: false,
@@ -2492,7 +2644,7 @@ fn run_window(mut app: App, out: Option<PathBuf>) -> Result<()> {
             std::fs::write(
                 out.join("gpu.json"),
                 serde_json::to_vec_pretty(
-                    &serde_json::json!({"complete":app.close_completed||app.frames>=app.frame_limit,"statistics":gpu.stats,"player_preview":gpu.preview_observation(),"preview_case":app.preview_test,"preview_trace":app.preview_trace,"saving":app.saving_observation(),"loading":app.loading_observation(),"timing":timing,"wireframe":app.wireframe,"palette_open":app.palette.open,"window_transitions":app.window_transitions,"live_edit_test":app.edit_test,"pending_edits":app.client.pending_edits(),"inventory_save_mesh_check":app.inventory_mesh_check,"mesh_toggle_trace":app.mesh_toggle_trace,"streaming":engine_stream::observation(&app.client),"stream_trace":app.stream_trace,"profile_seconds":app.profile_seconds,"profile_elapsed_seconds":app.profile_started.map(|t|t.elapsed().as_secs_f32()),"target":app.client.target()?.map(|h|[h.position.x,h.position.y,h.position.z]),"uncapped_event_loop":true,"back_face_culling":true,"frustum_culling":true,"internal_faces_removed":true,"depth_testing":true,"dirty_chunk_rebuilds":true}),
+                    &serde_json::json!({"complete":app.close_completed||app.frames>=app.frame_limit,"statistics":gpu.stats,"menu":format!("{:?}",app.menu.page),"settings":app.settings,"settings_trace":app.settings_trace,"player_position":app.client.actor.position,"player_preview":gpu.preview_observation(),"preview_case":app.preview_test,"preview_trace":app.preview_trace,"saving":app.saving_observation(),"loading":app.loading_observation(),"timing":timing,"wireframe":app.wireframe,"palette_open":app.palette.open,"window_transitions":app.window_transitions,"live_edit_test":app.edit_test,"pending_edits":app.client.pending_edits(),"inventory_save_mesh_check":app.inventory_mesh_check,"mesh_toggle_trace":app.mesh_toggle_trace,"streaming":engine_stream::observation(&app.client),"stream_trace":app.stream_trace,"profile_seconds":app.profile_seconds,"profile_elapsed_seconds":app.profile_started.map(|t|t.elapsed().as_secs_f32()),"target":app.client.target()?.map(|h|[h.position.x,h.position.y,h.position.z]),"uncapped_event_loop":true,"back_face_culling":true,"frustum_culling":true,"internal_faces_removed":true,"depth_testing":true,"dirty_chunk_rebuilds":true}),
                 )?,
             )?;
         }

@@ -60,22 +60,50 @@ impl Prepared {
                 for x in 0..32 {
                     let u = (x as f64 + 0.5) / 32.;
                     let v = (y as f64 + 0.5) / 32.;
-                    let rgb = client
-                        .engine_assets
-                        .as_ref()
-                        .and_then(|a| {
-                            a.color(
-                                &state.registry,
-                                id,
-                                face,
-                                u,
-                                if face <= 1 { v } else { 1. - v },
-                            )
-                        })
-                        .unwrap_or_else(|| {
-                            crate::engine::color(state.registry.get(id), face, u, v)
-                        });
-                    rgba.extend([rgb[0] as u8, rgb[1] as u8, rgb[2] as u8, 255]);
+                    let rgb = crate::engine_materials::color(
+                        client,
+                        id,
+                        face,
+                        u,
+                        if face <= 1 { v } else { 1. - v },
+                    )
+                    .unwrap_or_else(|| crate::engine::color(state.registry.get(id), face, u, v));
+                    let block = state.registry.get(id);
+                    let alpha = match block.render_layer {
+                        crate::engine_blocks::RenderLayer::Opaque => 255,
+                        _ => client
+                            .owned_materials
+                            .as_ref()
+                            .and_then(|a| a.textures.get(&(id, face)))
+                            .map(|t| t.as_ref())
+                            .or_else(|| {
+                                client
+                                    .engine_assets
+                                    .as_ref()
+                                    .and_then(|a| a.materials.get(&(id, face)))
+                                    .map(|m| &m.texture)
+                            })
+                            .map_or_else(
+                                || {
+                                    if block.render_layer
+                                        == crate::engine_blocks::RenderLayer::Translucent
+                                    {
+                                        90
+                                    } else if x < 2
+                                        || y < 2
+                                        || x >= 30
+                                        || y >= 30
+                                        || (x == y && x < 10)
+                                    {
+                                        255
+                                    } else {
+                                        0
+                                    }
+                                },
+                                |m| m.sample_repeat(u, v)[3],
+                            ),
+                    };
+                    rgba.extend([rgb[0] as u8, rgb[1] as u8, rgb[2] as u8, alpha]);
                 }
             }
             let mut width = 32;
@@ -160,8 +188,8 @@ mod tests {
         let mut client = crate::engine::generate(360036).unwrap();
         let plan = Prepared::build(&client).unwrap();
         assert!(plan.matches(&client));
-        assert_eq!(plan.layers, 156);
-        assert_eq!(plan.steps.len(), 156 * 6 + 16);
+        assert_eq!(plan.layers, 216);
+        assert_eq!(plan.steps.len(), 216 * 6 + 16);
         let mut cursor = 0;
         let mut bytes = 0;
         let mut frames = 0;
@@ -178,8 +206,8 @@ mod tests {
             cursor = batch.end;
             frames += 1;
         }
-        assert_eq!(bytes, 156 * 5460 + 1024 * 1024 * 4);
-        assert_eq!(frames, 46);
+        assert_eq!(bytes, 216 * 5460 + 1024 * 1024 * 4);
+        assert_eq!(frames, 57);
         let Step::Terrain { rgba: base, .. } = &plan.steps[0] else {
             panic!()
         };

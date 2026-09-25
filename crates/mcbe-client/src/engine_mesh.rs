@@ -137,6 +137,9 @@ fn naive(
             }
         }
     }
+    for v in &mut out {
+        v.layer |= geometry.flags(((v.layer & 0x1fffffff) / 6) as u16);
+    }
     ChunkMesh {
         exposed_faces: out.len() / 6,
         block_count,
@@ -192,7 +195,9 @@ fn greedy(
                             face,
                         );
                         mesh.occluded_faces += visible.hidden;
-                        if visible.whole_cube_face {
+                        if visible.whole_cube_face
+                            && geometry.layer(id) != crate::engine_blocks::RenderLayer::Translucent
+                        {
                             mask[t * 16 + s] = Some(id);
                         } else {
                             for surface in &visible.surfaces {
@@ -229,6 +234,9 @@ fn greedy(
                 }
             }
         }
+    }
+    for v in &mut mesh.vertices {
+        v.layer |= geometry.flags(((v.layer & 0x1fffffff) / 6) as u16);
     }
     mesh
 }

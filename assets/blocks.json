@@ -296,6 +296,12 @@
             1
           ]
         ]
+      },
+      "placement": {
+        "kind": "slab",
+        "lower": "oak_slab",
+        "upper": "oak_slab_upper",
+        "double": "oak_slab_double"
       }
     },
     {
@@ -322,6 +328,12 @@
             1
           ]
         ]
+      },
+      "placement": {
+        "kind": "slab",
+        "lower": "stone_slab",
+        "upper": "stone_slab_upper",
+        "double": "stone_slab_double"
       }
     },
     {
@@ -355,6 +367,21 @@
             1,
             1
           ]
+        ]
+      },
+      "placement": {
+        "kind": "stairs",
+        "lower": [
+          "oak_stairs_north",
+          "oak_stairs_east",
+          "oak_stairs_south",
+          "oak_stairs_west"
+        ],
+        "upper": [
+          "oak_stairs_north_upper",
+          "oak_stairs_east_upper",
+          "oak_stairs_south_upper",
+          "oak_stairs_west_upper"
         ]
       }
     },
@@ -390,7 +417,23 @@
             1
           ]
         ]
-      }
+      },
+      "placement": {
+        "kind": "stairs",
+        "lower": [
+          "oak_stairs_north",
+          "oak_stairs_east",
+          "oak_stairs_south",
+          "oak_stairs_west"
+        ],
+        "upper": [
+          "oak_stairs_north_upper",
+          "oak_stairs_east_upper",
+          "oak_stairs_south_upper",
+          "oak_stairs_west_upper"
+        ]
+      },
+      "hidden": true
     },
     {
       "id": "oak_stairs_south",
@@ -424,7 +467,23 @@
             0.5
           ]
         ]
-      }
+      },
+      "placement": {
+        "kind": "stairs",
+        "lower": [
+          "oak_stairs_north",
+          "oak_stairs_east",
+          "oak_stairs_south",
+          "oak_stairs_west"
+        ],
+        "upper": [
+          "oak_stairs_north_upper",
+          "oak_stairs_east_upper",
+          "oak_stairs_south_upper",
+          "oak_stairs_west_upper"
+        ]
+      },
+      "hidden": true
     },
     {
       "id": "oak_stairs_west",
@@ -458,7 +517,23 @@
             1
           ]
         ]
-      }
+      },
+      "placement": {
+        "kind": "stairs",
+        "lower": [
+          "oak_stairs_north",
+          "oak_stairs_east",
+          "oak_stairs_south",
+          "oak_stairs_west"
+        ],
+        "upper": [
+          "oak_stairs_north_upper",
+          "oak_stairs_east_upper",
+          "oak_stairs_south_upper",
+          "oak_stairs_west_upper"
+        ]
+      },
+      "hidden": true
     },
     {
       "id": "oak_window",
@@ -501,6 +576,366 @@
           ]
         ]
       }
+    },
+    {
+      "id": "oak_slab_upper",
+      "label": "Oak Slab Upper",
+      "color": [
+        160,
+        128,
+        76
+      ],
+      "pattern": "bricks",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "planks"
+      },
+      "geometry": {
+        "boxes": [
+          [
+            0,
+            0.5,
+            0,
+            1,
+            1,
+            1
+          ]
+        ]
+      },
+      "placement": {
+        "kind": "slab",
+        "lower": "oak_slab",
+        "upper": "oak_slab_upper",
+        "double": "oak_slab_double"
+      },
+      "hidden": true
+    },
+    {
+      "id": "oak_slab_double",
+      "label": "Oak Slab Double",
+      "color": [
+        160,
+        128,
+        76
+      ],
+      "pattern": "bricks",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "planks"
+      },
+      "geometry": {
+        "boxes": [
+          [
+            0,
+            0,
+            0,
+            1,
+            1,
+            1
+          ]
+        ]
+      },
+      "placement": {
+        "kind": "slab",
+        "lower": "oak_slab",
+        "upper": "oak_slab_upper",
+        "double": "oak_slab_double"
+      },
+      "hidden": true
+    },
+    {
+      "id": "stone_slab_upper",
+      "label": "Stone Slab Upper",
+      "color": [
+        136,
+        154,
+        165
+      ],
+      "pattern": "grain",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "stone"
+      },
+      "geometry": {
+        "boxes": [
+          [
+            0,
+            0.5,
+            0,
+            1,
+            1,
+            1
+          ]
+        ]
+      },
+      "placement": {
+        "kind": "slab",
+        "lower": "stone_slab",
+        "upper": "stone_slab_upper",
+        "double": "stone_slab_double"
+      },
+      "hidden": true
+    },
+    {
+      "id": "stone_slab_double",
+      "label": "Stone Slab Double",
+      "color": [
+        136,
+        154,
+        165
+      ],
+      "pattern": "grain",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "stone"
+      },
+      "geometry": {
+        "boxes": [
+          [
+            0,
+            0,
+            0,
+            1,
+            1,
+            1
+          ]
+        ]
+      },
+      "placement": {
+        "kind": "slab",
+        "lower": "stone_slab",
+        "upper": "stone_slab_upper",
+        "double": "stone_slab_double"
+      },
+      "hidden": true
+    },
+    {
+      "id": "oak_stairs_north_upper",
+      "label": "Oak Stairs North Upper",
+      "color": [
+        160,
+        128,
+        76
+      ],
+      "pattern": "bricks",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "planks"
+      },
+      "geometry": {
+        "boxes": [
+          [
+            0,
+            0.5,
+            0,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            0.5,
+            1,
+            0.5,
+            1
+          ]
+        ]
+      },
+      "placement": {
+        "kind": "stairs",
+        "lower": [
+          "oak_stairs_north",
+          "oak_stairs_east",
+          "oak_stairs_south",
+          "oak_stairs_west"
+        ],
+        "upper": [
+          "oak_stairs_north_upper",
+          "oak_stairs_east_upper",
+          "oak_stairs_south_upper",
+          "oak_stairs_west_upper"
+        ]
+      },
+      "hidden": true
+    },
+    {
+      "id": "oak_stairs_east_upper",
+      "label": "Oak Stairs East Upper",
+      "color": [
+        160,
+        128,
+        76
+      ],
+      "pattern": "bricks",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "planks"
+      },
+      "geometry": {
+        "boxes": [
+          [
+            0,
+            0.5,
+            0,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            0.5,
+            0.5,
+            1
+          ]
+        ]
+      },
+      "placement": {
+        "kind": "stairs",
+        "lower": [
+          "oak_stairs_north",
+          "oak_stairs_east",
+          "oak_stairs_south",
+          "oak_stairs_west"
+        ],
+        "upper": [
+          "oak_stairs_north_upper",
+          "oak_stairs_east_upper",
+          "oak_stairs_south_upper",
+          "oak_stairs_west_upper"
+        ]
+      },
+      "hidden": true
+    },
+    {
+      "id": "oak_stairs_south_upper",
+      "label": "Oak Stairs South Upper",
+      "color": [
+        160,
+        128,
+        76
+      ],
+      "pattern": "bricks",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "planks"
+      },
+      "geometry": {
+        "boxes": [
+          [
+            0,
+            0.5,
+            0,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            0.5,
+            0.5
+          ]
+        ]
+      },
+      "placement": {
+        "kind": "stairs",
+        "lower": [
+          "oak_stairs_north",
+          "oak_stairs_east",
+          "oak_stairs_south",
+          "oak_stairs_west"
+        ],
+        "upper": [
+          "oak_stairs_north_upper",
+          "oak_stairs_east_upper",
+          "oak_stairs_south_upper",
+          "oak_stairs_west_upper"
+        ]
+      },
+      "hidden": true
+    },
+    {
+      "id": "oak_stairs_west_upper",
+      "label": "Oak Stairs West Upper",
+      "color": [
+        160,
+        128,
+        76
+      ],
+      "pattern": "bricks",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "planks"
+      },
+      "geometry": {
+        "boxes": [
+          [
+            0,
+            0.5,
+            0,
+            1,
+            1,
+            1
+          ],
+          [
+            0.5,
+            0,
+            0,
+            1,
+            0.5,
+            1
+          ]
+        ]
+      },
+      "placement": {
+        "kind": "stairs",
+        "lower": [
+          "oak_stairs_north",
+          "oak_stairs_east",
+          "oak_stairs_south",
+          "oak_stairs_west"
+        ],
+        "upper": [
+          "oak_stairs_north_upper",
+          "oak_stairs_east_upper",
+          "oak_stairs_south_upper",
+          "oak_stairs_west_upper"
+        ]
+      },
+      "hidden": true
+    },
+    {
+      "id": "glass",
+      "label": "Glass",
+      "color": [
+        178,
+        221,
+        232
+      ],
+      "pattern": "solid",
+      "render_layer": "cutout",
+      "cull_group": "glass",
+      "minecraft": {
+        "pack": "vanilla",
+        "block": "glass"
+      }
+    },
+    {
+      "id": "blue_glass",
+      "label": "Blue Glass",
+      "color": [
+        64,
+        132,
+        224
+      ],
+      "pattern": "solid",
+      "render_layer": "translucent",
+      "cull_group": "blue_glass"
     }
   ]
 }

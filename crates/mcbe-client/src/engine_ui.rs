@@ -40,9 +40,10 @@ impl Palette {
             .iter()
             .enumerate()
             .filter(|(_, b)| {
-                term.is_empty()
-                    || b.id.contains(&term)
-                    || b.label.to_ascii_lowercase().contains(&term)
+                !b.hidden
+                    && (term.is_empty()
+                        || b.id.contains(&term)
+                        || b.label.to_ascii_lowercase().contains(&term))
             })
             .map(|(i, _)| i)
             .collect()
@@ -389,10 +390,7 @@ pub fn icon(client: &Client, p: &mut [u32], w: usize, h: usize, id: BlockId, bou
                         2 | 3 => 0.7,
                         _ => 0.82,
                     };
-                    let rgb = client
-                        .engine_assets
-                        .as_ref()
-                        .and_then(|assets| assets.color(&state.registry, id, face, tu, tv))
+                    let rgb = crate::engine_materials::color(client, id, face, tu, tv)
                         .unwrap_or_else(|| {
                             crate::engine::color(state.registry.get(id), face, tu, tv)
                         })
@@ -422,10 +420,7 @@ pub fn icon(client: &Client, p: &mut [u32], w: usize, h: usize, id: BlockId, bou
                 if !(0.0..1.0).contains(&u) || !(0.0..1.0).contains(&v) {
                     continue;
                 }
-                let rgb = client
-                    .engine_assets
-                    .as_ref()
-                    .and_then(|assets| assets.color(&state.registry, id, face, u, 1. - v))
+                let rgb = crate::engine_materials::color(client, id, face, u, 1. - v)
                     .unwrap_or_else(|| crate::engine::color(state.registry.get(id), face, u, v))
                     .map(|v| (v * shade) as u32);
                 let dx = x + xx;
@@ -600,7 +595,7 @@ mod tests {
                     .as_ref()
                     .unwrap()
                     .registry
-                    .find("oak_window")
+                    .find("blue_glass")
                     .unwrap()
             )
         );

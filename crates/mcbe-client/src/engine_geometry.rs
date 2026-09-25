@@ -25,6 +25,9 @@ pub struct Model {
     faces: [Vec<Surface>; 6],
 }
 pub struct Library {
+    collision: Vec<Vec<[f32; 6]>>,
+    layers: Vec<crate::engine_blocks::RenderLayer>,
+    groups: Vec<Option<String>>,
     models: Vec<Model>,
     by_block: Vec<usize>,
     visibility: Vec<[Visible; 6]>,
@@ -32,6 +35,18 @@ pub struct Library {
 const AXES: [usize; 6] = [1, 1, 2, 2, 0, 0];
 const POSITIVE: [bool; 6] = [true, false, false, true, true, false];
 pub const UNIT: [f32; 6] = [0., 0., 0., 1., 1., 1.];
+pub fn validate_boxes(boxes: &[[f32; 6]], allow_empty: bool) -> Result<()> {
+    if (!allow_empty && boxes.is_empty())
+        || boxes.len() > 16
+        || boxes.iter().any(|b| {
+            b.iter().any(|v| !v.is_finite())
+                || (0..3).any(|a| b[a] < 0. || b[a + 3] > 1. || b[a] >= b[a + 3])
+        })
+    {
+        return Err("Geometry requires at most 16 positive finite unit-block cuboids".into());
+    }
+    Ok(())
+}
 fn axes(face: usize) -> [usize; 2] {
     let a = AXES[face];
     match a {
@@ -210,6 +225,23 @@ impl Library {
             }
         }
         Ok(Self {
+            collision: registry
+                .blocks
+                .iter()
+                .map(|b| {
+                    b.collision.clone().unwrap_or_else(|| {
+                        b.geometry
+                            .as_ref()
+                            .map_or_else(|| vec![UNIT], |g| g.boxes.clone())
+                    })
+                })
+                .collect(),
+            layers: registry.blocks.iter().map(|b| b.render_layer).collect(),
+            groups: registry
+                .blocks
+                .iter()
+                .map(|b| b.cull_group.clone())
+                .collect(),
             models,
             by_block,
             visibility,
@@ -221,8 +253,28 @@ impl Library {
     pub fn full(&self, id: BlockId) -> bool {
         self.models[self.by_block[usize::from(id)]].full
     }
+    pub fn collision(&self, id: BlockId) -> &[[f32; 6]] {
+        &self.collision[usize::from(id)]
+    }
+    pub fn layer(&self, id: BlockId) -> crate::engine_blocks::RenderLayer {
+        self.layers[usize::from(id)]
+    }
+    pub fn flags(&self, id: BlockId) -> u32 {
+        match self.layer(id) {
+            crate::engine_blocks::RenderLayer::Opaque => 0,
+            crate::engine_blocks::RenderLayer::Cutout => 0x20000000,
+            crate::engine_blocks::RenderLayer::Translucent => 0x40000000,
+        }
+    }
     pub fn visible(&self, id: BlockId, neighbor: Option<BlockId>, face: usize) -> &Visible {
         let shape = self.by_block[usize::from(id)];
+        let neighbor = neighbor.filter(|n| {
+            self.layer(*n) == crate::engine_blocks::RenderLayer::Opaque
+                || (self.layer(id) != crate::engine_blocks::RenderLayer::Opaque
+                    && self.groups[usize::from(id)]
+                        .as_ref()
+                        .is_some_and(|g| self.groups[usize::from(*n)].as_ref() == Some(g)))
+        });
         let neighbor = neighbor.map_or(self.models.len(), |id| self.by_block[usize::from(id)]);
         &self.visibility[shape * (self.models.len() + 1) + neighbor][face]
     }
@@ -230,6 +282,22 @@ impl Library {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn transparent_neighbors_do_not_hide_opaque_blocks_and_collision_is_independent() {
+        let mut r = Registry::built_in();
+        let glass = r.find("glass").unwrap();
+        let stone = r.find("slate").unwrap();
+        r.blocks[usize::from(glass)].collision = Some(vec![]);
+        let g = Library::compile(&r).unwrap();
+        assert!(g.visible(stone, Some(glass), 4).whole_cube_face);
+        assert!(g.visible(glass, Some(glass), 4).surfaces.is_empty());
+        assert!(g.visible(glass, Some(stone), 4).surfaces.is_empty());
+        assert_eq!(g.boxes(glass), &[UNIT]);
+        assert!(g.collision(glass).is_empty());
+        assert_eq!(g.collision(stone), &[UNIT]);
+        r.blocks[usize::from(glass)].collision = Some(vec![[0., 0., 0., 1., 1.5, 1.]]);
+        assert!(r.validate().is_err());
+    }
     #[test]
     fn unions_remove_internal_overlapping_and_duplicate_faces() {
         let m = Model::compile(vec![[0., 0., 0., 1., 0.5, 1.], [0., 0.5, 0., 1., 1., 1.]]).unwrap();

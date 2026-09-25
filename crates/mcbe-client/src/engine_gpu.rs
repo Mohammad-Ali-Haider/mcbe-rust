@@ -17,6 +17,8 @@ use std::{
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 struct Mesh {
+    opaque_vertices: u32,
+    transparent: Vec<Vertex>,
     buffer: Option<wgpu::Buffer>,
     vertices: u32,
     exposed_faces: usize,
@@ -35,6 +37,9 @@ struct Camera {
 #[derive(PartialEq, Eq)]
 struct UiKey {
     startup: bool,
+    menu_revision: u64,
+    fullscreen: bool,
+    menu_page: crate::engine_settings::Page,
     movement: crate::engine_player::Movement,
     size: [u32; 2],
     scale: u32,
@@ -52,6 +57,10 @@ struct UiKey {
 }
 #[derive(Serialize)]
 pub struct Statistics {
+    pub blended_vertices: usize,
+    pub blended_uploads: usize,
+    pub blended_sorts: usize,
+    pub blended_bytes: usize,
     pub preview_uploads: usize,
     pub preview_vertices: usize,
     pub preview_draws: usize,
@@ -105,6 +114,9 @@ pub struct Statistics {
     pub last_frame_ms: f64,
 }
 pub struct Frame<'a> {
+    pub fullscreen: bool,
+    pub menu: &'a crate::engine_settings::Menu,
+    pub settings: &'a crate::engine_settings::Settings,
     pub startup: bool,
     pub wire: bool,
     pub debug: bool,
@@ -120,6 +132,10 @@ struct Upload {
     staged: bool,
 }
 pub struct Renderer {
+    transparent_pipeline: wgpu::RenderPipeline,
+    transparency: crate::engine_transparency::Batch,
+    transparent_revision: usize,
+    glass_keys: Vec<[i32; 3]>,
     preview_pipeline: wgpu::RenderPipeline,
     preview_buffer: wgpu::Buffer,
     preview_mesh: Option<crate::engine_preview::Mesh>,
@@ -232,6 +248,15 @@ impl Renderer {
         let world_pipeline=device.create_render_pipeline(&wgpu::RenderPipelineDescriptor{
             label:Some("culled terrain"),layout:None,vertex:wgpu::VertexState{module:&world_shader,entry_point:Some("vs"),compilation_options:Default::default(),buffers:&[wgpu::VertexBufferLayout{array_stride:std::mem::size_of::<Vertex>()as u64,step_mode:wgpu::VertexStepMode::Vertex,attributes:&wgpu::vertex_attr_array![0=>Float32x3,1=>Float32x2,2=>Uint32,3=>Float32,4=>Float32x3]}]},
             primitive:wgpu::PrimitiveState{cull_mode:Some(wgpu::Face::Back),..Default::default()},depth_stencil:Some(wgpu::DepthStencilState{format:wgpu::TextureFormat::Depth32Float,depth_write_enabled:true,depth_compare:wgpu::CompareFunction::Less,stencil:Default::default(),bias:Default::default()}),multisample:Default::default(),fragment:Some(wgpu::FragmentState{module:&world_shader,entry_point:Some("fs"),compilation_options:Default::default(),targets:&[Some(wgpu::ColorTargetState{format:config.format,blend:None,write_mask:wgpu::ColorWrites::ALL})]}),multiview:None,cache:None,
+        });
+        let terrain_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("shared opaque and blended terrain layout"),
+            bind_group_layouts: &[&world_pipeline.get_bind_group_layout(0)],
+            push_constant_ranges: &[],
+        });
+        let transparent_pipeline=device.create_render_pipeline(&wgpu::RenderPipelineDescriptor{
+            label:Some("sorted blended terrain"),layout:Some(&terrain_layout),vertex:wgpu::VertexState{module:&world_shader,entry_point:Some("vs"),compilation_options:Default::default(),buffers:&[wgpu::VertexBufferLayout{array_stride:std::mem::size_of::<Vertex>()as u64,step_mode:wgpu::VertexStepMode::Vertex,attributes:&wgpu::vertex_attr_array![0=>Float32x3,1=>Float32x2,2=>Uint32,3=>Float32,4=>Float32x3]}]},
+            primitive:wgpu::PrimitiveState{cull_mode:Some(wgpu::Face::Back),..Default::default()},depth_stencil:Some(wgpu::DepthStencilState{format:wgpu::TextureFormat::Depth32Float,depth_write_enabled:false,depth_compare:wgpu::CompareFunction::Less,stencil:Default::default(),bias:Default::default()}),multisample:Default::default(),fragment:Some(wgpu::FragmentState{module:&world_shader,entry_point:Some("fs"),compilation_options:Default::default(),targets:&[Some(wgpu::ColorTargetState{format:config.format,blend:Some(wgpu::BlendState::ALPHA_BLENDING),write_mask:wgpu::ColorWrites::ALL})]}),multiview:None,cache:None,
         });
         let ui_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("shared HUD and preview atlas"),
@@ -353,6 +378,10 @@ impl Renderer {
         });
         let depth = depth(&device, config.width, config.height);
         let stats = Statistics {
+            blended_vertices: 0,
+            blended_uploads: 0,
+            blended_sorts: 0,
+            blended_bytes: 0,
             preview_uploads: 0,
             preview_vertices: 0,
             preview_draws: 0,
@@ -406,6 +435,10 @@ impl Renderer {
             last_frame_ms: 0.,
         };
         Ok(Self {
+            transparent_pipeline,
+            transparency: Default::default(),
+            transparent_revision: 0,
+            glass_keys: Vec::new(),
             preview_pipeline,
             preview_buffer,
             preview_mesh: None,
@@ -463,6 +496,25 @@ impl Renderer {
             self.stats.greedy_meshing = greedy;
             self.mesh_mode_dirty = true;
         }
+    }
+    pub fn set_vsync(&mut self, enabled: bool) {
+        let mode = if enabled {
+            wgpu::PresentMode::AutoVsync
+        } else {
+            wgpu::PresentMode::AutoNoVsync
+        };
+        if self.config.present_mode != mode {
+            self.config.present_mode = mode;
+            self.surface.configure(&self.device, &self.config);
+            self.stats.present_mode = format!("{:?}", mode);
+        }
+    }
+    pub fn menu_scale(&self) -> f32 {
+        self.stats
+            .gui_scale
+            .min(self.config.width as f32 / 380.)
+            .min(self.config.height as f32 / 300.)
+            .max(0.5)
     }
     pub fn logical_size(&self) -> (f64, f64) {
         (
@@ -686,21 +738,43 @@ impl Renderer {
     }
     fn upload(&mut self, key: [i32; 3], mesh: engine_mesh::ChunkMesh) {
         self.stats.mesh_rebuilds += 1;
+        if self
+            .meshes
+            .get(&key)
+            .is_some_and(|m| !m.transparent.is_empty())
+            || mesh.vertices.iter().any(|v| v.layer & 0x40000000 != 0)
+        {
+            self.transparent_revision += 1;
+        }
         if mesh.block_count == 0 {
             self.meshes.remove(&key);
             return;
         }
-        let buffer = (!mesh.vertices.is_empty()).then(|| {
+        let opaque: Vec<_> = mesh
+            .vertices
+            .iter()
+            .filter(|v| v.layer & 0x40000000 == 0)
+            .copied()
+            .collect();
+        let transparent: Vec<_> = mesh
+            .vertices
+            .iter()
+            .filter(|v| v.layer & 0x40000000 != 0)
+            .copied()
+            .collect();
+        let buffer = (!opaque.is_empty()).then(|| {
             self.device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("exposed chunk faces"),
-                    contents: bytemuck::cast_slice(&mesh.vertices),
+                    contents: bytemuck::cast_slice(&opaque),
                     usage: wgpu::BufferUsages::VERTEX,
                 })
         });
         self.meshes.insert(
             key,
             Mesh {
+                opaque_vertices: opaque.len() as u32,
+                transparent,
                 buffer,
                 vertices: mesh.vertices.len() as u32,
                 exposed_faces: mesh.exposed_faces,
@@ -867,10 +941,10 @@ impl Renderer {
             55.
         };
         let matrix = Mat4::perspective_rh(
-            70f32.to_radians(),
+            (frame.settings.fov as f32).to_radians(),
             self.config.width as f32 / self.config.height as f32,
             0.05,
-            100.,
+            (fog_end + 40.).max(100.),
         ) * Mat4::look_to_rh(eye, Vec3::from(dir), Vec3::Y);
         let target = client
             .scene
@@ -916,9 +990,32 @@ impl Renderer {
         let keys = &self.visible_keys;
         self.stats.visible_chunks = keys.len();
         self.stats.submitted_vertices = keys.iter().map(|p| self.meshes[p].vertices as usize).sum();
+        self.glass_keys.clear();
+        self.glass_keys.extend(
+            keys.iter()
+                .copied()
+                .filter(|k| !self.meshes[k].transparent.is_empty()),
+        );
+        self.transparency.update(
+            &self.device,
+            &self.queue,
+            self.transparent_revision,
+            &self.glass_keys,
+            self.glass_keys
+                .iter()
+                .map(|k| self.meshes[k].transparent.as_slice()),
+            (frame.eye, dir),
+        );
+        self.stats.blended_vertices = self.transparency.count as usize;
+        self.stats.blended_uploads = self.transparency.uploads;
+        self.stats.blended_sorts = self.transparency.sorts;
+        self.stats.blended_bytes = self.transparency.bytes;
         let state = client.scene.engine.as_ref().unwrap();
         let key = UiKey {
             startup: frame.startup,
+            menu_revision: frame.menu.revision,
+            fullscreen: frame.fullscreen,
+            menu_page: frame.menu.page,
             movement: client.movement,
             size: [self.config.width, self.config.height],
             scale: self.stats.gui_scale.to_bits(),
@@ -973,11 +1070,18 @@ impl Renderer {
                 client,
                 palette,
                 Context {
+                    menu: frame.menu,
+                    settings: frame.settings,
+                    fullscreen: frame.fullscreen,
                     startup: frame.startup,
                     loading: !self.stats.meshes_ready,
                     width: self.config.width,
                     height: self.config.height,
-                    scale: self.stats.gui_scale,
+                    scale: if frame.menu.open() {
+                        self.menu_scale()
+                    } else {
+                        self.stats.gui_scale
+                    },
                     wire: frame.wire,
                     debug: frame.debug,
                     statistics: &label,
@@ -985,7 +1089,7 @@ impl Renderer {
                 },
             );
             self.ui_preview_at = composition.preview_at;
-            self.preview_mesh = if !frame.startup {
+            self.preview_mesh = if !frame.startup && !frame.menu.open() {
                 self.atlas.as_ref().unwrap().preview(
                     client,
                     palette,
@@ -1056,8 +1160,16 @@ impl Renderer {
                 let mesh = &self.meshes[key];
                 if let Some(buffer) = &mesh.buffer {
                     pass.set_vertex_buffer(0, buffer.slice(..));
-                    pass.draw(0..mesh.vertices, 0..1);
+                    pass.draw(0..mesh.opaque_vertices, 0..1);
                 }
+            }
+            if let (Some(vertex), Some(index)) =
+                (&self.transparency.vertex, &self.transparency.index)
+            {
+                pass.set_pipeline(&self.transparent_pipeline);
+                pass.set_vertex_buffer(0, vertex.slice(..));
+                pass.set_index_buffer(index.slice(..), wgpu::IndexFormat::Uint32);
+                pass.draw_indexed(0..self.transparency.count, 0, 0..1);
             }
         }
         {

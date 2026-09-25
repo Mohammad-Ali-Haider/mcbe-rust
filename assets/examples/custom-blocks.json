@@ -1,0 +1,66 @@
+{
+  "blocks": [
+    {
+      "id": "study_table",
+      "label": "Study Table",
+      "color": [
+        56,
+        181,
+        161
+      ],
+      "pattern": "checker",
+      "texture_files": [
+        "assets/textures/checker.png",
+        "assets/textures/checker.png",
+        "assets/textures/checker.png",
+        "assets/textures/checker.png",
+        "assets/textures/checker.png",
+        "assets/textures/checker.png"
+      ],
+      "geometry": {
+        "boxes": [
+          [
+            0,
+            0.75,
+            0,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            0.2,
+            0.75,
+            0.2
+          ],
+          [
+            0.8,
+            0,
+            0,
+            1,
+            0.75,
+            0.2
+          ],
+          [
+            0,
+            0,
+            0.8,
+            0.2,
+            0.75,
+            1
+          ],
+          [
+            0.8,
+            0,
+            0.8,
+            1,
+            0.75,
+            1
+          ]
+        ]
+      }
+    }
+  ]
+}

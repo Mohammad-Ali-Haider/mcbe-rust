@@ -410,7 +410,7 @@ impl Scene {
                 return Ok(state
                     .blocks
                     .get(&p)
-                    .map_or_else(Vec::new, |id| state.geometry.boxes(*id).to_vec()));
+                    .map_or_else(Vec::new, |id| state.geometry.collision(*id).to_vec()));
             }
             if self.cells.contains(&p) {
                 return Ok(vec![[0., 0., 0., 1., 1., 1.]]);
@@ -428,8 +428,10 @@ pub struct Input {
     pub side: f32,
     pub jump: bool,
     pub sneak: bool,
+    pub sprint: bool,
 }
 pub struct Client {
+    pub owned_materials: Option<crate::engine_materials::Owned>,
     pub engine_gpu_prepared: std::cell::RefCell<Option<crate::engine_texture::Prepared>>,
     pub movement: crate::engine_player::Movement,
     pub engine_render_cache: std::cell::RefCell<Option<crate::render::EngineCache>>,
@@ -494,6 +496,7 @@ impl Client {
             engine_gpu_prepared: std::cell::RefCell::new(None),
             movement: Default::default(),
             scene,
+            owned_materials: None,
             engine_assets: None,
             engine_worker: None,
             engine_render_cache: std::cell::RefCell::new(None),
@@ -714,6 +717,9 @@ impl Client {
         let Some(hit) = self.target()? else {
             return Ok(false);
         };
+        if place && self.scene.engine.is_some() {
+            return crate::engine_placement::place(self, &hit);
+        }
         let mut p = [hit.position.x, hit.position.y, hit.position.z];
         if place {
             let (axis, sign) = match hit.face {

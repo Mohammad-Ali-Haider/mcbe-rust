@@ -4,7 +4,7 @@
 The user changed the goal on 2026-10-14; exact Minecraft cloning is no longer
 required. Earlier Bedrock research is retained as a reusable reference.
 
-**Checkpoint 47 is runnable now, building on Blockwork Version 1.0.** Double-click `Run-engine.cmd` for the
+**Checkpoint 48 is runnable now, building on Blockwork Version 1.0.** Double-click `Run-engine.cmd` for the
 Blockwork GPU engine: actual local Minecraft block textures, native window
 resolution, F4 wireframes, a compact HUD, player inventory and 2×2 crafting.
 A/D and horizontal mouse direction are corrected. Shift sneaks, F toggles
@@ -15,6 +15,11 @@ oriented stairs and a window frame with a real gap. The exported
 3D player preview using local model/skin data; its head follows the pointer.
 Open `Player-preview.cmd` in the exported checkpoint to try it.
 See [player preview](docs/engine-player-preview.md).
+Escape now opens a pause/settings menu with live chunk distance, FOV, GUI scale,
+mouse, VSync and FPS controls. Ctrl sprints; slabs support upper/lower/double
+placement and stairs support all eight orientations. Glass, tinted transparency,
+independent collision and your own per-face PNGs are available. Try the exported
+`Features-demo.cmd`; see [settings and custom blocks](docs/engine-settings-blocks.md).
 Block definitions and four recipes are editable JSON. F5 saves slots and terrain
 on a background worker while the game continues rendering.
 F4 shows wireframes; F8 switches optimized/reference geometry.

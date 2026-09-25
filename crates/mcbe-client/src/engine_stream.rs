@@ -41,7 +41,7 @@ impl Config {
     }
     fn validate(&self, registry: &Registry) -> Result<()> {
         if self.version != 1
-            || !(2..=4).contains(&self.radius)
+            || !(2..=8).contains(&self.radius)
             || self.exhibits.len() > 15
             || self.exhibits.iter().collect::<BTreeSet<_>>().len() != self.exhibits.len()
         {
@@ -348,9 +348,12 @@ fn insert(scene: &mut Scene, generated: Generated) {
     dirty(scene, c, ys);
 }
 fn recenter(scene: &mut Scene, c: Column) {
+    recenter_inner(scene, c, false);
+}
+fn recenter_inner(scene: &mut Scene, c: Column, force: bool) {
     let state = scene.engine.as_mut().unwrap();
     let stream = state.stream.as_mut().unwrap();
-    if stream.center == c {
+    if stream.center == c && !force {
         return;
     }
     stream.center = c;
@@ -373,6 +376,23 @@ fn recenter(scene: &mut Scene, c: Column) {
         stream.evicted += 1;
         dirty(scene, c, ys);
     }
+}
+/// Change residency without synchronously generating any columns. Existing worker
+/// jobs use the same terrain generator; radius only controls the wanted window.
+pub fn set_radius(client: &mut Client, radius: i32) -> Result<()> {
+    if !(2..=8).contains(&radius) {
+        return Err("Render distance must be 2..8 chunks".into());
+    }
+    let c = center(client.actor.position);
+    let Some(stream) = client.scene.engine.as_mut().and_then(|s| s.stream.as_mut()) else {
+        return Ok(());
+    };
+    if stream.generator.config.radius == radius {
+        return Ok(());
+    }
+    Arc::make_mut(&mut stream.generator).config.radius = radius;
+    recenter_inner(&mut client.scene, c, true);
+    Ok(())
 }
 /// Teleports and save loading prepare the whole bounded destination before movement.
 pub fn prepare(client: &mut Client, position: Vec3) -> Result<()> {
@@ -398,7 +418,7 @@ pub fn prepare(client: &mut Client, position: Vec3) -> Result<()> {
                 if client.movement.mode != crate::engine_player::Mode::Noclip
                     && let Some(id) = stream.observed([x, y, z])
                 {
-                    for b in state.geometry.boxes(id) {
+                    for b in state.geometry.collision(id) {
                         if (0..3).all(|a| {
                             low[a] < [x, y, z][a] as f32 + b[a + 3]
                                 && high[a] > [x, y, z][a] as f32 + b[a]
@@ -535,6 +555,65 @@ pub fn observation(client: &Client) -> serde_json::Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn live_radius_change_evicts_residents_but_preserves_distant_edits_and_bounded_jobs() {
+        let mut c = generate(360036, Registry::built_in()).unwrap();
+        let id = c
+            .scene
+            .engine
+            .as_ref()
+            .unwrap()
+            .registry
+            .find("glass")
+            .unwrap();
+        let p = [48, 35, 0];
+        c.scene.change_engine(p, Some(id)).unwrap();
+        set_radius(&mut c, 8).unwrap();
+        c.sync_region().unwrap();
+        assert!(c.engine_worker.as_ref().unwrap().pending.len() <= 2);
+        assert_eq!(
+            c.scene
+                .engine
+                .as_ref()
+                .unwrap()
+                .stream
+                .as_ref()
+                .unwrap()
+                .wanted
+                .len(),
+            289
+        );
+        set_radius(&mut c, 2).unwrap();
+        settle(&mut c);
+        assert_eq!(
+            c.scene
+                .engine
+                .as_ref()
+                .unwrap()
+                .stream
+                .as_ref()
+                .unwrap()
+                .residents
+                .len(),
+            25
+        );
+        assert!(!c.scene.engine.as_ref().unwrap().blocks.contains_key(&p));
+        assert_eq!(
+            c.scene
+                .engine
+                .as_ref()
+                .unwrap()
+                .stream
+                .as_ref()
+                .unwrap()
+                .observed(p),
+            Some(id)
+        );
+        set_radius(&mut c, 3).unwrap();
+        settle(&mut c);
+        assert_eq!(c.scene.engine.as_ref().unwrap().blocks.get(&p), Some(&id));
+        assert!(set_radius(&mut c, 9).is_err());
+    }
     fn settle(client: &mut Client) {
         let deadline = Instant::now() + std::time::Duration::from_secs(10);
         loop {

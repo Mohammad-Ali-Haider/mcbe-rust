@@ -162,6 +162,12 @@ pub fn verify(app: &mut App, out: &Path) -> Result<()> {
     app.client.scene.change_engine([6, 4, -5], Some(slab))?;
     app.client.set_spawn(Vec3::new(6.5, 4.5, -4.5))?;
     let mut changed = registry.clone();
+    for b in &mut changed.blocks {
+        if matches!(&b.placement,Some(crate::engine_blocks::Placement::Slab{lower,..}) if lower=="oak_slab")
+        {
+            b.placement = None;
+        }
+    }
     changed.blocks[usize::from(slab)]
         .geometry
         .as_mut()

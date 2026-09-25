@@ -69,6 +69,7 @@ enum Operation {
         path: PathBuf,
         expected: String,
         root: Option<PathBuf>,
+        owned_root: Option<PathBuf>,
     },
 }
 struct Request {
@@ -194,7 +195,7 @@ fn prepare_region(
                 if movement.mode != crate::engine_player::Mode::Noclip
                     && let Some(id) = observed([x, y, z])
                 {
-                    for b in geometry.boxes(id) {
+                    for b in geometry.collision(id) {
                         if (0..3).all(|a| {
                             low[a] < [x, y, z][a] as f32 + b[a + 3]
                                 && high[a] > [x, y, z][a] as f32 + b[a]
@@ -292,6 +293,7 @@ impl Service {
                                         path,
                                         expected,
                                         root,
+                                        owned_root,
                                     } => {
                                         check_file(&path, &expected)?;
                                         let mut client = crate::engine::load(&path)?;
@@ -310,11 +312,28 @@ impl Service {
                                         if token.load(Ordering::Acquire) != id {
                                             return Err("Preparation superseded".into());
                                         }
+                                        if let Some(registry) = client
+                                            .scene
+                                            .engine
+                                            .as_ref()
+                                            .unwrap()
+                                            .registry
+                                            .with_new_builtins()?
+                                        {
+                                            crate::engine::apply_registry(&mut client, registry)?;
+                                        }
                                         if let Some(root) = root {
                                             client.engine_assets = Some(engine_assets::load(
                                                 &client.scene.engine.as_ref().unwrap().registry,
                                                 &root,
                                             )?);
+                                        }
+                                        if let Some(home) = owned_root {
+                                            client.owned_materials =
+                                                Some(crate::engine_materials::load(
+                                                    &client.scene.engine.as_ref().unwrap().registry,
+                                                    &home,
+                                                )?);
                                         }
                                         check_file(&path, &expected)?;
                                         Ok(Prepared::Reload(Box::new(client)))
@@ -407,6 +426,7 @@ impl Service {
                 path: path.clone(),
                 expected: expected.clone(),
                 root: client.engine_assets.as_ref().map(|a| a.root.clone()),
+                owned_root: client.owned_materials.as_ref().map(|a| a.root.clone()),
             },
             started,
         )

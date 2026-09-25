@@ -82,9 +82,11 @@ pub fn tick(client: &mut Client, input: Input) -> Result<()> {
         .sqrt()
         .max(1.);
     let speed = if client.movement.mode != Mode::Walking {
-        0.4
+        if input.sprint { 0.8 } else { 0.4 }
     } else if client.movement.crouched {
         0.054
+    } else if input.sprint && input.forward > 0. {
+        0.28
     } else {
         0.18
     };
@@ -175,6 +177,40 @@ mod tests {
         let mut c = crate::engine::generate(360036).unwrap();
         c.set_spawn(Vec3::new(0.5, 4., -9.5)).unwrap();
         c
+    }
+    #[test]
+    fn sprint_is_faster_but_sneak_takes_priority_and_strafe_is_normalized() {
+        let mut c = client();
+        c.yaw = 0.;
+        c.tick(Input {
+            forward: 1.,
+            sprint: true,
+            ..Default::default()
+        })
+        .unwrap();
+        assert!((c.actor.displacement.z - 0.28).abs() < 0.001);
+        c.tick(Input {
+            forward: 1.,
+            sprint: true,
+            sneak: true,
+            ..Default::default()
+        })
+        .unwrap();
+        assert!((c.actor.displacement.z - 0.054).abs() < 0.001);
+        mode(&mut c, Mode::Flying).unwrap();
+        let p = c.actor.position;
+        c.tick(Input {
+            forward: 1.,
+            side: 1.,
+            jump: true,
+            sprint: true,
+            ..Default::default()
+        })
+        .unwrap();
+        let d = c.actor.position;
+        assert!(
+            ((d.x - p.x).powi(2) + (d.y - p.y).powi(2) + (d.z - p.z).powi(2) - 0.64).abs() < 0.001
+        );
     }
     #[test]
     fn strafe_and_mouse_follow_screen_right_at_every_heading() {
@@ -302,14 +338,14 @@ mod tests {
             ..Default::default()
         })
         .unwrap();
-        let mut registry = c.scene.engine.as_ref().unwrap().registry.clone();
-        let slab = registry.find("stone_slab").unwrap();
-        registry.blocks[usize::from(slab)]
-            .geometry
-            .as_mut()
+        let slab = c
+            .scene
+            .engine
+            .as_ref()
             .unwrap()
-            .boxes = vec![[0., 0.5, 0., 1., 1., 1.]];
-        crate::engine::apply_registry(&mut c, registry).unwrap();
+            .registry
+            .find("stone_slab_upper")
+            .unwrap();
         c.scene.change_engine([0, 5, -10], Some(slab)).unwrap();
         c.tick(Input::default()).unwrap();
         assert!(c.movement.crouched);

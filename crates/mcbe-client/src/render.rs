@@ -220,10 +220,7 @@ pub fn render(client: &Client, width: usize, height: usize) -> Vec<u32> {
                     [80.0, 219.0, 190.0]
                 } else if let Kind::Engine(id) = kind {
                     let state = client.scene.engine.as_ref().unwrap();
-                    client
-                        .engine_assets
-                        .as_ref()
-                        .and_then(|assets| assets.color(&state.registry, id, face, a, b))
+                    crate::engine_materials::color(client, id, face, a, b)
                         .unwrap_or_else(|| crate::engine::color(state.registry.get(id), face, a, b))
                         .map(|v| v * shade)
                 } else if let Some(material) = material {

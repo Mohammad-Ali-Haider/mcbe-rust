@@ -74,6 +74,18 @@ impl Options {
                 }
             }
         };
+        if !new_world
+            && self.definitions.is_none()
+            && let Some(registry) = client
+                .scene
+                .engine
+                .as_ref()
+                .unwrap()
+                .registry
+                .with_new_builtins()?
+        {
+            engine::apply_registry(&mut client, registry)?;
+        }
         progress.phase(3)?;
         if new_world {
             let path = self.home.join("assets/recipes.json");
@@ -93,6 +105,10 @@ impl Options {
                 &self.pack_root,
             )?);
         }
+        client.owned_materials = Some(crate::engine_materials::load(
+            &client.scene.engine.as_ref().unwrap().registry,
+            &self.home,
+        )?);
         progress.phase(5)?;
         // Loading a save is a snapshot operation, including the slower texture decode.
         if let Some((path, expected)) = &client.scene.engine.as_ref().unwrap().loaded {
