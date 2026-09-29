@@ -57,6 +57,13 @@ struct UiKey {
 }
 #[derive(Serialize)]
 pub struct Statistics {
+    pub distant_ready: bool,
+    pub distant_vertices: usize,
+    pub distant_bytes: usize,
+    pub distant_leaves: usize,
+    pub distant_area_blocks: u64,
+    pub distant_jobs: usize,
+    pub distant_discarded: usize,
     pub blended_vertices: usize,
     pub blended_uploads: usize,
     pub blended_sorts: usize,
@@ -132,6 +139,7 @@ struct Upload {
     staged: bool,
 }
 pub struct Renderer {
+    distant: crate::engine_distance::Distant,
     transparent_pipeline: wgpu::RenderPipeline,
     transparency: crate::engine_transparency::Batch,
     transparent_revision: usize,
@@ -378,6 +386,13 @@ impl Renderer {
         });
         let depth = depth(&device, config.width, config.height);
         let stats = Statistics {
+            distant_ready: true,
+            distant_vertices: 0,
+            distant_bytes: 0,
+            distant_leaves: 0,
+            distant_area_blocks: 0,
+            distant_jobs: 0,
+            distant_discarded: 0,
             blended_vertices: 0,
             blended_uploads: 0,
             blended_sorts: 0,
@@ -435,6 +450,7 @@ impl Renderer {
             last_frame_ms: 0.,
         };
         Ok(Self {
+            distant: Default::default(),
             transparent_pipeline,
             transparency: Default::default(),
             transparent_revision: 0,
@@ -787,6 +803,13 @@ impl Renderer {
         );
     }
     fn sync(&mut self, client: &Client, eye: [f32; 3]) -> Result<()> {
+        self.stats.distant_ready = self.distant.update(client, &self.device)?;
+        self.stats.distant_vertices = self.distant.vertices as usize;
+        self.stats.distant_bytes = self.stats.distant_vertices * std::mem::size_of::<Vertex>();
+        self.stats.distant_leaves = self.distant.leaves;
+        self.stats.distant_area_blocks = self.distant.area;
+        self.stats.distant_jobs = self.distant.jobs;
+        self.stats.distant_discarded = self.distant.discarded;
         let state = client
             .scene
             .engine
@@ -918,7 +941,10 @@ impl Renderer {
         self.sync(client, frame.eye)?;
         // A requested verification capture waits for complete, current geometry.
         // No surface is presented or counted while this final capture is pending.
-        if frame.capture.is_some() && !self.stats.meshes_ready && !frame.startup {
+        if frame.capture.is_some()
+            && (!self.stats.meshes_ready || !self.stats.distant_ready)
+            && !frame.startup
+        {
             return Ok(false);
         }
         let surface = match self.surface.get_current_texture() {
@@ -936,7 +962,11 @@ impl Renderer {
         let flying = client.movement.mode != crate::engine_player::Mode::Walking;
         let fog_end = streamed.map_or(95., |s| s.generator.config.radius as f32 * 16. - 2.);
         let fog_start = if streamed.is_some() {
-            fog_end - 14.
+            if fog_end > 128. {
+                fog_end * 0.8
+            } else {
+                fog_end - 14.
+            }
         } else {
             55.
         };
@@ -1156,6 +1186,10 @@ impl Renderer {
             });
             pass.set_pipeline(&self.world_pipeline);
             pass.set_bind_group(0, self.world_bind.as_ref().unwrap(), &[]);
+            if let Some(buffer) = &self.distant.buffer {
+                pass.set_vertex_buffer(0, buffer.slice(..));
+                pass.draw(0..self.distant.vertices, 0..1);
+            }
             for key in keys {
                 let mesh = &self.meshes[key];
                 if let Some(buffer) = &mesh.buffer {

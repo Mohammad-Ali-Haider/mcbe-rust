@@ -3,6 +3,7 @@ mod engine;
 mod engine_assets;
 mod engine_blocks;
 mod engine_crafting;
+mod engine_distance;
 mod engine_features_study;
 mod engine_font;
 mod engine_geometry;
@@ -861,7 +862,10 @@ impl App {
         self.poll_saves()?;
         self.poll_loads()?;
         if self.load_test && !self.load_close_test {
-            let ready = self.gpu.as_ref().is_some_and(|g| g.stats.meshes_ready);
+            let ready = self
+                .gpu
+                .as_ref()
+                .is_some_and(|g| g.stats.meshes_ready && g.stats.distant_ready);
             match self.load_stage {
                 0 if ready => {
                     for _ in 0..3 {
@@ -1038,13 +1042,17 @@ impl App {
             if self.frames > 5 && settled && self.gpu.as_ref().is_some_and(|g| g.stats.meshes_ready)
             {
                 if self.settings_stage == 0 {
-                    self.settings_trace.push(serde_json::json!({"stage":"expanded","stream":o,"position":self.client.actor.position}));
+                    self.settings_trace.push(serde_json::json!({"stage":"expanded","stream":o,"position":self.client.actor.position,"distant":self.gpu.as_ref().map(|g|serde_json::json!({"ready":g.stats.distant_ready,"vertices":g.stats.distant_vertices,"bytes":g.stats.distant_bytes,"area":g.stats.distant_area_blocks}))}));
                     self.settings_stage = 1;
-                    for _ in 0..6 {
-                        self.engine_key(KeyCode::ArrowLeft)?;
+                    if self.settings.render_distance > engine_stream::DETAIL_RADIUS {
+                        self.engine_key(KeyCode::Home)?;
+                    } else {
+                        for _ in 0..6 {
+                            self.engine_key(KeyCode::ArrowLeft)?;
+                        }
                     }
                 } else if self.settings_stage == 1 {
-                    self.settings_trace.push(serde_json::json!({"stage":"reduced","stream":o,"position":self.client.actor.position}));
+                    self.settings_trace.push(serde_json::json!({"stage":"reduced","stream":o,"position":self.client.actor.position,"distant":self.gpu.as_ref().map(|g|serde_json::json!({"ready":g.stats.distant_ready,"vertices":g.stats.distant_vertices,"bytes":g.stats.distant_bytes}))}));
                     if let Some(gpu) = &self.gpu {
                         let proof = gpu.verify_geometry(&self.client)?;
                         if proof["all_vertex_bytes_match"] != true {

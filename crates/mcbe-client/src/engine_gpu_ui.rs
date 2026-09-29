@@ -414,6 +414,13 @@ impl Atlas {
                 );
                 c.rect([left, y + 18., 340., 2.], [0.04, 0.05, 0.04, 1.]);
                 self.text(&mut c, left + 20., y + 6., label, [1.; 4]);
+                if ctx.menu.page == Page::Settings && i == 0 {
+                    let value = (ctx.settings.render_distance - 2) as f32
+                        / (crate::engine_stream::MAX_RADIUS - 2) as f32;
+                    c.rect([left + 30., y + 15., 280., 2.], [0.07, 0.09, 0.07, 1.]);
+                    c.rect([left + 30., y + 15., 280. * value, 2.], [0.7, 1., 0.65, 1.]);
+                    c.rect([left + 28. + 280. * value, y + 14., 4., 4.], [1.; 4]);
+                }
                 if ctx.menu.page == Page::Settings && i < 6 {
                     self.text(&mut c, left + 6., y + 6., "-", [1.; 4]);
                     self.text(&mut c, left + 328., y + 6., "+", [1.; 4]);
@@ -423,7 +430,7 @@ impl Atlas {
                 &mut c,
                 left + 3.,
                 top + 250.,
-                "Arrows / Click: change     Esc: back",
+                "Arrows / Slider: change  Home/End: min/max",
                 [0.8, 0.8, 0.8, 1.],
             );
             self.text(

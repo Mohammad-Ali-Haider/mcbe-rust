@@ -159,3 +159,52 @@ pub fn prepare(app: &mut App, out: &Path, settings: bool) -> Result<()> {
     app.notice = None;
     Ok(())
 }
+/// Maximum-range fixture uses real settings controls and the save/load pipeline.
+pub fn distance(app: &mut App, out: &Path, menu: bool, shrink: bool) -> Result<()> {
+    prepare(app, out, false)?;
+    app.engine_key(KeyCode::Escape)?;
+    app.engine_key(KeyCode::ArrowDown)?;
+    app.engine_key(KeyCode::Enter)?;
+    app.engine_key(KeyCode::End)?;
+    app.settings.write(out)?;
+    if crate::engine_settings::Settings::read(out)?.render_distance != 255 {
+        return Err("Maximum distance preference did not persist".into());
+    }
+    engine_player::mode(&mut app.client, Mode::Flying)?;
+    app.client.set_spawn(Vec3::new(0.5, 50., -10.5))?;
+    app.client.pitch = -0.08;
+    app.simulation_previous = app.client.actor.position;
+    app.request_save()?;
+    app.finish_work()?;
+    let saved = app
+        .client
+        .last_save
+        .clone()
+        .ok_or("Maximum distance save missing")?;
+    let loaded = engine::load(&saved)?;
+    let stream = loaded
+        .scene
+        .engine
+        .as_ref()
+        .unwrap()
+        .stream
+        .as_ref()
+        .unwrap();
+    if stream.generator.config.radius != 255 || stream.residents.len() != 289 {
+        return Err("Maximum distance save/load exceeded detailed residency budget".into());
+    }
+    fs::write(
+        out.join("distance.json"),
+        serde_json::to_vec_pretty(
+            &json!({"complete":true,"radius":255,"maximum_detail_columns":289,"saved_world":saved,"saved_radius":stream.generator.config.radius,"saved_residents":stream.residents.len(),"menu":menu,"shrink":shrink}),
+        )?,
+    )?;
+    if !menu && !shrink {
+        app.engine_key(KeyCode::Escape)?;
+        app.engine_key(KeyCode::Escape)?;
+    }
+    app.settings_test = shrink;
+    app.frame_limit = 700;
+    app.notice = None;
+    Ok(())
+}

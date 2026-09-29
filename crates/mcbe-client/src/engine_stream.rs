@@ -19,6 +19,8 @@ pub const BOUNDS: Bounds = Bounds {
     max: [8192, 64, 8192],
 };
 pub const MAX_EDITS: usize = 200_000;
+pub const MAX_RADIUS: i32 = 255;
+pub const DETAIL_RADIUS: i32 = 8;
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
@@ -41,7 +43,7 @@ impl Config {
     }
     fn validate(&self, registry: &Registry) -> Result<()> {
         if self.version != 1
-            || !(2..=8).contains(&self.radius)
+            || !(2..=MAX_RADIUS).contains(&self.radius)
             || self.exhibits.len() > 15
             || self.exhibits.iter().collect::<BTreeSet<_>>().len() != self.exhibits.len()
         {
@@ -293,6 +295,9 @@ impl Drop for Worker {
     }
 }
 pub(crate) fn wanted(c: Column, radius: i32) -> BTreeSet<Column> {
+    // Far terrain has its own bounded LOD mesh; only nearby columns own blocks,
+    // collision, edits and detailed chunk meshes.
+    let radius = radius.min(DETAIL_RADIUS);
     let mut result = BTreeSet::new();
     for x in c[0] - radius..=c[0] + radius {
         for z in c[1] - radius..=c[1] + radius {
@@ -380,8 +385,8 @@ fn recenter_inner(scene: &mut Scene, c: Column, force: bool) {
 /// Change residency without synchronously generating any columns. Existing worker
 /// jobs use the same terrain generator; radius only controls the wanted window.
 pub fn set_radius(client: &mut Client, radius: i32) -> Result<()> {
-    if !(2..=8).contains(&radius) {
-        return Err("Render distance must be 2..8 chunks".into());
+    if !(2..=MAX_RADIUS).contains(&radius) {
+        return Err("Render distance must be 2..255 chunks".into());
     }
     let c = center(client.actor.position);
     let Some(stream) = client.scene.engine.as_mut().and_then(|s| s.stream.as_mut()) else {
@@ -550,7 +555,7 @@ pub fn observation(client: &Client) -> serde_json::Value {
     let Some(s) = &state.stream else {
         return serde_json::Value::Null;
     };
-    serde_json::json!({"generator_version":s.generator.config.version,"radius":s.generator.config.radius,"center":s.center,"resident_columns":s.residents.len(),"wanted_columns":s.wanted.len(),"generated_columns":s.generated,"evicted_columns":s.evicted,"discarded_jobs":s.discarded,"generation_ms":s.generation_ms,"resident_blocks":state.blocks.len(),"sparse_edits":s.edits.len(),"pending_edits":state.pending(),"queued_jobs":client.engine_worker.as_ref().map_or(0,|w|w.pending.len()),"dirty_keys":state.dirty_chunks.len()})
+    serde_json::json!({"generator_version":s.generator.config.version,"radius":s.generator.config.radius,"full_detail_radius":s.generator.config.radius.min(DETAIL_RADIUS),"far_terrain_lod":s.generator.config.radius>DETAIL_RADIUS,"center":s.center,"resident_columns":s.residents.len(),"wanted_columns":s.wanted.len(),"generated_columns":s.generated,"evicted_columns":s.evicted,"discarded_jobs":s.discarded,"generation_ms":s.generation_ms,"resident_blocks":state.blocks.len(),"sparse_edits":s.edits.len(),"pending_edits":state.pending(),"queued_jobs":client.engine_worker.as_ref().map_or(0,|w|w.pending.len()),"dirty_keys":state.dirty_chunks.len()})
 }
 #[cfg(test)]
 mod tests {
@@ -612,7 +617,7 @@ mod tests {
         set_radius(&mut c, 3).unwrap();
         settle(&mut c);
         assert_eq!(c.scene.engine.as_ref().unwrap().blocks.get(&p), Some(&id));
-        assert!(set_radius(&mut c, 9).is_err());
+        assert!(set_radius(&mut c, 256).is_err());
     }
     fn settle(client: &mut Client) {
         let deadline = Instant::now() + std::time::Duration::from_secs(10);

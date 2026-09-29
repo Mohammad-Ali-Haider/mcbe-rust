@@ -30,7 +30,7 @@ impl Default for Settings {
 impl Settings {
     pub fn validate(&self) -> Result<()> {
         if self.version != 1
-            || !(2..=8).contains(&self.render_distance)
+            || !(2..=crate::engine_stream::MAX_RADIUS).contains(&self.render_distance)
             || !(1..=3).contains(&self.gui_scale)
             || !(50..=110).contains(&self.fov)
             || !(20..=200).contains(&self.sensitivity)
@@ -154,7 +154,10 @@ impl Menu {
             };
         }
         match self.selected {
-            0 => s.render_distance = (s.render_distance + delta).clamp(2, 8),
+            0 => {
+                s.render_distance =
+                    (s.render_distance + delta).clamp(2, crate::engine_stream::MAX_RADIUS)
+            }
             1 => s.gui_scale = (s.gui_scale as i32 + delta).clamp(1, 3) as u32,
             2 => s.fov = (s.fov as i32 + delta * 5).clamp(50, 110) as u32,
             3 => s.sensitivity = (s.sensitivity as i32 + delta * 10).clamp(20, 200) as u32,
@@ -176,6 +179,15 @@ impl Menu {
     }
     pub fn key(&mut self, s: &mut Settings, key: KeyCode) -> Action {
         match key {
+            KeyCode::Home | KeyCode::End if self.page == Page::Settings && self.selected == 0 => {
+                s.render_distance = if key == KeyCode::End {
+                    crate::engine_stream::MAX_RADIUS
+                } else {
+                    2
+                };
+                self.revision += 1;
+                Action::Changed
+            }
             KeyCode::Escape => self.escape(),
             KeyCode::ArrowUp => {
                 self.selected = (self.selected + self.count() - 1) % self.count();
@@ -213,7 +225,15 @@ impl Menu {
         if let Some(row) = self.hit(p, view) {
             self.selected = row;
             let [x, _] = Self::origin(view);
-            self.activate(s, if p[0] < x + 170. { -1 } else { 1 })
+            if self.page == Page::Settings && row == 0 && p[0] >= x + 20. && p[0] <= x + 320. {
+                let fraction = ((p[0] - x - 30.) / 280.).clamp(0., 1.);
+                s.render_distance =
+                    2 + (fraction * (crate::engine_stream::MAX_RADIUS - 2) as f32).round() as i32;
+                self.revision += 1;
+                Action::Changed
+            } else {
+                self.activate(s, if p[0] < x + 170. { -1 } else { 1 })
+            }
         } else {
             Action::None
         }
@@ -225,11 +245,11 @@ mod tests {
     #[test]
     fn settings_roundtrip_rejects_unbounded_work_and_unknown_fields() {
         let mut s = Settings {
-            render_distance: 8,
+            render_distance: 255,
             ..Default::default()
         };
         assert!(s.validate().is_ok());
-        s.render_distance = 9;
+        s.render_distance = 256;
         assert!(s.validate().is_err());
         assert!(serde_json::from_str::<Settings>("{}").is_err());
         let s = Settings::default();
@@ -237,6 +257,28 @@ mod tests {
             s,
             serde_json::from_slice(&serde_json::to_vec(&s).unwrap()).unwrap()
         );
+    }
+    #[test]
+    fn slider_and_home_end_select_the_full_distance_range() {
+        let mut menu = Menu {
+            page: Page::Settings,
+            ..Default::default()
+        };
+        let mut s = Settings::default();
+        let view = [640., 360.];
+        let [x, y] = Menu::origin(view);
+        menu.key(&mut s, KeyCode::End);
+        assert_eq!(s.render_distance, 255);
+        menu.key(&mut s, KeyCode::ArrowRight);
+        assert_eq!(s.render_distance, 255);
+        menu.key(&mut s, KeyCode::Home);
+        assert_eq!(s.render_distance, 2);
+        menu.click(&mut s, [x + 310., y + 40.], view);
+        assert_eq!(s.render_distance, 255);
+        menu.click(&mut s, [x + 30., y + 40.], view);
+        assert_eq!(s.render_distance, 2);
+        menu.click(&mut s, [x + 170., y + 40.], view);
+        assert!((128..=129).contains(&s.render_distance));
     }
     #[test]
     fn menu_mouse_keyboard_and_back_agree() {

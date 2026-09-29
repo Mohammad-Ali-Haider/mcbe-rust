@@ -15,10 +15,12 @@ oriented stairs and a window frame with a real gap. The exported
 3D player preview using local model/skin data; its head follows the pointer.
 Open `Player-preview.cmd` in the exported checkpoint to try it.
 See [player preview](docs/engine-player-preview.md).
-Escape now opens a pause/settings menu with live chunk distance, FOV, GUI scale,
+Escape now opens a pause/settings menu with live chunk distance up to 255, FOV, GUI scale,
 mouse, VSync and FPS controls. Ctrl sprints; slabs support upper/lower/double
 placement and stairs support all eight orientations. Glass, tinted transparency,
-independent collision and your own per-face PNGs are available. Try the exported
+independent collision and your own per-face PNGs are available. Full-detail
+terrain stays nearby; an adaptive background mesh supplies distant ground.
+See [255-chunk distance](docs/render-distance-255.md). Try the exported
 `Features-demo.cmd`; see [settings and custom blocks](docs/engine-settings-blocks.md).
 Block definitions and four recipes are editable JSON. F5 saves slots and terrain
 on a background worker while the game continues rendering.
