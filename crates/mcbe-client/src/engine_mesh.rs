@@ -103,37 +103,18 @@ fn emit_surface(
         });
     }
 }
-/// Coarse distant terrain uses a top and skirts down to the foundation so
-/// different LOD cell heights cannot reveal cracks between cells.
-pub(crate) fn distant_cell(
+pub(crate) fn lod_surface(
     out: &mut Vec<Vertex>,
     p: [i32; 3],
-    size: i32,
-    height: i32,
-    top: u16,
-    side: u16,
+    face: usize,
+    id: u16,
+    bounds: [f32; 6],
+    flags: u32,
 ) {
-    for face in [0, 2, 3, 4, 5] {
-        let mut bounds = [0., 0., 0., size as f32, height as f32, size as f32];
-        let axis = match face {
-            0 => 1,
-            2 | 3 => 2,
-            _ => 0,
-        };
-        let plane = if [0, 3, 4].contains(&face) {
-            bounds[axis + 3]
-        } else {
-            0.
-        };
-        bounds[axis] = plane;
-        bounds[axis + 3] = plane;
-        emit_surface(
-            out,
-            p,
-            face,
-            if face == 0 { top } else { side },
-            crate::engine_geometry::Surface { bounds },
-        );
+    let first = out.len();
+    emit_surface(out, p, face, id, crate::engine_geometry::Surface { bounds });
+    for v in &mut out[first..] {
+        v.layer |= flags;
     }
 }
 pub fn build_naive(state: &WorldState, key: [i32; 3]) -> ChunkMesh {

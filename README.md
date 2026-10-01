@@ -19,7 +19,9 @@ Escape now opens a pause/settings menu with live chunk distance up to 255, FOV, 
 mouse, VSync and FPS controls. Ctrl sprints; slabs support upper/lower/double
 placement and stairs support all eight orientations. Glass, tinted transparency,
 independent collision and your own per-face PNGs are available. Full-detail
-terrain stays nearby; an adaptive background mesh supplies distant ground.
+terrain stays nearby; a stitched background mesh supplies distant hills and tree
+silhouettes. Overlapping detail levels morph and blend, and chunk crossings keep
+the previous mesh visible while its replacement builds.
 See [255-chunk distance](docs/render-distance-255.md). Try the exported
 `Features-demo.cmd`; see [settings and custom blocks](docs/engine-settings-blocks.md).
 Block definitions and four recipes are editable JSON. F5 saves slots and terrain

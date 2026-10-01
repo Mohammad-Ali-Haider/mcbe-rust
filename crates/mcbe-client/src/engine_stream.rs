@@ -123,7 +123,7 @@ impl Generator {
         let edge = 5 + (engine::noise(x.div_euclid(5), z.div_euclid(5), self.seed) % 5) as i32;
         (edge * (24 - distance) + smooth * distance) / 24
     }
-    fn tree(&self, c: Column) -> Option<[i32; 3]> {
+    pub(crate) fn tree(&self, c: Column) -> Option<[i32; 3]> {
         let n = engine::noise(c[0], c[1], self.seed ^ 0x38c6f01c);
         if !n.is_multiple_of(3) {
             return None;
@@ -134,6 +134,23 @@ impl Generator {
             return None;
         }
         Some([x, self.height(x, z), z])
+    }
+    pub(crate) fn ground_height(&self, x: i32, z: i32) -> i32 {
+        if (-40..40).contains(&x) && (-40..40).contains(&z) {
+            if x.abs() <= 16 && z.abs() <= 18 {
+                4
+            } else {
+                5 + (engine::noise(x.div_euclid(5), z.div_euclid(5), self.seed) % 5) as i32
+            }
+        } else {
+            self.height(x, z)
+        }
+    }
+    pub(crate) fn structures(&self) -> impl Iterator<Item = ([i32; 3], BlockId)> + '_ {
+        self.court
+            .iter()
+            .filter(|(p, _)| p[1] >= self.ground_height(p[0], p[2]))
+            .map(|(p, id)| (*p, *id))
     }
     pub fn block(&self, p: Position) -> Option<BlockId> {
         if !BOUNDS.contains(p) {

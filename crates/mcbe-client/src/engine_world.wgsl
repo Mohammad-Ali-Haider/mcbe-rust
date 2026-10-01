@@ -1,4 +1,4 @@
-struct Camera{matrix:mat4x4<f32>,eye:vec4<f32>,settings:vec4<f32>,focus:vec4<f32>};
+struct Camera{matrix:mat4x4<f32>,eye:vec4<f32>,settings:vec4<f32>,focus:vec4<f32>,lod:vec4<f32>,lod_old:vec4<f32>};
 @group(0) @binding(0) var terrain:texture_2d_array<f32>;
 @group(0) @binding(1) var terrain_sampler:sampler;
 @group(0) @binding(2) var<uniform> camera:Camera;
@@ -6,17 +6,49 @@ struct Out{@builtin(position) position:vec4<f32>,@location(0) uv:vec2<f32>,@loca
 @vertex fn vs(@location(0) position:vec3<f32>,@location(1) uv:vec2<f32>,@location(2) layer:u32,@location(3) shade:f32,@location(4) bary:vec3<f32>)->Out{
     var o:Out;o.position=camera.matrix*vec4(position,1.);o.uv=uv;o.layer=layer;o.shade=shade;o.bary=bary;o.world=position;return o;
 }
+@vertex fn vs_previous(@location(0) position:vec3<f32>,@location(1) uv:vec2<f32>,@location(2) layer:u32,@location(3) shade:f32,@location(4) bary:vec3<f32>)->Out{
+    var o:Out;o.position=camera.matrix*vec4(position,1.);o.uv=uv;o.layer=layer|0x04000000u;o.shade=shade;o.bary=bary;o.world=position;return o;
+}
+fn noise(p:vec2<u32>,salt:u32)->f32 {
+    var n=p.x*1973u+p.y*9277u+salt*26699u;n=(n^(n>>16u))*2246822519u;n=(n^(n>>13u))*3266489917u;
+    return f32(n&65535u)/65536.;
+}
 @fragment fn fs(i:Out)->@location(0) vec4<f32>{
-    let layer=i.layer&0x1fffffffu;
+    let layer=i.layer&0x007fffffu;
     let custom=(i.layer&0x80000000u)!=0u;
     let texel=textureSample(terrain,terrain_sampler,i.uv,i32(layer));
+    let thickness=max(max(fwidth(i.bary.x),fwidth(i.bary.y)),fwidth(i.bary.z));
+    if camera.lod.w>0.5 {
+        let pixel=vec2<u32>(i.position.xy);
+        let old=camera.lod_old.z>0.5 && noise(pixel,31u)>=camera.lod.z;
+        let is_previous=(i.layer&0x04000000u)!=0u;
+        let fine=(i.layer&0x10000000u)!=0u;
+        let field=(i.layer&0x08000000u)!=0u;
+        let object=(i.layer&0x03000000u)!=0u;
+        let far=fine || field || object;
+        if far && old!=is_previous {discard;}
+        let origin=select(camera.lod.xy,camera.lod_old.xy,old);
+        let offset=abs(i.world.xz-origin);
+        let d=max(offset.x,offset.y);
+        let a=smoothstep(80.,112.,d)*camera.lod_old.w;
+        let b=smoothstep(208.,256.,d);
+        let value=noise(pixel,7u);
+        let glass=(i.layer&0x40000000u)!=0u;
+        if !far && !glass && value<a {discard;}
+        if fine && (value>=a || value<a*b) {discard;}
+        if field && value>=a*b {discard;}
+        let trunk=(i.layer&0x00800000u)!=0u;
+        let tree_detail=select(1.,1.-smoothstep(384.,640.,d),trunk);
+        if object && value>=a*(1.-smoothstep(1024.,1536.,d))*tree_detail {discard;}
+    }
+
     let cutout=(i.layer&0x20000000u)!=0u;
     let blended=(i.layer&0x40000000u)!=0u;
     if cutout && texel.a<0.5 {discard;}
     if blended && texel.a<0.004 {discard;}
     var rgb=texel.rgb*i.shade;
     if camera.settings.x>0.5 {
-        let edge=min(min(i.bary.x,i.bary.y),i.bary.z);let thickness=max(max(fwidth(i.bary.x),fwidth(i.bary.y)),fwidth(i.bary.z));
+        let edge=min(min(i.bary.x,i.bary.y),i.bary.z);
         if edge<thickness*0.8 {rgb=vec3(0.05,0.9,0.3);}
     }
     if camera.focus.w>0.5 {

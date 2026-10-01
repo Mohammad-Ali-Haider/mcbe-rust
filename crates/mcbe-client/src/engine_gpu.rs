@@ -33,6 +33,8 @@ struct Camera {
     eye: [f32; 4],
     settings: [f32; 4],
     focus: [f32; 4],
+    lod: [f32; 4],
+    lod_old: [f32; 4],
 }
 #[derive(PartialEq, Eq)]
 struct UiKey {
@@ -57,6 +59,13 @@ struct UiKey {
 }
 #[derive(Serialize)]
 pub struct Statistics {
+    pub distant_trees: usize,
+    pub distant_objects: usize,
+    pub distant_stitched_edges: usize,
+    pub distant_fine_vertices: usize,
+    pub distant_retained_updates: usize,
+    pub distant_crossfades: usize,
+    pub distant_previous_vertices: usize,
     pub distant_ready: bool,
     pub distant_vertices: usize,
     pub distant_bytes: usize,
@@ -140,6 +149,7 @@ struct Upload {
 }
 pub struct Renderer {
     distant: crate::engine_distance::Distant,
+    previous_lod_pipeline: wgpu::RenderPipeline,
     transparent_pipeline: wgpu::RenderPipeline,
     transparency: crate::engine_transparency::Batch,
     transparent_revision: usize,
@@ -266,6 +276,10 @@ impl Renderer {
             label:Some("sorted blended terrain"),layout:Some(&terrain_layout),vertex:wgpu::VertexState{module:&world_shader,entry_point:Some("vs"),compilation_options:Default::default(),buffers:&[wgpu::VertexBufferLayout{array_stride:std::mem::size_of::<Vertex>()as u64,step_mode:wgpu::VertexStepMode::Vertex,attributes:&wgpu::vertex_attr_array![0=>Float32x3,1=>Float32x2,2=>Uint32,3=>Float32,4=>Float32x3]}]},
             primitive:wgpu::PrimitiveState{cull_mode:Some(wgpu::Face::Back),..Default::default()},depth_stencil:Some(wgpu::DepthStencilState{format:wgpu::TextureFormat::Depth32Float,depth_write_enabled:false,depth_compare:wgpu::CompareFunction::Less,stencil:Default::default(),bias:Default::default()}),multisample:Default::default(),fragment:Some(wgpu::FragmentState{module:&world_shader,entry_point:Some("fs"),compilation_options:Default::default(),targets:&[Some(wgpu::ColorTargetState{format:config.format,blend:Some(wgpu::BlendState::ALPHA_BLENDING),write_mask:wgpu::ColorWrites::ALL})]}),multiview:None,cache:None,
         });
+        let previous_lod_pipeline=device.create_render_pipeline(&wgpu::RenderPipelineDescriptor{
+            label:Some("previous LOD crossfade"),layout:Some(&terrain_layout),vertex:wgpu::VertexState{module:&world_shader,entry_point:Some("vs_previous"),compilation_options:Default::default(),buffers:&[wgpu::VertexBufferLayout{array_stride:std::mem::size_of::<Vertex>()as u64,step_mode:wgpu::VertexStepMode::Vertex,attributes:&wgpu::vertex_attr_array![0=>Float32x3,1=>Float32x2,2=>Uint32,3=>Float32,4=>Float32x3]}]},
+            primitive:wgpu::PrimitiveState{cull_mode:Some(wgpu::Face::Back),..Default::default()},depth_stencil:Some(wgpu::DepthStencilState{format:wgpu::TextureFormat::Depth32Float,depth_write_enabled:true,depth_compare:wgpu::CompareFunction::Less,stencil:Default::default(),bias:Default::default()}),multisample:Default::default(),fragment:Some(wgpu::FragmentState{module:&world_shader,entry_point:Some("fs"),compilation_options:Default::default(),targets:&[Some(wgpu::ColorTargetState{format:config.format,blend:None,write_mask:wgpu::ColorWrites::ALL})]}),multiview:None,cache:None,
+        });
         let ui_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("shared HUD and preview atlas"),
             entries: &[
@@ -374,7 +388,7 @@ impl Renderer {
         }
         let uniform = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("camera"),
-            size: 112,
+            size: std::mem::size_of::<Camera>() as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -386,6 +400,13 @@ impl Renderer {
         });
         let depth = depth(&device, config.width, config.height);
         let stats = Statistics {
+            distant_trees: 0,
+            distant_objects: 0,
+            distant_stitched_edges: 0,
+            distant_fine_vertices: 0,
+            distant_retained_updates: 0,
+            distant_crossfades: 0,
+            distant_previous_vertices: 0,
             distant_ready: true,
             distant_vertices: 0,
             distant_bytes: 0,
@@ -451,6 +472,7 @@ impl Renderer {
         };
         Ok(Self {
             distant: Default::default(),
+            previous_lod_pipeline,
             transparent_pipeline,
             transparency: Default::default(),
             transparent_revision: 0,
@@ -804,6 +826,13 @@ impl Renderer {
     }
     fn sync(&mut self, client: &Client, eye: [f32; 3]) -> Result<()> {
         self.stats.distant_ready = self.distant.update(client, &self.device)?;
+        self.stats.distant_trees = self.distant.trees;
+        self.stats.distant_objects = self.distant.objects;
+        self.stats.distant_stitched_edges = self.distant.stitched_edges;
+        self.stats.distant_fine_vertices = self.distant.fine_vertices;
+        self.stats.distant_retained_updates = self.distant.retained_updates;
+        self.stats.distant_crossfades = self.distant.crossfades;
+        self.stats.distant_previous_vertices = self.distant.previous_vertices as usize;
         self.stats.distant_vertices = self.distant.vertices as usize;
         self.stats.distant_bytes = self.stats.distant_vertices * std::mem::size_of::<Vertex>();
         self.stats.distant_leaves = self.distant.leaves;
@@ -979,7 +1008,10 @@ impl Renderer {
         let target = client
             .scene
             .target(frame.eye.map(f64::from), client.direction())?;
+        let (lod, lod_old) = self.distant.blend();
         let uniform = Camera {
+            lod,
+            lod_old,
             matrix: matrix.to_cols_array(),
             eye: [eye.x, eye.y, eye.z, 1.],
             settings: [
@@ -1186,6 +1218,12 @@ impl Renderer {
             });
             pass.set_pipeline(&self.world_pipeline);
             pass.set_bind_group(0, self.world_bind.as_ref().unwrap(), &[]);
+            if let Some(buffer) = &self.distant.previous_buffer {
+                pass.set_pipeline(&self.previous_lod_pipeline);
+                pass.set_vertex_buffer(0, buffer.slice(..));
+                pass.draw(0..self.distant.previous_vertices, 0..1);
+                pass.set_pipeline(&self.world_pipeline);
+            }
             if let Some(buffer) = &self.distant.buffer {
                 pass.set_vertex_buffer(0, buffer.slice(..));
                 pass.draw(0..self.distant.vertices, 0..1);

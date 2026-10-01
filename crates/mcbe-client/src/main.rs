@@ -53,6 +53,9 @@ use winit::{
 
 struct App {
     flight_tap: engine_player::FlightTap,
+    lod_motion_test: bool,
+    lod_motion_stage: usize,
+    lod_motion_trace: Vec<serde_json::Value>,
     settings_test: bool,
     settings_stage: u8,
     settings_trace: Vec<serde_json::Value>,
@@ -210,6 +213,9 @@ impl App {
             capture_out: None,
             simulation_previous: client.actor.position,
             flight_tap: Default::default(),
+            lod_motion_test: false,
+            lod_motion_stage: 0,
+            lod_motion_trace: Vec::new(),
             settings_test: false,
             settings_stage: 0,
             settings_trace: Vec::new(),
@@ -1036,10 +1042,39 @@ impl App {
             }
         }
         self.client.sync_region()?;
+        if self.lod_motion_test && self.lod_motion_stage < 5 {
+            let gpu = self.gpu.as_ref().unwrap();
+            if self.frames > 5
+                && gpu.stats.meshes_ready
+                && gpu.stats.distant_ready
+                && (self.lod_motion_stage == 0
+                    || gpu.stats.distant_crossfades >= self.lod_motion_stage)
+            {
+                if self.lod_motion_stage < 4 {
+                    let mut p = self.client.actor.position;
+                    if self.lod_motion_stage.is_multiple_of(2) {
+                        p.x += 16.;
+                    } else {
+                        p.z += 16.;
+                    }
+                    self.client.set_spawn(p)?;
+                    self.simulation_previous = p;
+                    self.frame_limit = self.frames + 700;
+                } else {
+                    self.frame_limit = self.frames + 1;
+                }
+                self.lod_motion_stage += 1;
+            }
+        }
         if self.settings_test {
             let o = engine_stream::observation(&self.client);
             let settled = o["resident_columns"] == o["wanted_columns"] && o["queued_jobs"] == 0;
-            if self.frames > 5 && settled && self.gpu.as_ref().is_some_and(|g| g.stats.meshes_ready)
+            if self.frames > 5
+                && settled
+                && self
+                    .gpu
+                    .as_ref()
+                    .is_some_and(|g| g.stats.meshes_ready && g.stats.distant_ready)
             {
                 if self.settings_stage == 0 {
                     self.settings_trace.push(serde_json::json!({"stage":"expanded","stream":o,"position":self.client.actor.position,"distant":self.gpu.as_ref().map(|g|serde_json::json!({"ready":g.stats.distant_ready,"vertices":g.stats.distant_vertices,"bytes":g.stats.distant_bytes,"area":g.stats.distant_area_blocks}))}));
@@ -1285,6 +1320,9 @@ impl App {
             )?;
             if presented {
                 self.frames += 1;
+                if self.lod_motion_test && self.lod_motion_stage > 0 {
+                    self.lod_motion_trace.push(serde_json::json!({"frame":self.frames,"stage":self.lod_motion_stage,"position":self.client.actor.position,"vertices":gpu.stats.distant_vertices,"previous_vertices":gpu.stats.distant_previous_vertices,"ready":gpu.stats.distant_ready,"crossfades":gpu.stats.distant_crossfades,"retained_updates":gpu.stats.distant_retained_updates}));
+                }
                 if self.preview_test.as_deref() == Some("live")
                     && [1, 21, 41, 60].contains(&self.frames)
                 {
@@ -2581,6 +2619,9 @@ fn main() -> Result<()> {
         settings: Default::default(),
         menu: Default::default(),
         flight_tap: Default::default(),
+        lod_motion_test: false,
+        lod_motion_stage: 0,
+        lod_motion_trace: Vec::new(),
         settings_test: false,
         settings_stage: 0,
         settings_trace: Vec::new(),
@@ -2694,7 +2735,7 @@ fn run_window(mut app: App, out: Option<PathBuf>) -> Result<()> {
             std::fs::write(
                 out.join("gpu.json"),
                 serde_json::to_vec_pretty(
-                    &serde_json::json!({"complete":app.close_completed||app.frames>=app.frame_limit,"statistics":gpu.stats,"menu":format!("{:?}",app.menu.page),"settings":app.settings,"settings_trace":app.settings_trace,"player_position":app.client.actor.position,"player_preview":gpu.preview_observation(),"preview_case":app.preview_test,"preview_trace":app.preview_trace,"saving":app.saving_observation(),"loading":app.loading_observation(),"timing":timing,"wireframe":app.wireframe,"palette_open":app.palette.open,"window_transitions":app.window_transitions,"live_edit_test":app.edit_test,"pending_edits":app.client.pending_edits(),"inventory_save_mesh_check":app.inventory_mesh_check,"mesh_toggle_trace":app.mesh_toggle_trace,"streaming":engine_stream::observation(&app.client),"stream_trace":app.stream_trace,"profile_seconds":app.profile_seconds,"profile_elapsed_seconds":app.profile_started.map(|t|t.elapsed().as_secs_f32()),"target":app.client.target()?.map(|h|[h.position.x,h.position.y,h.position.z]),"uncapped_event_loop":true,"back_face_culling":true,"frustum_culling":true,"internal_faces_removed":true,"depth_testing":true,"dirty_chunk_rebuilds":true}),
+                    &serde_json::json!({"complete":app.close_completed||app.frames>=app.frame_limit,"statistics":gpu.stats,"menu":format!("{:?}",app.menu.page),"settings":app.settings,"settings_trace":app.settings_trace,"lod_motion_trace":app.lod_motion_trace,"player_position":app.client.actor.position,"player_preview":gpu.preview_observation(),"preview_case":app.preview_test,"preview_trace":app.preview_trace,"saving":app.saving_observation(),"loading":app.loading_observation(),"timing":timing,"wireframe":app.wireframe,"palette_open":app.palette.open,"window_transitions":app.window_transitions,"live_edit_test":app.edit_test,"pending_edits":app.client.pending_edits(),"inventory_save_mesh_check":app.inventory_mesh_check,"mesh_toggle_trace":app.mesh_toggle_trace,"streaming":engine_stream::observation(&app.client),"stream_trace":app.stream_trace,"profile_seconds":app.profile_seconds,"profile_elapsed_seconds":app.profile_started.map(|t|t.elapsed().as_secs_f32()),"target":app.client.target()?.map(|h|[h.position.x,h.position.y,h.position.z]),"uncapped_event_loop":true,"back_face_culling":true,"frustum_culling":true,"internal_faces_removed":true,"depth_testing":true,"dirty_chunk_rebuilds":true}),
                 )?,
             )?;
         }
