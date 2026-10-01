@@ -51,7 +51,11 @@ impl Recipes {
         Ok(())
     }
     pub fn built_in() -> Self {
-        Self::parse(include_bytes!("../../../assets/recipes.json")).expect("Built-in recipes")
+        Self::parse(include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../assets/recipes.json"
+        )))
+        .expect("Built-in recipes")
     }
     pub fn parse(bytes: &[u8]) -> Result<Self> {
         if bytes.len() > 256 * 1024 {

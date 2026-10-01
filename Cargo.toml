@@ -1,5 +1,6 @@
 [workspace]
 members = ["crates/mcbe-core", "crates/mcbe-cli", "crates/mcbe-client"]
+default-members = ["crates/mcbe-client"]
 resolver = "3"
 
 [workspace.package]

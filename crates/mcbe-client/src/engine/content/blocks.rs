@@ -125,7 +125,11 @@ impl Registry {
         }
     }
     pub fn built_in() -> Self {
-        Self::parse(include_bytes!("../../../assets/blocks.json")).expect("Built-in engine blocks")
+        Self::parse(include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../assets/blocks.json"
+        )))
+        .expect("Built-in engine blocks")
     }
     pub fn parse(bytes: &[u8]) -> Result<Self> {
         if bytes.len() > 256 * 1024 {

@@ -48,9 +48,11 @@ impl ContainerBlock {
     fn definitions() -> &'static [RayBlock] {
         static DEFINITIONS: std::sync::OnceLock<Vec<RayBlock>> = std::sync::OnceLock::new();
         DEFINITIONS.get_or_init(|| {
-            let table: Value =
-                serde_json::from_str(include_str!("../../../docs/container-geometry.json"))
-                    .expect("Container geometry JSON");
+            let table: Value = serde_json::from_str(include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/data/container-geometry.json"
+            )))
+            .expect("Container geometry JSON");
             let rows = table["rows"].as_array().expect("Container rows");
             assert!(rows.len() <= usize::from(u16::MAX) + 1);
             rows.iter()
@@ -86,9 +88,11 @@ impl ContainerBlock {
 }
 
 pub fn catalog() -> Value {
-    let mut catalog: Value =
-        serde_json::from_str(include_str!("../../../docs/container-geometry.json"))
-            .expect("Built-in container geometry JSON");
+    let mut catalog: Value = serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/data/container-geometry.json"
+    )))
+    .expect("Built-in container geometry JSON");
     let rows = catalog["rows"]
         .as_array_mut()
         .expect("Built-in geometry rows");
