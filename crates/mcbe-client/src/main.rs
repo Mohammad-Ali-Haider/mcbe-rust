@@ -1049,6 +1049,14 @@ impl App {
         }
         self.client.sync_region()?;
         if self.lod_motion_test && self.lod_motion_stage < 5 {
+            // The uncapped renderer can exhaust a frame budget before a worker
+            // finishes. Keep presenting until every requested crossing settles.
+            if self.frames + 1 >= self.frame_limit {
+                if self.frames >= 20_000 {
+                    return Err("Native LOD movement fixture failed to settle".into());
+                }
+                self.frame_limit += 1;
+            }
             let gpu = self.gpu.as_ref().unwrap();
             if self.frames > 5
                 && gpu.stats.meshes_ready
