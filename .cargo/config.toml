@@ -1,0 +1,4 @@
+[alias]
+play = "run --release -p mcbe-client -- --engine --engine-home . --engine-continue"
+new-world = "run --release -p mcbe-client -- --engine --engine-home ."
+original = "run --release -p mcbe-client -- --engine --engine-home . --engine-continue --engine-original"

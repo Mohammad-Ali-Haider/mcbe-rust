@@ -1,0 +1,28 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug Blockwork",
+      "cargo": {
+        "args": [
+          "build",
+          "-p",
+          "mcbe-client"
+        ],
+        "filter": {
+          "name": "mcbe-client",
+          "kind": "bin"
+        }
+      },
+      "args": [
+        "--engine",
+        "--engine-home",
+        "${workspaceFolder}",
+        "--engine-continue"
+      ],
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}
