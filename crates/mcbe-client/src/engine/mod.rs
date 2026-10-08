@@ -911,16 +911,22 @@ pub fn reload_definitions(client: &mut Client, path: &Path) -> Result<()> {
 }
 
 pub fn launch(args: &[String]) -> Result<()> {
-    let mut home = std::env::current_exe()?
-        .parent()
-        .ok_or("Executable directory missing")?
-        .to_path_buf();
+    // Cargo launches from the project folder: use its editable assets and saves.
+    // Explicit command-line launches retain their own --engine-home override.
+    let mut home = if args.is_empty() {
+        std::env::current_dir()?
+    } else {
+        std::env::current_exe()?
+            .parent()
+            .ok_or("Executable directory missing")?
+            .to_path_buf()
+    };
     let mut source = None;
     let mut definitions = None;
     let mut render_distance = None;
     let mut original = false;
     let mut pack_root = PathBuf::from(crate::engine_assets::DEFAULT_ROOT);
-    let mut resume = false;
+    let mut resume = args.is_empty();
     let mut out = None;
     let mut smoke = false;
     let mut seed = 360036u64;
