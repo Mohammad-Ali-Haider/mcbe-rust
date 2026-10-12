@@ -1,11 +1,11 @@
-# Blockwork
+# Minecraft Rust Edition
 
 An expandable Rust voxel engine for your own block game. This is the single
 active project; development versions now live in Git history.
 
 ## Open and run manually
 
-Open `D:\Recontruction Projects\Blockwork` with VS Code → File → Open Folder.
+Open `D:\Recontruction Projects\Minecraft Rust Edition` with VS Code → File → Open Folder.
 Open Terminal → New Terminal, then run:
 
 ```powershell
@@ -71,3 +71,6 @@ more memory than the earlier flat approximation.
 
 Runtime worlds, preferences, build output and verification captures are ignored
 by Git. No launcher scripts or copied checkpoint packages belong in this project.
+
+The former `Blockwork` project was renamed in place. Retained MCBE research is
+under ignored `.local/legacy-research/`; there is no separate working project.

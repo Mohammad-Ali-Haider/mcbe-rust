@@ -1440,9 +1440,9 @@ impl ApplicationHandler for App {
         }
         let attributes = Window::default_attributes()
             .with_title(if self.client.scene.engine.is_some() {
-                format!("Blockwork | Checkpoint {}", engine::CHECKPOINT)
+                "Minecraft Rust Edition".to_owned()
             } else {
-                "MCBE Reconstruction | Rust research client".to_owned()
+                "Minecraft Rust Edition | Research client".to_owned()
             })
             .with_inner_size(winit::dpi::LogicalSize::new(1100.0, 680.0))
             .with_maximized(true);
@@ -2144,7 +2144,7 @@ fn present(
         error.map(str::to_owned).into_iter().collect::<Vec<_>>()
     } else if client.scene.engine.is_some() {
         vec![
-            format!("BLOCKWORK / RUST ENGINE / CHECKPOINT {}", engine::CHECKPOINT),
+            "MINECRAFT RUST EDITION".to_owned(),
             "WASD move  |  Space jump  |  Mouse / arrows look  |  Click to capture  |  Esc release".into(),
             "Left remove  |  Right build  |  1-8 / G material  |  F5 save  |  F9 reload  |  R reset  |  T overlook".into(),
             format!("{}  |  {} blocks  |  {} unsaved edits  |  {:.1}, {:.1}, {:.1}", engine::material(client).map_or("Empty hand",|b|b.label.as_str()), client.scene.cells.len(),client.pending_edits(),p.x,p.y,p.z),

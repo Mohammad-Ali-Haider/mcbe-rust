@@ -4,7 +4,7 @@
     {
       "type": "lldb",
       "request": "launch",
-      "name": "Debug Blockwork",
+      "name": "Debug Minecraft Rust Edition",
       "cargo": {
         "args": [
           "build",
