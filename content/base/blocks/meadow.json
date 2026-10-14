@@ -1,0 +1,25 @@
+{
+  "id": "meadow",
+  "label": "Grass Block",
+  "extends": "templates/solid.json",
+  "components": {
+    "visual": {
+      "model": "models/cube.json",
+      "color": [
+        114,
+        165,
+        85
+      ],
+      "pattern": "meadow",
+      "side_color": [
+        151,
+        103,
+        75
+      ],
+      "local": {
+        "pack": "vanilla",
+        "block": "grass"
+      }
+    }
+  }
+}

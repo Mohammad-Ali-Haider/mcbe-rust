@@ -1,0 +1,20 @@
+{
+  "id": "oak_log",
+  "label": "Oak Log",
+  "extends": "templates/solid.json",
+  "components": {
+    "visual": {
+      "model": "models/cube.json",
+      "color": [
+        120,
+        90,
+        53
+      ],
+      "pattern": "grain",
+      "local": {
+        "pack": "vanilla",
+        "block": "log"
+      }
+    }
+  }
+}

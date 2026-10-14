@@ -1,0 +1,20 @@
+{
+  "id": "stone_bricks",
+  "label": "Stone Bricks",
+  "extends": "templates/solid.json",
+  "components": {
+    "visual": {
+      "model": "models/cube.json",
+      "color": [
+        127,
+        127,
+        127
+      ],
+      "pattern": "bricks",
+      "local": {
+        "pack": "vanilla",
+        "block": "stonebrick"
+      }
+    }
+  }
+}

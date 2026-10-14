@@ -1,0 +1,20 @@
+{
+  "id": "plum",
+  "label": "Purpur Block",
+  "extends": "templates/solid.json",
+  "components": {
+    "visual": {
+      "model": "models/cube.json",
+      "color": [
+        143,
+        91,
+        156
+      ],
+      "pattern": "grain",
+      "local": {
+        "pack": "vanilla",
+        "block": "purpur_block"
+      }
+    }
+  }
+}

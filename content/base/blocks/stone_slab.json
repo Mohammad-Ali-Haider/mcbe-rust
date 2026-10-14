@@ -1,0 +1,91 @@
+{
+  "id": "stone_slab",
+  "label": "Stone Slab",
+  "extends": "templates/slab.json",
+  "components": {
+    "visual": {
+      "model": "models/oak_slab.json",
+      "color": [
+        136,
+        154,
+        165
+      ],
+      "pattern": "grain",
+      "local": {
+        "pack": "vanilla",
+        "block": "stone"
+      }
+    }
+  },
+  "states": [
+    {
+      "id": "stone_slab",
+      "label": "Stone Slab",
+      "properties": {
+        "half": "lower"
+      },
+      "hidden": false,
+      "components": {
+        "visual": {
+          "model": "models/oak_slab.json",
+          "color": [
+            136,
+            154,
+            165
+          ],
+          "pattern": "grain",
+          "local": {
+            "pack": "vanilla",
+            "block": "stone"
+          }
+        }
+      }
+    },
+    {
+      "id": "stone_slab_upper",
+      "label": "Stone Slab Upper",
+      "properties": {
+        "half": "upper"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_slab_upper.json",
+          "color": [
+            136,
+            154,
+            165
+          ],
+          "pattern": "grain",
+          "local": {
+            "pack": "vanilla",
+            "block": "stone"
+          }
+        }
+      }
+    },
+    {
+      "id": "stone_slab_double",
+      "label": "Stone Slab Double",
+      "properties": {
+        "half": "double"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/cube.json",
+          "color": [
+            136,
+            154,
+            165
+          ],
+          "pattern": "grain",
+          "local": {
+            "pack": "vanilla",
+            "block": "stone"
+          }
+        }
+      }
+    }
+  ]
+}

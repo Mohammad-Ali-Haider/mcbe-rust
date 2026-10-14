@@ -1,0 +1,24 @@
+{
+  "id": "glass",
+  "label": "Glass",
+  "extends": "templates/glass.json",
+  "components": {
+    "visual": {
+      "model": "models/cube.json",
+      "color": [
+        178,
+        221,
+        232
+      ],
+      "pattern": "solid",
+      "local": {
+        "pack": "vanilla",
+        "block": "glass"
+      }
+    },
+    "occlusion": {
+      "cull_group": "glass",
+      "layer": "cutout"
+    }
+  }
+}

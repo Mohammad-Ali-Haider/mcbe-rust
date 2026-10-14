@@ -1,0 +1,20 @@
+{
+  "id": "moss",
+  "label": "Mossy Cobblestone",
+  "extends": "templates/solid.json",
+  "components": {
+    "visual": {
+      "model": "models/cube.json",
+      "color": [
+        68,
+        116,
+        76
+      ],
+      "pattern": "grain",
+      "local": {
+        "pack": "vanilla",
+        "block": "mossy_cobblestone"
+      }
+    }
+  }
+}

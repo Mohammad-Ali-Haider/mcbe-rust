@@ -1,0 +1,20 @@
+{
+  "id": "oak_planks",
+  "label": "Oak Planks",
+  "extends": "templates/solid.json",
+  "components": {
+    "visual": {
+      "model": "models/cube.json",
+      "color": [
+        160,
+        128,
+        76
+      ],
+      "pattern": "bricks",
+      "local": {
+        "pack": "vanilla",
+        "block": "planks"
+      }
+    }
+  }
+}

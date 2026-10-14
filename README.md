@@ -52,8 +52,10 @@ cargo build --release --locked
 
 - `crates/mcbe-client/src/main.rs`: app state, window events and frame loop.
 - `crates/mcbe-client/src/engine/`: playable engine, grouped by responsibility.
-- `assets/blocks.json`: registration, shapes, materials and collision.
-- `assets/recipes.json`: editable crafting recipes.
+- `content/base/blocks/`: one JSON definition per block family.
+- `content/base/models/` and `templates/`: shared models and component defaults.
+- `content/base/recipes/crafting.json`: editable crafting recipes.
+- `crates/mcbe-client/src/engine/blocks/`: typed components, state registry and compiled shapes.
 - `crates/mcbe-core/`: reusable physics/inventory and earlier Bedrock data readers.
 - `crates/mcbe-cli/`: optional research tools, separate from the playable entry point.
 

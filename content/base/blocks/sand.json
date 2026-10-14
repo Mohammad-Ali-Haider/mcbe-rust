@@ -1,0 +1,20 @@
+{
+  "id": "sand",
+  "label": "Sand",
+  "extends": "templates/solid.json",
+  "components": {
+    "visual": {
+      "model": "models/cube.json",
+      "color": [
+        220,
+        210,
+        164
+      ],
+      "pattern": "grain",
+      "local": {
+        "pack": "vanilla",
+        "block": "sand"
+      }
+    }
+  }
+}

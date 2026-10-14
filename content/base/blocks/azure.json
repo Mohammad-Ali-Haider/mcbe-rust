@@ -1,0 +1,20 @@
+{
+  "id": "azure",
+  "label": "Block of Diamond",
+  "extends": "templates/solid.json",
+  "components": {
+    "visual": {
+      "model": "models/cube.json",
+      "color": [
+        70,
+        161,
+        184
+      ],
+      "pattern": "checker",
+      "local": {
+        "pack": "vanilla",
+        "block": "diamond_block"
+      }
+    }
+  }
+}

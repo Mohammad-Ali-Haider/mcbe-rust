@@ -1,0 +1,20 @@
+{
+  "id": "cobblestone",
+  "label": "Cobblestone",
+  "extends": "templates/solid.json",
+  "components": {
+    "visual": {
+      "model": "models/cube.json",
+      "color": [
+        127,
+        127,
+        127
+      ],
+      "pattern": "grain",
+      "local": {
+        "pack": "vanilla",
+        "block": "cobblestone"
+      }
+    }
+  }
+}

@@ -1,74 +1,8 @@
 //! Engine-owned block identifiers, independent of the research cube enum.
+use super::definition::*;
 use crate::scene::Result;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, fs, path::Path};
-pub type BlockId = u16;
-#[derive(Default, Clone, Copy, Serialize, Deserialize, Debug, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum RenderLayer {
-    #[default]
-    Opaque,
-    Cutout,
-    Translucent,
-}
-/// References ordinary registered blocks; no special numeric IDs or save encoding.
-#[derive(Clone, Serialize, Deserialize, Debug)]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-pub enum Placement {
-    Slab {
-        lower: String,
-        upper: String,
-        double: String,
-    },
-    Stairs {
-        lower: [String; 4],
-        upper: [String; 4],
-    },
-}
-#[derive(Clone, Copy, Serialize, Deserialize, Debug)]
-#[serde(rename_all = "snake_case")]
-pub enum Pattern {
-    Grain,
-    Bricks,
-    Checker,
-    Meadow,
-    Solid,
-}
-#[derive(Clone, Serialize, Deserialize, Debug)]
-#[serde(deny_unknown_fields)]
-pub struct Block {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub placement: Option<Placement>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub texture_files: Option<[String; 6]>,
-    /// None uses the visual model. Some([]) is non-solid but still selectable.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub collision: Option<Vec<[f32; 6]>>,
-    #[serde(default)]
-    pub render_layer: RenderLayer,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cull_group: Option<String>,
-    #[serde(default)]
-    pub hidden: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub face_textures: Option<[Binding; 6]>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub geometry: Option<crate::engine_geometry::Geometry>,
-    pub id: String,
-    pub label: String,
-    pub color: [u8; 3],
-    pub pattern: Pattern,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub side_color: Option<[u8; 3]>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub minecraft: Option<Binding>,
-}
-#[derive(Clone, Serialize, Deserialize, Debug)]
-#[serde(deny_unknown_fields)]
-pub struct Binding {
-    pub pack: String,
-    pub block: String,
-}
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Registry {
@@ -125,11 +59,9 @@ impl Registry {
         }
     }
     pub fn built_in() -> Self {
-        Self::parse(include_bytes!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../assets/blocks.json"
-        )))
-        .expect("Built-in engine blocks")
+        crate::engine::content::loader::built_in()
+            .expect("Built-in unified content")
+            .registry
     }
     pub fn parse(bytes: &[u8]) -> Result<Self> {
         if bytes.len() > 256 * 1024 {
@@ -140,6 +72,9 @@ impl Registry {
         Ok(result)
     }
     pub fn read(path: &Path) -> Result<Self> {
+        if path.is_dir() || path.file_name().is_some_and(|n| n == "pack.json") {
+            return Ok(crate::engine::content::loader::read(path)?.registry);
+        }
         if fs::metadata(path)?.len() > 256 * 1024 {
             return Err("Block definitions exceed 256 KiB".into());
         }
@@ -150,7 +85,12 @@ impl Registry {
             return Err("Block registry requires version 1 and 1..256 blocks".into());
         }
         let mut seen = HashSet::new();
-        for b in &self.blocks {
+        for (index, b) in self.blocks.iter().enumerate() {
+            if let Some(state) = &b.state
+                && self.resolve_state(&state.block, &state.properties)? as usize != index
+            {
+                return Err("Duplicate compiled state identity".into());
+            }
             if b.texture_files.as_ref().is_some_and(|files| {
                 files
                     .iter()
@@ -176,6 +116,15 @@ impl Registry {
                     || !g.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_')
             }) {
                 return Err("Cull groups require 1..48 identifier characters".into());
+            }
+            if let Some(boxes) = &b.selection {
+                crate::engine_geometry::validate_boxes(boxes, true)?;
+            }
+            if let Some(signal) = &b.signal {
+                signal.validate()?;
+            }
+            if let Some(state) = &b.state {
+                state.validate()?;
             }
             if let Some(boxes) = &b.collision {
                 crate::engine_geometry::validate_boxes(boxes, true)?;
@@ -237,6 +186,21 @@ impl Registry {
         crate::engine_geometry::Library::compile(self)?;
         Ok(())
     }
+    pub fn resolve_state(
+        &self,
+        block: &str,
+        properties: &std::collections::BTreeMap<String, String>,
+    ) -> Result<BlockId> {
+        self.blocks
+            .iter()
+            .position(|b| {
+                b.state
+                    .as_ref()
+                    .is_some_and(|s| s.block == block && &s.properties == properties)
+            })
+            .map(|i| i as BlockId)
+            .ok_or_else(|| format!("Unknown state for {block}: {properties:?}").into())
+    }
     pub fn find(&self, name: &str) -> Result<BlockId> {
         self.blocks
             .iter()
@@ -248,7 +212,7 @@ impl Registry {
         &self.blocks[usize::from(id)]
     }
     pub fn shapes(&self) -> Result<mcbe_core::raycast::Shapes> {
-        let rows:Vec<_>=self.blocks.iter().map(|b|serde_json::json!({"id":format!("blockwork:{}",b.id),"states":{},"boxes":b.geometry.as_ref().map_or_else(||vec![crate::engine_geometry::UNIT],|g|g.boxes.clone()),"passable":false})).collect();
+        let rows:Vec<_>=self.blocks.iter().map(|b|serde_json::json!({"id":format!("blockwork:{}",b.id),"states":{},"boxes":b.selection.clone().unwrap_or_else(|| b.geometry.as_ref().map_or_else(||vec![crate::engine_geometry::UNIT],|g|g.boxes.clone())),"passable":false})).collect();
         Ok(mcbe_core::raycast::Shapes::read(&serde_json::json!(rows))?)
     }
 }
@@ -290,6 +254,9 @@ mod tests {
         let mut r = Registry::built_in();
         for i in 0..100 {
             r.blocks.push(Block {
+                state: None,
+                selection: None,
+                signal: None,
                 texture_files: None,
                 placement: None,
                 collision: None,

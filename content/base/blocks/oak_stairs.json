@@ -1,0 +1,214 @@
+{
+  "id": "oak_stairs",
+  "label": "Oak Stairs North",
+  "extends": "templates/stairs.json",
+  "components": {
+    "visual": {
+      "model": "models/oak_stairs_north.json",
+      "color": [
+        160,
+        128,
+        76
+      ],
+      "pattern": "bricks",
+      "local": {
+        "pack": "vanilla",
+        "block": "planks"
+      }
+    }
+  },
+  "states": [
+    {
+      "id": "oak_stairs_north",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "lower",
+        "facing": "north"
+      },
+      "hidden": false,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_north.json",
+          "color": [
+            160,
+            128,
+            76
+          ],
+          "pattern": "bricks",
+          "local": {
+            "pack": "vanilla",
+            "block": "planks"
+          }
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_east",
+      "label": "Oak Stairs East",
+      "properties": {
+        "half": "lower",
+        "facing": "east"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_east.json",
+          "color": [
+            160,
+            128,
+            76
+          ],
+          "pattern": "bricks",
+          "local": {
+            "pack": "vanilla",
+            "block": "planks"
+          }
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_south",
+      "label": "Oak Stairs South",
+      "properties": {
+        "half": "lower",
+        "facing": "south"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_south.json",
+          "color": [
+            160,
+            128,
+            76
+          ],
+          "pattern": "bricks",
+          "local": {
+            "pack": "vanilla",
+            "block": "planks"
+          }
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_west",
+      "label": "Oak Stairs West",
+      "properties": {
+        "half": "lower",
+        "facing": "west"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_west.json",
+          "color": [
+            160,
+            128,
+            76
+          ],
+          "pattern": "bricks",
+          "local": {
+            "pack": "vanilla",
+            "block": "planks"
+          }
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_north_upper",
+      "label": "Oak Stairs North Upper",
+      "properties": {
+        "half": "upper",
+        "facing": "north"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_north_upper.json",
+          "color": [
+            160,
+            128,
+            76
+          ],
+          "pattern": "bricks",
+          "local": {
+            "pack": "vanilla",
+            "block": "planks"
+          }
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_east_upper",
+      "label": "Oak Stairs East Upper",
+      "properties": {
+        "half": "upper",
+        "facing": "east"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_east_upper.json",
+          "color": [
+            160,
+            128,
+            76
+          ],
+          "pattern": "bricks",
+          "local": {
+            "pack": "vanilla",
+            "block": "planks"
+          }
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_south_upper",
+      "label": "Oak Stairs South Upper",
+      "properties": {
+        "half": "upper",
+        "facing": "south"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_south_upper.json",
+          "color": [
+            160,
+            128,
+            76
+          ],
+          "pattern": "bricks",
+          "local": {
+            "pack": "vanilla",
+            "block": "planks"
+          }
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_west_upper",
+      "label": "Oak Stairs West Upper",
+      "properties": {
+        "half": "upper",
+        "facing": "west"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_west_upper.json",
+          "color": [
+            160,
+            128,
+            76
+          ],
+          "pattern": "bricks",
+          "local": {
+            "pack": "vanilla",
+            "block": "planks"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "id": "basalt",
+  "label": "Deepslate",
+  "extends": "templates/solid.json",
+  "components": {
+    "visual": {
+      "model": "models/cube.json",
+      "color": [
+        65,
+        79,
+        93
+      ],
+      "pattern": "grain",
+      "local": {
+        "pack": "vanilla_1.17.0",
+        "block": "deepslate"
+      }
+    }
+  }
+}

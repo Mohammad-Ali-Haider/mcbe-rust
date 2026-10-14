@@ -1,0 +1,23 @@
+{
+  "components": {
+    "visual": {
+      "model": "models/cube.json",
+      "color": [
+        255,
+        255,
+        255
+      ],
+      "pattern": "solid"
+    },
+    "collision": {
+      "shape": "model"
+    },
+    "selection": {
+      "shape": "model"
+    },
+    "occlusion": {
+      "layer": "opaque"
+    },
+    "placement": "standard"
+  }
+}

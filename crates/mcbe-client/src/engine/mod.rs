@@ -1,5 +1,6 @@
 //! Engine terrain, player inventory, recipes and versioned saves.
 //! Optional installed Minecraft texture bindings are handled in engine_assets.
+pub(crate) mod blocks;
 pub(crate) mod content;
 pub(crate) mod persistence;
 pub(crate) mod player;
@@ -875,12 +876,22 @@ pub fn apply_registry(client: &mut Client, registry: Registry) -> Result<()> {
     Ok(())
 }
 pub fn reload_definitions(client: &mut Client, path: &Path) -> Result<()> {
-    let registry = Registry::read(path)?;
+    let pack = if path.is_dir() || path.file_name().is_some_and(|n| n == "pack.json") {
+        Some(content::loader::read(path)?)
+    } else {
+        None
+    };
+    let registry = pack
+        .as_ref()
+        .map(|p| p.registry.clone())
+        .map_or_else(|| Registry::read(path), Ok)?;
     let recipe_path = path
         .parent()
         .ok_or("Block definition directory missing")?
         .join("recipes.json");
-    let recipes = if recipe_path.is_file() {
+    let recipes = if let Some(pack) = pack {
+        pack.recipes
+    } else if recipe_path.is_file() {
         crate::engine_crafting::Recipes::read(&recipe_path)?
     } else {
         client
@@ -1634,6 +1645,9 @@ mod tests {
         let mut client = generate(38).unwrap();
         let mut registry = client.scene.engine.as_ref().unwrap().registry.clone();
         registry.blocks.push(crate::engine_blocks::Block {
+            state: None,
+            selection: None,
+            signal: None,
             texture_files: None,
             placement: None,
             collision: None,

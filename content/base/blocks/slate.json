@@ -1,0 +1,20 @@
+{
+  "id": "slate",
+  "label": "Stone",
+  "extends": "templates/solid.json",
+  "components": {
+    "visual": {
+      "model": "models/cube.json",
+      "color": [
+        136,
+        154,
+        165
+      ],
+      "pattern": "grain",
+      "local": {
+        "pack": "vanilla",
+        "block": "stone"
+      }
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "extends": "templates/solid.json",
+  "components": {
+    "occlusion": {
+      "layer": "translucent"
+    }
+  }
+}

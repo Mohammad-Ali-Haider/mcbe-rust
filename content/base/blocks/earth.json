@@ -1,0 +1,20 @@
+{
+  "id": "earth",
+  "label": "Dirt",
+  "extends": "templates/solid.json",
+  "components": {
+    "visual": {
+      "model": "models/cube.json",
+      "color": [
+        151,
+        103,
+        75
+      ],
+      "pattern": "grain",
+      "local": {
+        "pack": "vanilla",
+        "block": "dirt"
+      }
+    }
+  }
+}

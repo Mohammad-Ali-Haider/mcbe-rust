@@ -9,7 +9,7 @@ def main():
     ap=argparse.ArgumentParser();ap.add_argument('--out',type=Path,required=True);a=ap.parse_args();root=Path(__file__).resolve().parents[1];out=a.out.resolve();binary=root/'target/release/mcbe-client.exe'
     if out.exists():raise ValueError('Fresh proof directory required')
     out.mkdir(parents=True);bh=sha(binary)
-    files=[root/'Cargo.toml',root/'Cargo.lock',*sorted((root/'crates').rglob('*.rs')),*sorted((root/'crates').rglob('*.wgsl')),*sorted((root/'assets').rglob('*')),Path(__file__)]
+    files=[root/'Cargo.toml',root/'Cargo.lock',*sorted((root/'crates').rglob('*.rs')),*sorted((root/'crates').rglob('*.wgsl')),*sorted((root/'assets').rglob('*')),*sorted((root/'content').rglob('*')),Path(__file__)]
     hashes={p.relative_to(root).as_posix():sha(p)for p in files if p.is_file()};checks={}
     def launch(name,flag,extra=()):
         p=out/name;r=subprocess.run([str(binary),flag,str(p),*map(str,extra)],cwd=root,capture_output=True,text=True,timeout=150)

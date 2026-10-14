@@ -1,0 +1,6 @@
+{
+  "extends": "templates/solid.json",
+  "components": {
+    "placement": "slab"
+  }
+}

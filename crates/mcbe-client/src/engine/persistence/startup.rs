@@ -61,7 +61,7 @@ impl Options {
         let mut client = match source {
             Some(path) => engine::load(&path)?,
             None => {
-                let local = self.home.join("assets/blocks.json");
+                let local = crate::engine::content::loader::entry(&self.home);
                 let registry = if local.is_file() {
                     Registry::read(&local)?
                 } else {
@@ -88,7 +88,12 @@ impl Options {
         }
         progress.phase(3)?;
         if new_world {
+            let pack = crate::engine::content::loader::entry(&self.home);
             let path = self.home.join("assets/recipes.json");
+            if pack.file_name().is_some_and(|n| n == "pack.json") {
+                client.scene.engine.as_mut().unwrap().recipes =
+                    crate::engine::content::loader::read(&pack)?.recipes;
+            }
             if path.is_file() {
                 let recipes = crate::engine_crafting::Recipes::read(&path)?;
                 recipes.validate_registry(&client.scene.engine.as_ref().unwrap().registry)?;
@@ -96,7 +101,19 @@ impl Options {
             }
         }
         if let Some(path) = &self.definitions {
-            engine::apply_registry(&mut client, Registry::read(path)?)?;
+            let pack = if path.is_dir() || path.file_name().is_some_and(|n| n == "pack.json") {
+                Some(crate::engine::content::loader::read(path)?)
+            } else {
+                None
+            };
+            let registry = pack
+                .as_ref()
+                .map(|p| p.registry.clone())
+                .map_or_else(|| Registry::read(path), Ok)?;
+            engine::apply_registry(&mut client, registry)?;
+            if let Some(pack) = pack {
+                client.scene.engine.as_mut().unwrap().recipes = pack.recipes;
+            }
         }
         progress.phase(4)?;
         if !self.original {

@@ -1,0 +1,20 @@
+{
+  "id": "crafting_table",
+  "label": "Crafting Table",
+  "extends": "templates/solid.json",
+  "components": {
+    "visual": {
+      "model": "models/cube.json",
+      "color": [
+        155,
+        113,
+        61
+      ],
+      "pattern": "bricks",
+      "local": {
+        "pack": "vanilla",
+        "block": "crafting_table"
+      }
+    }
+  }
+}

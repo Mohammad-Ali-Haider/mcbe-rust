@@ -1,0 +1,91 @@
+{
+  "id": "oak_slab",
+  "label": "Oak Slab",
+  "extends": "templates/slab.json",
+  "components": {
+    "visual": {
+      "model": "models/oak_slab.json",
+      "color": [
+        160,
+        128,
+        76
+      ],
+      "pattern": "bricks",
+      "local": {
+        "pack": "vanilla",
+        "block": "planks"
+      }
+    }
+  },
+  "states": [
+    {
+      "id": "oak_slab",
+      "label": "Oak Slab",
+      "properties": {
+        "half": "lower"
+      },
+      "hidden": false,
+      "components": {
+        "visual": {
+          "model": "models/oak_slab.json",
+          "color": [
+            160,
+            128,
+            76
+          ],
+          "pattern": "bricks",
+          "local": {
+            "pack": "vanilla",
+            "block": "planks"
+          }
+        }
+      }
+    },
+    {
+      "id": "oak_slab_upper",
+      "label": "Oak Slab Upper",
+      "properties": {
+        "half": "upper"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_slab_upper.json",
+          "color": [
+            160,
+            128,
+            76
+          ],
+          "pattern": "bricks",
+          "local": {
+            "pack": "vanilla",
+            "block": "planks"
+          }
+        }
+      }
+    },
+    {
+      "id": "oak_slab_double",
+      "label": "Oak Slab Double",
+      "properties": {
+        "half": "double"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/cube.json",
+          "color": [
+            160,
+            128,
+            76
+          ],
+          "pattern": "bricks",
+          "local": {
+            "pack": "vanilla",
+            "block": "planks"
+          }
+        }
+      }
+    }
+  ]
+}

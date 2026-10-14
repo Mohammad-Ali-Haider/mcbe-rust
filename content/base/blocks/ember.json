@@ -1,0 +1,20 @@
+{
+  "id": "ember",
+  "label": "Block of Redstone",
+  "extends": "templates/solid.json",
+  "components": {
+    "visual": {
+      "model": "models/cube.json",
+      "color": [
+        221,
+        116,
+        54
+      ],
+      "pattern": "grain",
+      "local": {
+        "pack": "vanilla",
+        "block": "redstone_block"
+      }
+    }
+  }
+}

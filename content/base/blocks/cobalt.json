@@ -1,0 +1,20 @@
+{
+  "id": "cobalt",
+  "label": "Block of Lapis Lazuli",
+  "extends": "templates/solid.json",
+  "components": {
+    "visual": {
+      "model": "models/cube.json",
+      "color": [
+        72,
+        96,
+        168
+      ],
+      "pattern": "bricks",
+      "local": {
+        "pack": "vanilla",
+        "block": "lapis_block"
+      }
+    }
+  }
+}

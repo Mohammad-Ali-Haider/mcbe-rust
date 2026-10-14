@@ -1,0 +1,20 @@
+{
+  "id": "sunstone",
+  "label": "Block of Gold",
+  "extends": "templates/solid.json",
+  "components": {
+    "visual": {
+      "model": "models/cube.json",
+      "color": [
+        232,
+        181,
+        73
+      ],
+      "pattern": "checker",
+      "local": {
+        "pack": "vanilla",
+        "block": "gold_block"
+      }
+    }
+  }
+}

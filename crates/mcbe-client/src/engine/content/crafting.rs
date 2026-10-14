@@ -53,7 +53,7 @@ impl Recipes {
     pub fn built_in() -> Self {
         Self::parse(include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../assets/recipes.json"
+            "/../../content/base/recipes/crafting.json"
         )))
         .expect("Built-in recipes")
     }

@@ -4,10 +4,10 @@ mod shared;
 mod verification;
 
 // Compatibility names keep the engine behavior unchanged during this folder reorganization.
+use crate::engine::blocks as engine_blocks;
+use crate::engine::blocks::shapes as engine_geometry;
 use crate::engine::content::assets as engine_assets;
-use crate::engine::content::blocks as engine_blocks;
 use crate::engine::content::crafting as engine_crafting;
-use crate::engine::content::geometry as engine_geometry;
 use crate::engine::content::materials as engine_materials;
 use crate::engine::persistence::loading as engine_loading;
 use crate::engine::persistence::saving as engine_saving;
@@ -525,7 +525,7 @@ impl App {
                 }
                 crate::engine::reload_definitions(
                     &mut self.client,
-                    &self.root.join("assets/blocks.json"),
+                    &crate::engine::content::loader::entry(&self.root),
                 )?;
                 self.notice = Some("Reloaded block definitions and textures".into());
                 Ok(true)

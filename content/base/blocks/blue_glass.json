@@ -1,0 +1,19 @@
+{
+  "id": "blue_glass",
+  "label": "Blue Glass",
+  "extends": "templates/glass.json",
+  "components": {
+    "visual": {
+      "model": "models/cube.json",
+      "color": [
+        64,
+        132,
+        224
+      ],
+      "pattern": "solid"
+    },
+    "occlusion": {
+      "cull_group": "blue_glass"
+    }
+  }
+}
