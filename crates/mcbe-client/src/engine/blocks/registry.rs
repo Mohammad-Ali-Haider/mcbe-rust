@@ -183,6 +183,11 @@ impl Registry {
                 }
             }
         }
+        for (id, b) in self.blocks.iter().enumerate() {
+            if b.behavior == super::components::BehaviorComponent::Wire {
+                super::behavior::signal::validate(self, id as BlockId)?;
+            }
+        }
         crate::engine_geometry::Library::compile(self)?;
         Ok(())
     }
@@ -254,6 +259,7 @@ mod tests {
         let mut r = Registry::built_in();
         for i in 0..100 {
             r.blocks.push(Block {
+                behavior: Default::default(),
                 state: None,
                 selection: None,
                 signal: None,

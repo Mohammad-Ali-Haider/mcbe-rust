@@ -1,0 +1,278 @@
+{
+  "id": "wire",
+  "label": "Wire",
+  "extends": "templates/solid.json",
+  "components": {
+    "behavior": "wire",
+    "signal": {
+      "source": 0,
+      "attenuation": 1,
+      "delay": 2
+    },
+    "visual": {
+      "model": "models/wire.json",
+      "pattern": "solid"
+    },
+    "collision": {
+      "shape": "none"
+    }
+  },
+  "states": [
+    {
+      "id": "wire_0",
+      "properties": {
+        "power": "0"
+      },
+      "hidden": false,
+      "components": {
+        "visual": {
+          "color": [
+            80,
+            20,
+            20
+          ]
+        }
+      }
+    },
+    {
+      "id": "wire_1",
+      "properties": {
+        "power": "1"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "color": [
+            91,
+            22,
+            20
+          ]
+        }
+      }
+    },
+    {
+      "id": "wire_2",
+      "properties": {
+        "power": "2"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "color": [
+            102,
+            24,
+            20
+          ]
+        }
+      }
+    },
+    {
+      "id": "wire_3",
+      "properties": {
+        "power": "3"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "color": [
+            113,
+            26,
+            20
+          ]
+        }
+      }
+    },
+    {
+      "id": "wire_4",
+      "properties": {
+        "power": "4"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "color": [
+            124,
+            28,
+            20
+          ]
+        }
+      }
+    },
+    {
+      "id": "wire_5",
+      "properties": {
+        "power": "5"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "color": [
+            135,
+            30,
+            20
+          ]
+        }
+      }
+    },
+    {
+      "id": "wire_6",
+      "properties": {
+        "power": "6"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "color": [
+            146,
+            32,
+            20
+          ]
+        }
+      }
+    },
+    {
+      "id": "wire_7",
+      "properties": {
+        "power": "7"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "color": [
+            157,
+            34,
+            20
+          ]
+        }
+      }
+    },
+    {
+      "id": "wire_8",
+      "properties": {
+        "power": "8"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "color": [
+            168,
+            36,
+            20
+          ]
+        }
+      }
+    },
+    {
+      "id": "wire_9",
+      "properties": {
+        "power": "9"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "color": [
+            179,
+            38,
+            20
+          ]
+        }
+      }
+    },
+    {
+      "id": "wire_10",
+      "properties": {
+        "power": "10"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "color": [
+            190,
+            40,
+            20
+          ]
+        }
+      }
+    },
+    {
+      "id": "wire_11",
+      "properties": {
+        "power": "11"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "color": [
+            201,
+            42,
+            20
+          ]
+        }
+      }
+    },
+    {
+      "id": "wire_12",
+      "properties": {
+        "power": "12"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "color": [
+            212,
+            44,
+            20
+          ]
+        }
+      }
+    },
+    {
+      "id": "wire_13",
+      "properties": {
+        "power": "13"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "color": [
+            223,
+            46,
+            20
+          ]
+        }
+      }
+    },
+    {
+      "id": "wire_14",
+      "properties": {
+        "power": "14"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "color": [
+            234,
+            48,
+            20
+          ]
+        }
+      }
+    },
+    {
+      "id": "wire_15",
+      "properties": {
+        "power": "15"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "color": [
+            245,
+            50,
+            20
+          ]
+        }
+      }
+    }
+  ]
+}

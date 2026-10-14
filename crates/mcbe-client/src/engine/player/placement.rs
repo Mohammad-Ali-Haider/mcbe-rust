@@ -1,26 +1,16 @@
-//! Reusable hit-height, heading and slab-combination placement policies.
+//! Player interaction adapter; shared block behaviors resolve placement.
+use crate::engine::blocks::{
+    behavior::{self, PlacementContext},
+    systems::collision,
+};
 use crate::{
-    engine_blocks::{BlockId, Placement, Registry},
+    engine_blocks::{BlockId, Registry},
     scene::{Client, Result},
 };
-use mcbe_core::raycast::{Face, Hit};
-fn upper(hit: &Hit) -> bool {
-    hit.face == Face::Down || (hit.face != Face::Up && hit.face_location.y > 0.5)
-}
-fn neighbor(hit: &Hit) -> [i32; 3] {
-    let mut p = [hit.position.x, hit.position.y, hit.position.z];
-    let (axis, step) = match hit.face {
-        Face::Up => (1, 1),
-        Face::Down => (1, -1),
-        Face::East => (0, 1),
-        Face::West => (0, -1),
-        Face::North => (2, -1),
-        Face::South => (2, 1),
-    };
-    p[axis] += step;
-    p
-}
-/// Pure resolver shared by interaction tests and the live client.
+use behavior::placement::neighbor;
+#[cfg(test)]
+use mcbe_core::raycast::Face;
+use mcbe_core::raycast::Hit;
 pub fn resolve(
     registry: &Registry,
     selected: BlockId,
@@ -29,48 +19,14 @@ pub fn resolve(
     target: Option<BlockId>,
     adjacent: Option<BlockId>,
 ) -> Result<Option<([i32; 3], BlockId)>> {
-    let mut p = neighbor(hit);
-    let id = match &registry.get(selected).placement {
-        Some(Placement::Slab {
-            lower,
-            upper: top,
-            double,
-        }) => {
-            let lo = registry.find(lower)?;
-            let hi = registry.find(top)?;
-            let both = registry.find(double)?;
-            if (target == Some(lo) && hit.face == Face::Up)
-                || (target == Some(hi) && hit.face == Face::Down)
-            {
-                p = [hit.position.x, hit.position.y, hit.position.z];
-                both
-            } else {
-                let id = if upper(hit) { hi } else { lo };
-                match adjacent {
-                    None => id,
-                    Some(old) if (old == lo && id == hi) || (old == hi && id == lo) => both,
-                    _ => return Ok(None),
-                }
-            }
-        }
-        Some(Placement::Stairs { lower, upper: top }) => {
-            if adjacent.is_some() {
-                return Ok(None);
-            }
-            // North, east, south, west are the directions of the upper step.
-            let heading =
-                ((yaw / std::f32::consts::FRAC_PI_2).round() as i32).rem_euclid(4) as usize;
-            let index = [0, 3, 2, 1][heading];
-            registry.find(&(if upper(hit) { top } else { lower })[index])?
-        }
-        None => {
-            if adjacent.is_some() {
-                return Ok(None);
-            }
-            selected
-        }
-    };
-    Ok(Some((p, id)))
+    behavior::get(registry, selected).place(&PlacementContext {
+        registry,
+        selected,
+        hit,
+        yaw,
+        target,
+        adjacent,
+    })
 }
 pub fn place(client: &mut Client, hit: &Hit) -> Result<bool> {
     let state = client.scene.engine.as_ref().unwrap();
@@ -92,16 +48,7 @@ pub fn place(client: &mut Client, hit: &Hit) -> Result<bool> {
     if !client.scene.inside(p) {
         return Ok(false);
     }
-    let a = client.actor.position;
-    let half = client.actor.body.width * 0.5;
-    let low = [a.x - half, a.y, a.z - half];
-    let high = [a.x + half, a.y + client.actor.body.height, a.z + half];
-    if state
-        .geometry
-        .collision(id)
-        .iter()
-        .any(|b| (0..3).all(|n| low[n] < p[n] as f32 + b[n + 3] && high[n] > p[n] as f32 + b[n]))
-    {
+    if collision::intersects_actor(&state.geometry, id, p, &client.actor) {
         return Ok(false);
     }
     client.scene.change_engine(p, Some(id))?;

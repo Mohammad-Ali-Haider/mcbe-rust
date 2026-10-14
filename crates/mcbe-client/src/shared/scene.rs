@@ -163,6 +163,7 @@ impl Scene {
         let mut state = state;
         state.original_blocks = blocks.clone();
         state.blocks = blocks;
+        state.simulation.hydrate(&state.registry, &state.blocks);
         Ok(Self {
             containers: HashMap::new(),
             geometry: Geometry::measured()?,
@@ -259,6 +260,7 @@ impl Scene {
                 self.cells.remove(&p);
             }
         }
+        state.simulation.changed(&state.registry, p, id);
         state.edit_revision = state.edit_revision.wrapping_add(1);
         state.revision = state.revision.wrapping_add(1);
         for d in [
@@ -708,7 +710,8 @@ impl Client {
         [(s * q) as f64, p as f64, (c * q) as f64]
     }
     pub fn tick(&mut self, input: Input) -> Result<()> {
-        crate::engine_player::tick(self, input)
+        crate::engine_player::tick(self, input)?;
+        crate::engine::blocks::systems::simulation::tick(self)
     }
     pub fn target(&self) -> Result<Option<Hit>> {
         self.scene.target(self.eye(), self.direction())

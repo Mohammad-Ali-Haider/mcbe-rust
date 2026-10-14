@@ -57,12 +57,19 @@ impl Options {
                 .map(|e| e.path());
         }
         let new_world = source.is_none();
+        let local = crate::engine::content::loader::entry(&self.home);
+        let pack = if new_world && local.file_name().is_some_and(|n| n == "pack.json") {
+            Some(crate::engine::content::loader::read(&local)?)
+        } else {
+            None
+        };
         progress.phase(2)?;
         let mut client = match source {
             Some(path) => engine::load(&path)?,
             None => {
-                let local = crate::engine::content::loader::entry(&self.home);
-                let registry = if local.is_file() {
+                let registry = if let Some(pack) = &pack {
+                    pack.registry.clone()
+                } else if local.is_file() {
                     Registry::read(&local)?
                 } else {
                     Registry::built_in()
@@ -88,16 +95,15 @@ impl Options {
         }
         progress.phase(3)?;
         if new_world {
-            let pack = crate::engine::content::loader::entry(&self.home);
-            let path = self.home.join("assets/recipes.json");
-            if pack.file_name().is_some_and(|n| n == "pack.json") {
-                client.scene.engine.as_mut().unwrap().recipes =
-                    crate::engine::content::loader::read(&pack)?.recipes;
-            }
-            if path.is_file() {
-                let recipes = crate::engine_crafting::Recipes::read(&path)?;
-                recipes.validate_registry(&client.scene.engine.as_ref().unwrap().registry)?;
-                client.scene.engine.as_mut().unwrap().recipes = recipes;
+            if let Some(pack) = pack {
+                client.scene.engine.as_mut().unwrap().recipes = pack.recipes;
+            } else {
+                let path = self.home.join("assets/recipes.json");
+                if path.is_file() {
+                    let recipes = crate::engine_crafting::Recipes::read(&path)?;
+                    recipes.validate_registry(&client.scene.engine.as_ref().unwrap().registry)?;
+                    client.scene.engine.as_mut().unwrap().recipes = recipes;
+                }
             }
         }
         if let Some(path) = &self.definitions {

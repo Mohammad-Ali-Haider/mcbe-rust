@@ -1,4 +1,8 @@
 //! One bounded loader/compiler for editable and embedded content packs.
+use crate::engine::blocks::definition::{
+    BlockDefinition as Definition, BlockStateDefinition as Variant, empty_object,
+};
+use crate::engine::blocks::templates::BlockTemplate as Template;
 use crate::engine::blocks::{
     components::{BlockComponents, PlacementComponent},
     state::StateIdentity,
@@ -20,6 +24,7 @@ include!(concat!(env!("OUT_DIR"), "/builtin_content.rs"));
 
 #[derive(Clone)]
 pub struct ContentPack {
+    pub asset_root: String,
     pub registry: Registry,
     pub recipes: Recipes,
 }
@@ -33,39 +38,6 @@ struct Manifest {
     recipes: String,
     #[serde(default)]
     state_order: Vec<String>,
-}
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Template {
-    extends: Option<String>,
-    components: Value,
-}
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Definition {
-    id: String,
-    label: String,
-    extends: Option<String>,
-    components: Value,
-    #[serde(default)]
-    hidden: bool,
-    #[serde(default)]
-    states: Vec<Variant>,
-}
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Variant {
-    id: String,
-    label: Option<String>,
-    #[serde(default)]
-    hidden: bool,
-    #[serde(default)]
-    properties: BTreeMap<String, String>,
-    #[serde(default = "empty_object")]
-    components: Value,
-}
-fn empty_object() -> Value {
-    serde_json::json!({})
 }
 fn safe_path(name: &str) -> Result<()> {
     if name.is_empty()
@@ -190,6 +162,7 @@ fn compile<F: FnMut(&str) -> Result<Vec<u8>>>(read: F) -> Result<ContentPack> {
             let collision = c.collision.compile()?;
             let selection = c.selection.compile()?;
             group.push(Block {
+                behavior: c.behavior,
                 id: v.id,
                 label: v.label.unwrap_or_else(|| d.label.clone()),
                 hidden: v.hidden,
@@ -274,7 +247,11 @@ fn compile<F: FnMut(&str) -> Result<Vec<u8>>>(read: F) -> Result<ContentPack> {
             return Err("Pack changed during loading; retry".into());
         }
     }
-    Ok(ContentPack { registry, recipes })
+    Ok(ContentPack {
+        asset_root: manifest.asset_root,
+        registry,
+        recipes,
+    })
 }
 pub fn built_in() -> Result<ContentPack> {
     compile(|path| {
@@ -312,6 +289,24 @@ pub fn entry(home: &Path) -> std::path::PathBuf {
     } else {
         home.join("assets/blocks.json")
     }
+}
+#[cfg(test)]
+pub(crate) fn signal_example() -> Result<ContentPack> {
+    compile(|path| {
+        let bytes = EMBEDDED
+            .iter()
+            .find(|(p, _)| *p == path)
+            .ok_or("Missing example content")?
+            .1;
+        if path != "pack.json" {
+            return Ok(bytes.to_vec());
+        }
+        let mut v: Value = serde_json::from_slice(bytes)?;
+        let list = v["blocks"].as_array_mut().unwrap();
+        list.push("examples/power_source.json".into());
+        list.push("examples/wire.json".into());
+        Ok(serde_json::to_vec(&v)?)
+    })
 }
 #[cfg(test)]
 mod tests {
@@ -358,6 +353,26 @@ mod tests {
             old.find("oak_slab_double").unwrap()
         );
         assert!(new.resolve_state("oak_slab", &BTreeMap::new()).is_err());
+    }
+    #[test]
+    fn editable_pack_matches_embedded_pack_and_reload_failure_is_atomic() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let pack = read(&root.join("content/base/pack.json")).unwrap();
+        assert_eq!(
+            serde_json::to_value(&pack.registry).unwrap(),
+            serde_json::to_value(built_in().unwrap().registry).unwrap()
+        );
+        let mut c = crate::engine::generate(360036).unwrap();
+        crate::engine::reload_definitions(&mut c, &root.join("content/base/pack.json")).unwrap();
+        let before = serde_json::to_value(&c.scene.engine.as_ref().unwrap().registry).unwrap();
+        assert!(
+            crate::engine::reload_definitions(&mut c, &root.join("content/missing/pack.json"))
+                .is_err()
+        );
+        assert_eq!(
+            before,
+            serde_json::to_value(&c.scene.engine.as_ref().unwrap().registry).unwrap()
+        );
     }
     #[test]
     fn rejects_cycles_typos_missing_models_and_traversal() {

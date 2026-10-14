@@ -37,6 +37,11 @@ pub enum Pattern {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Block {
+    #[serde(
+        default,
+        skip_serializing_if = "super::components::BehaviorComponent::passive"
+    )]
+    pub behavior: super::components::BehaviorComponent,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub state: Option<super::state::StateIdentity>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -74,4 +79,34 @@ pub struct Block {
 pub struct Binding {
     pub pack: String,
     pub block: String,
+}
+
+use serde_json::Value;
+use std::collections::BTreeMap;
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BlockDefinition {
+    pub id: String,
+    pub label: String,
+    pub extends: Option<String>,
+    pub components: Value,
+    #[serde(default)]
+    pub hidden: bool,
+    #[serde(default)]
+    pub states: Vec<BlockStateDefinition>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BlockStateDefinition {
+    pub id: String,
+    pub label: Option<String>,
+    #[serde(default)]
+    pub hidden: bool,
+    #[serde(default)]
+    pub properties: BTreeMap<String, String>,
+    #[serde(default = "empty_object")]
+    pub components: Value,
+}
+pub(crate) fn empty_object() -> Value {
+    serde_json::json!({})
 }

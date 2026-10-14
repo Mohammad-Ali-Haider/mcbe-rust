@@ -510,6 +510,11 @@ impl Service {
                             std::mem::swap(&mut s.residents, &mut region.residents);
                             std::mem::swap(&mut s.wanted, &mut region.wanted);
                             s.center = stream::center(region.position);
+                            state.simulation =
+                                crate::engine::blocks::systems::simulation::Simulation::new(
+                                    &state.registry,
+                                );
+                            state.simulation.hydrate(&state.registry, &state.blocks);
                             client.actor = Actor::new(region.position, client.movement.body())?;
                             client.spawn = region.position;
                             client.yaw = region.yaw;

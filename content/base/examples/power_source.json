@@ -1,0 +1,18 @@
+{
+  "id": "power_source",
+  "label": "Power Source",
+  "extends": "templates/solid.json",
+  "components": {
+    "signal": {
+      "source": 15,
+      "attenuation": 1
+    },
+    "visual": {
+      "color": [
+        255,
+        210,
+        60
+      ]
+    }
+  }
+}

@@ -1,47 +1,20 @@
 //! Typed capabilities resolved once when registering a block.
 pub(crate) mod collision;
 pub(crate) mod visual;
-use crate::{engine_blocks::RenderLayer, scene::Result};
 pub use collision::ShapeComponent;
 use serde::{Deserialize, Serialize};
 pub use visual::VisualComponent;
-#[derive(Clone, Default, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct OcclusionComponent {
-    #[serde(default)]
-    pub layer: RenderLayer,
-    pub cull_group: Option<String>,
-}
-#[derive(Clone, Copy, Default, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum PlacementComponent {
-    #[default]
-    Standard,
-    Slab,
-    Stairs,
-}
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct SignalComponent {
-    #[serde(default)]
-    pub source: u8,
-    #[serde(default = "one")]
-    pub attenuation: u8,
-}
-fn one() -> u8 {
-    1
-}
-impl SignalComponent {
-    pub fn validate(&self) -> Result<()> {
-        if self.source > 15 || !(1..=15).contains(&self.attenuation) {
-            return Err("Signals require source 0..15 and attenuation 1..15".into());
-        }
-        Ok(())
-    }
-}
+pub(crate) mod occlusion;
+pub use occlusion::OcclusionComponent;
+pub(crate) mod placement;
+pub use placement::PlacementComponent;
+pub(crate) mod signal;
+pub use signal::SignalComponent;
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BlockComponents {
+    #[serde(default)]
+    pub behavior: BehaviorComponent,
     #[serde(default)]
     pub visual: VisualComponent,
     #[serde(default)]
@@ -53,4 +26,20 @@ pub struct BlockComponents {
     #[serde(default)]
     pub placement: PlacementComponent,
     pub signal: Option<SignalComponent>,
+}
+
+#[derive(Clone, Copy, Default, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum BehaviorComponent {
+    #[default]
+    Passive,
+    Wire,
+}
+impl BehaviorComponent {
+    pub fn receives_events(self) -> bool {
+        self == Self::Wire
+    }
+    pub fn passive(&self) -> bool {
+        *self == Self::Passive
+    }
 }

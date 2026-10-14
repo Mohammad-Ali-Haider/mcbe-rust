@@ -363,6 +363,7 @@ fn insert(scene: &mut Scene, generated: Generated) {
     let positions: Vec<_> = blocks.keys().copied().collect();
     let ys = positions.iter().map(|p| p[1].div_euclid(16)).collect();
     scene.cells.extend(positions.iter().copied());
+    state.simulation.hydrate(&state.registry, &blocks);
     state.blocks.extend(blocks);
     stream.residents.insert(c, positions);
     stream.generated += 1;
@@ -393,6 +394,7 @@ fn recenter_inner(scene: &mut Scene, c: Column, force: bool) {
         let ys = positions.iter().map(|p| p[1].div_euclid(16)).collect();
         for p in positions {
             state.blocks.remove(&p);
+            state.simulation.changed(&state.registry, p, None);
             scene.cells.remove(&p);
         }
         stream.evicted += 1;

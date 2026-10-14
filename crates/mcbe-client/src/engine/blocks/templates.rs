@@ -14,3 +14,11 @@ pub fn merge(base: &mut Value, overrides: Value) {
         (a, b) => *a = b,
     }
 }
+
+use serde::Deserialize;
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BlockTemplate {
+    pub extends: Option<String>,
+    pub components: Value,
+}

@@ -33,6 +33,7 @@ pub const BOUNDS: Bounds = Bounds {
 pub const SPAWN: Vec3 = Vec3::new(0.5, 4., -9.5);
 #[derive(Clone)]
 pub struct WorldState {
+    pub simulation: blocks::systems::simulation::Simulation,
     pub geometry: std::sync::Arc<crate::engine_geometry::Library>,
     pub instance: u64,
     pub registry_revision: u64,
@@ -60,6 +61,7 @@ impl WorldState {
         let player = crate::engine_inventory::Inventory::starter(registry.blocks.len(), selected);
         let recipes = crate::engine_crafting::Recipes::built_in().available(&registry);
         Self {
+            simulation: blocks::systems::simulation::Simulation::new(&registry),
             geometry: std::sync::Arc::new(
                 crate::engine_geometry::Library::compile(&registry)
                     .expect("Validated geometry registry"),
@@ -847,18 +849,12 @@ pub fn apply_registry(client: &mut Client, registry: Registry) -> Result<()> {
     let recipes = state.recipes.clone().available(&registry);
     let shapes = registry.shapes()?;
     let geometry = std::sync::Arc::new(crate::engine_geometry::Library::compile(&registry)?);
-    if client.movement.mode != crate::engine_player::Mode::Noclip {
-        let p = client.actor.position;
-        let half = client.actor.body.width * 0.5;
-        let low = [p.x - half, p.y, p.z - half];
-        let high = [p.x + half, p.y + client.actor.body.height, p.z + half];
-        if blocks.iter().any(|(p, id)| {
-            geometry.collision(*id).iter().any(|b| {
-                (0..3).all(|a| low[a] < p[a] as f32 + b[a + 3] && high[a] > p[a] as f32 + b[a])
-            })
-        }) {
-            return Err("Updated model overlaps the player; move to clear space before F6".into());
-        }
+    if client.movement.mode != crate::engine_player::Mode::Noclip
+        && blocks.iter().any(|(p, id)| {
+            blocks::systems::collision::intersects_actor(&geometry, *id, *p, &client.actor)
+        })
+    {
+        return Err("Updated model overlaps the player; move to clear space before F6".into());
     }
     let state = client.scene.engine.as_mut().unwrap();
     state.blocks = blocks;
@@ -869,6 +865,8 @@ pub fn apply_registry(client: &mut Client, registry: Registry) -> Result<()> {
     state.player = player;
     state.original_player = original_player;
     state.recipes = recipes;
+    state.simulation = blocks::systems::simulation::Simulation::new(&registry);
+    state.simulation.hydrate(&registry, &state.blocks);
     state.registry = registry;
     state.revision = state.revision.wrapping_add(1);
     state.registry_revision = state.revision;
@@ -889,6 +887,16 @@ pub fn reload_definitions(client: &mut Client, path: &Path) -> Result<()> {
         .parent()
         .ok_or("Block definition directory missing")?
         .join("recipes.json");
+    let pack_home = pack.as_ref().map(|p| {
+        let root = if path.is_dir() {
+            path
+        } else {
+            path.parent().unwrap()
+        };
+        root.ancestors()
+            .nth(Path::new(&p.asset_root).components().count())
+            .unwrap_or(Path::new("."))
+    });
     let recipes = if let Some(pack) = pack {
         pack.recipes
     } else if recipe_path.is_file() {
@@ -912,6 +920,7 @@ pub fn reload_definitions(client: &mut Client, path: &Path) -> Result<()> {
         .owned_materials
         .as_ref()
         .map(|a| a.root.as_path())
+        .or(pack_home)
         .unwrap_or(path.parent().unwrap().parent().unwrap_or(Path::new(".")));
     let owned = crate::engine_materials::load(&registry, home)?;
     apply_registry(client, registry)?;
@@ -1645,6 +1654,7 @@ mod tests {
         let mut client = generate(38).unwrap();
         let mut registry = client.scene.engine.as_ref().unwrap().registry.clone();
         registry.blocks.push(crate::engine_blocks::Block {
+            behavior: Default::default(),
             state: None,
             selection: None,
             signal: None,
