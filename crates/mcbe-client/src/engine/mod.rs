@@ -2,6 +2,7 @@
 //! Optional installed Minecraft texture bindings are handled in engine_assets.
 pub(crate) mod blocks;
 pub(crate) mod content;
+pub(crate) mod machines;
 pub(crate) mod persistence;
 pub(crate) mod player;
 pub(crate) mod render;
@@ -33,6 +34,9 @@ pub const BOUNDS: Bounds = Bounds {
 pub const SPAWN: Vec3 = Vec3::new(0.5, 4., -9.5);
 #[derive(Clone)]
 pub struct WorldState {
+    pub machines: machines::Machines,
+    pub original_machines: machines::Machines,
+    pub smelting: machines::recipes::Recipes,
     pub ui: std::sync::Arc<ui::framework::Library>,
     pub simulation: blocks::systems::simulation::Simulation,
     pub geometry: std::sync::Arc<crate::engine_geometry::Library>,
@@ -61,7 +65,14 @@ impl WorldState {
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
         let player = crate::engine_inventory::Inventory::starter(registry.blocks.len(), selected);
         let recipes = crate::engine_crafting::Recipes::built_in().available(&registry);
+        let smelting = machines::recipes::Definitions::built_in()
+            .available(&registry)
+            .compile(&registry)
+            .expect("Validated built-in smelting");
         Self {
+            machines: Default::default(),
+            original_machines: Default::default(),
+            smelting,
             ui: std::sync::Arc::new(ui::framework::Library::built_in()),
             simulation: blocks::systems::simulation::Simulation::new(&registry),
             geometry: std::sync::Arc::new(
@@ -86,7 +97,9 @@ impl WorldState {
     }
     pub fn pending(&self) -> usize {
         if let Some(stream) = &self.stream {
-            return stream.pending() + self.player.changed_slots(&self.original_player);
+            return stream.pending()
+                + self.player.changed_slots(&self.original_player)
+                + self.machines.changed(&self.original_machines);
         }
         self.blocks
             .iter()
@@ -98,6 +111,7 @@ impl WorldState {
                 .filter(|p| !self.blocks.contains_key(*p))
                 .count()
             + self.player.changed_slots(&self.original_player)
+            + self.machines.changed(&self.original_machines)
     }
 }
 pub fn material(client: &Client) -> Option<&Block> {
@@ -112,7 +126,11 @@ struct Cell {
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Document {
+pub(crate) struct Document {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    machines: Option<persistence::machines::SavedMachines>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    smelting: Option<machines::recipes::Definitions>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     movement: Option<crate::engine_player::Movement>,
     format: String,
@@ -152,6 +170,8 @@ struct SavedStack {
 struct SavedInventory {
     slots: Vec<Option<SavedStack>>,
     crafting: Vec<Option<SavedStack>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    table: Vec<Option<SavedStack>>,
     cursor: Option<SavedStack>,
     active: usize,
 }
@@ -166,12 +186,16 @@ impl SavedInventory {
         Self {
             slots: p.slots.iter().copied().map(convert).collect(),
             crafting: p.crafting.iter().copied().map(convert).collect(),
+            table: p.table.iter().copied().map(convert).collect(),
             cursor: convert(p.cursor),
             active: p.active,
         }
     }
     fn restore(self, r: &Registry) -> Result<crate::engine_inventory::Inventory> {
-        if self.slots.len() != 36 || self.crafting.len() != 4 {
+        if self.slots.len() != 36
+            || self.crafting.len() != 4
+            || (!self.table.is_empty() && self.table.len() != 9)
+        {
             return Err("Saved player slot count differs".into());
         }
         let convert = |s: Option<SavedStack>| -> Result<Option<crate::engine_inventory::Stack>> {
@@ -189,6 +213,9 @@ impl SavedInventory {
         }
         for (i, s) in self.crafting.into_iter().enumerate() {
             p.crafting[i] = convert(s)?;
+        }
+        for (i, s) in self.table.into_iter().enumerate() {
+            p.table[i] = convert(s)?;
         }
         p.cursor = convert(self.cursor)?;
         p.active = self.active;
@@ -330,6 +357,8 @@ enum SavedTerrain {
     ),
 }
 pub struct SaveSnapshot {
+    machines: machines::Machines,
+    smelting: machines::recipes::Definitions,
     movement: crate::engine_player::Movement,
     pub instance: u64,
     registry_revision: u64,
@@ -360,6 +389,8 @@ impl SaveSnapshot {
     pub fn capture(client: &Client) -> Result<Self> {
         let s = client.scene.engine.as_ref().ok_or("Engine world missing")?;
         Ok(Self {
+            machines: s.machines.clone(),
+            smelting: s.smelting.definitions.clone(),
             movement: client.movement,
             instance: s.instance,
             registry_revision: s.registry_revision,
@@ -386,7 +417,7 @@ impl SaveSnapshot {
             self.loaded = state.loaded.clone();
         }
     }
-    fn document(&self) -> Result<Document> {
+    pub(crate) fn document(&self) -> Result<Document> {
         self.registry.validate()?;
         self.player.validate(self.registry.blocks.len())?;
         let id = |id: BlockId| -> Result<String> {
@@ -432,9 +463,14 @@ impl SaveSnapshot {
             ),
         };
         Ok(Document {
+            machines: Some(persistence::machines::SavedMachines::capture(
+                &self.machines,
+                &self.registry,
+            )?),
+            smelting: Some(self.smelting.clone()),
             movement: Some(self.movement),
             format: "blockwork-world".into(),
-            version: 5,
+            version: 6,
             seed: self.seed,
             player: self.position,
             yaw: self.yaw,
@@ -573,6 +609,7 @@ impl CommittedSave {
             _ => return Ok(false),
         }
         state.original_player = self.snapshot.player;
+        state.original_machines = self.snapshot.machines;
         state.loaded = Some((self.path.clone(), self.sha256));
         client.last_save = Some(self.path);
         Ok(true)
@@ -588,7 +625,7 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
     }
     let d: Document = serde_json::from_slice(bytes)?;
     if d.format != "blockwork-world"
-        || ![1, 2, 3, 4, 5].contains(&d.version)
+        || ![1, 2, 3, 4, 5, 6].contains(&d.version)
         || d.cells.len() > BOUNDS.volume()?
         || !d.yaw.is_finite()
         || !d.pitch.is_finite()
@@ -602,7 +639,7 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
             r.blocks.truncate(8);
             r
         }
-        (2..=5, Some(r)) => {
+        (2..=6, Some(r)) => {
             r.validate()?;
             r
         }
@@ -613,7 +650,7 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
             registry.blocks.len(),
             registry.find(&d.selected)?,
         ),
-        (3..=5, Some(p)) => p.restore(&registry)?,
+        (3..=6, Some(p)) => p.restore(&registry)?,
         _ => return Err("Save inventory/version mismatch".into()),
     };
     if d.version >= 3
@@ -626,18 +663,18 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
     }
     let recipes = match (d.version, d.recipes) {
         (1 | 2, None) => crate::engine_crafting::Recipes::built_in().available(&registry),
-        (3..=5, Some(r)) => {
+        (3..=6, Some(r)) => {
             r.validate_registry(&registry)?;
             r
         }
         _ => return Err("Save recipe/version mismatch".into()),
     };
     let movement = match (d.version, d.movement) {
-        (5, Some(m)) => m,
+        (5 | 6, Some(m)) => m,
         (1..=4, None) => Default::default(),
         _ => return Err("Save movement/version mismatch".into()),
     };
-    if d.version == 4 || d.version == 5 && d.generator.is_some() {
+    if d.version == 4 || d.version >= 5 && d.generator.is_some() {
         if !d.cells.is_empty() {
             return Err("Streamed saves contain sparse edits, not full cells".into());
         }
@@ -672,6 +709,7 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
         client.set_spawn(d.player)?;
         client.yaw = d.yaw;
         client.pitch = d.pitch;
+        persistence::machines::restore(&mut client, d.machines, d.smelting, d.version)?;
         return Ok(client);
     }
     if d.generator.is_some() || d.edits.is_some() {
@@ -709,6 +747,7 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
     client.set_spawn(d.player)?;
     client.yaw = d.yaw;
     client.pitch = d.pitch;
+    persistence::machines::restore(&mut client, d.machines, d.smelting, d.version)?;
     Ok(client)
 }
 pub fn load(path: &Path) -> Result<Client> {
@@ -837,6 +876,7 @@ pub fn apply_registry(client: &mut Client, registry: Registry) -> Result<()> {
                 .slots
                 .iter_mut()
                 .chain(&mut next.crafting)
+                .chain(&mut next.table)
                 .chain(std::iter::once(&mut next.cursor))
                 .flatten()
             {
@@ -849,6 +889,36 @@ pub fn apply_registry(client: &mut Client, registry: Registry) -> Result<()> {
     let player = remap_player(&state.player)?;
     let original_player = remap_player(&state.original_player)?;
     let recipes = state.recipes.clone().available(&registry);
+    let smelting = state
+        .smelting
+        .definitions
+        .clone()
+        .available(&registry)
+        .compile(&registry)?;
+    let machines =
+        persistence::machines::remap(&state.machines, &state.registry, &registry, &smelting)?;
+    let original_machines = persistence::machines::remap(
+        &state.original_machines,
+        &state.registry,
+        &registry,
+        &smelting,
+    )?;
+    for p in machines.furnaces.keys() {
+        let id = stream.as_ref().map_or_else(
+            || blocks.get(p).copied(),
+            |s| {
+                s.edits
+                    .get(p)
+                    .copied()
+                    .unwrap_or_else(|| s.generator.block(*p))
+            },
+        );
+        if id.is_none_or(|id| {
+            registry.get(id).interaction != Some(blocks::components::Interaction::Furnace)
+        }) {
+            return Err("Updated definitions remove an occupied furnace interaction".into());
+        }
+    }
     let shapes = registry.shapes()?;
     let geometry = std::sync::Arc::new(crate::engine_geometry::Library::compile(&registry)?);
     if client.movement.mode != crate::engine_player::Mode::Noclip
@@ -867,6 +937,9 @@ pub fn apply_registry(client: &mut Client, registry: Registry) -> Result<()> {
     state.player = player;
     state.original_player = original_player;
     state.recipes = recipes;
+    state.machines = machines;
+    state.original_machines = original_machines;
+    state.smelting = smelting;
     state.simulation = blocks::systems::simulation::Simulation::new(&registry);
     state.simulation.hydrate(&registry, &state.blocks);
     state.registry = registry;
@@ -926,8 +999,24 @@ pub fn reload_definitions(client: &mut Client, path: &Path) -> Result<()> {
         .unwrap_or(path.parent().unwrap().parent().unwrap_or(Path::new(".")));
     let owned = crate::engine_materials::load(&registry, home)?;
     let ui = std::sync::Arc::new(ui::framework::Library::read_home(home)?);
+    let smelting = machines::recipes::Definitions::read_home(home)?.compile(&registry)?;
     apply_registry(client, registry)?;
-    client.scene.engine.as_mut().unwrap().ui = ui;
+    let state = client.scene.engine.as_mut().unwrap();
+    state.ui = ui;
+    for f in state
+        .machines
+        .furnaces
+        .values_mut()
+        .chain(state.original_machines.furnaces.values_mut())
+    {
+        if let Some(input) = f.slots[0]
+            && state.smelting.get(input.id) != smelting.get(input.id)
+        {
+            f.cook_ms = 0;
+        }
+    }
+    state.smelting = smelting;
+    state.machines.rehydrate(&state.smelting);
     client.owned_materials = Some(owned);
     client.scene.engine.as_mut().unwrap().recipes = recipes;
     client.engine_assets = assets;
@@ -964,7 +1053,7 @@ pub fn launch(args: &[String]) -> Result<()> {
             "--engine-naive" => {},
             "--engine-stream" | "--engine-finite" | "--engine-sync-mesh" => {},
             "--engine-continue" => resume = true,
-            "--engine-ui-smoke" | "--engine-ui-lab-smoke" | "--engine-render-distance" | "--engine-home" | "--engine-load" | "--engine-study" | "--engine-distance-motion-smoke" | "--engine-distance-smoke" | "--engine-distance-settings-smoke" | "--engine-distance-shrink-smoke" | "--engine-features-smoke" | "--engine-settings-smoke" | "--engine-preview-smoke" | "--engine-preview-case" | "--engine-startup-gpu-close-smoke" | "--engine-startup-retry-smoke" | "--engine-startup-smoke" | "--engine-startup-close-smoke" | "--engine-startup-error-smoke" | "--engine-v1-study" | "--engine-v1-smoke" | "--engine-v1-wire-smoke" | "--engine-v1-fly-smoke" | "--engine-v1-noclip-smoke" | "--engine-v1-sneak-smoke" | "--engine-loading-study" | "--engine-loading-smoke" | "--engine-loading-close-smoke" | "--engine-save-study" | "--engine-save-smoke" | "--engine-save-close-smoke" | "--engine-async-smoke" | "--engine-stream-profile" | "--engine-stream-study" | "--engine-stream-smoke" | "--engine-stream-wire-smoke" | "--engine-smoke" | "--engine-palette-smoke" | "--engine-wire-smoke" | "--engine-window-smoke" | "--engine-edit-smoke" | "--engine-benchmark" | "--engine-profile" | "--engine-render-smoke" | "--engine-mesh-smoke" | "--engine-camera" | "--engine-inventory-study" | "--engine-inventory-smoke" | "--engine-seed" | "--engine-blocks" | "--engine-pack-root" => {
+            "--engine-table-smoke" | "--engine-furnace-smoke" | "--engine-ui-smoke" | "--engine-ui-lab-smoke" | "--engine-render-distance" | "--engine-home" | "--engine-load" | "--engine-study" | "--engine-distance-motion-smoke" | "--engine-distance-smoke" | "--engine-distance-settings-smoke" | "--engine-distance-shrink-smoke" | "--engine-features-smoke" | "--engine-settings-smoke" | "--engine-preview-smoke" | "--engine-preview-case" | "--engine-startup-gpu-close-smoke" | "--engine-startup-retry-smoke" | "--engine-startup-smoke" | "--engine-startup-close-smoke" | "--engine-startup-error-smoke" | "--engine-v1-study" | "--engine-v1-smoke" | "--engine-v1-wire-smoke" | "--engine-v1-fly-smoke" | "--engine-v1-noclip-smoke" | "--engine-v1-sneak-smoke" | "--engine-loading-study" | "--engine-loading-smoke" | "--engine-loading-close-smoke" | "--engine-save-study" | "--engine-save-smoke" | "--engine-save-close-smoke" | "--engine-async-smoke" | "--engine-stream-profile" | "--engine-stream-study" | "--engine-stream-smoke" | "--engine-stream-wire-smoke" | "--engine-smoke" | "--engine-palette-smoke" | "--engine-wire-smoke" | "--engine-window-smoke" | "--engine-edit-smoke" | "--engine-benchmark" | "--engine-profile" | "--engine-render-smoke" | "--engine-mesh-smoke" | "--engine-camera" | "--engine-inventory-study" | "--engine-inventory-smoke" | "--engine-seed" | "--engine-blocks" | "--engine-pack-root" => {
                 let flag = &args[i]; i+=1; let value = args.get(i).ok_or("Engine option requires a value")?;
                 match flag.as_str() {
                     "--engine-render-distance" => {let distance:i32=value.parse()?;if !(2..=crate::engine_stream::MAX_RADIUS).contains(&distance) {return Err("Render distance must be 2..255 chunks".into());}render_distance=Some(distance);},
@@ -1058,7 +1147,18 @@ pub fn launch(args: &[String]) -> Result<()> {
         app.frame_limit = 4;
     }
     if let Some(out) = &out {
-        if args
+        if args.iter().any(|a| {
+            matches!(
+                a.as_str(),
+                "--engine-table-smoke" | "--engine-furnace-smoke"
+            )
+        }) {
+            crate::verification::stations::prepare(
+                &mut app,
+                out,
+                args.iter().any(|a| a == "--engine-furnace-smoke"),
+            )?;
+        } else if args
             .iter()
             .any(|a| matches!(a.as_str(), "--engine-ui-smoke" | "--engine-ui-lab-smoke"))
         {
@@ -1506,6 +1606,8 @@ mod tests {
             let mut old = serde_json::to_value(document(&old).unwrap()).unwrap();
             old["version"] = json!(version);
             old.as_object_mut().unwrap().remove("movement");
+            old.as_object_mut().unwrap().remove("machines");
+            old.as_object_mut().unwrap().remove("smelting");
             let restored = decode(&serde_json::to_vec(&old).unwrap(), None).unwrap();
             assert_eq!(restored.movement, crate::engine_player::Movement::default());
         }
@@ -1560,7 +1662,7 @@ mod tests {
         let bytes = serde_json::to_vec(&document(&c).unwrap()).unwrap();
         assert!(bytes.len() < 16_384);
         let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-        assert_eq!(value["version"], 5);
+        assert_eq!(value["version"], 6);
         assert!(value.get("cells").is_none());
         assert_eq!(value["edits"].as_array().unwrap().len(), 3);
         let mut copy = decode(&bytes, None).unwrap();
@@ -1648,6 +1750,8 @@ mod tests {
         old["version"] = json!(2);
         old["selected"] = json!("cobblestone");
         old.as_object_mut().unwrap().remove("movement");
+        old.as_object_mut().unwrap().remove("machines");
+        old.as_object_mut().unwrap().remove("smelting");
         old.as_object_mut().unwrap().remove("inventory");
         old.as_object_mut().unwrap().remove("recipes");
         old["registry"]["blocks"]
@@ -1667,6 +1771,7 @@ mod tests {
         let mut client = generate(38).unwrap();
         let mut registry = client.scene.engine.as_ref().unwrap().registry.clone();
         registry.blocks.push(crate::engine_blocks::Block {
+            interaction: None,
             behavior: Default::default(),
             state: None,
             selection: None,

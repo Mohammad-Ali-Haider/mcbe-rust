@@ -163,6 +163,7 @@ fn compile<F: FnMut(&str) -> Result<Vec<u8>>>(read: F) -> Result<ContentPack> {
             let selection = c.selection.compile()?;
             group.push(Block {
                 behavior: c.behavior,
+                interaction: c.interaction,
                 id: v.id,
                 label: v.label.unwrap_or_else(|| d.label.clone()),
                 hidden: v.hidden,
@@ -334,13 +335,20 @@ mod tests {
         ))
         .unwrap();
         let new = built_in().unwrap().registry;
-        assert_eq!(old.blocks.len(), new.blocks.len());
+        assert_eq!(old.blocks.len(), 36);
+        assert_eq!(new.blocks.len(), 37);
+        assert_eq!(new.find("furnace").unwrap(), 36);
+        assert_eq!(
+            new.get(16).interaction,
+            Some(crate::engine::blocks::components::Interaction::CraftingTable)
+        );
         for (a, b) in old.blocks.iter().zip(&new.blocks) {
             let mut a = serde_json::to_value(a).unwrap();
             let mut b = serde_json::to_value(b).unwrap();
             // Full cubes canonicalize to the implicit cube model.
             for v in [&mut a, &mut b] {
                 v.as_object_mut().unwrap().remove("state");
+                v.as_object_mut().unwrap().remove("interaction");
                 if v.get("geometry") == Some(&serde_json::json!({"boxes":[[0.,0.,0.,1.,1.,1.]]})) {
                     v.as_object_mut().unwrap().remove("geometry");
                 }

@@ -1,0 +1,21 @@
+{
+  "id": "furnace",
+  "label": "Furnace",
+  "extends": "templates/solid.json",
+  "components": {
+    "interaction": "furnace",
+    "visual": {
+      "model": "models/cube.json",
+      "color": [
+        110,
+        110,
+        110
+      ],
+      "pattern": "bricks",
+      "local": {
+        "pack": "vanilla",
+        "block": "furnace"
+      }
+    }
+  }
+}

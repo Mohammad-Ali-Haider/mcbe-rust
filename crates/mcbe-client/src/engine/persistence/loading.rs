@@ -33,6 +33,7 @@ struct Guard {
     registry: u64,
     edits: u64,
     player: Inventory,
+    machines: u64,
 }
 impl Guard {
     fn capture(client: &Client) -> Result<Self> {
@@ -43,6 +44,7 @@ impl Guard {
             registry: s.registry_revision,
             edits: s.edit_revision,
             player: s.player.clone(),
+            machines: s.machines.revision,
         })
     }
     fn matches(&self, client: &Client, reload: bool) -> bool {
@@ -52,7 +54,8 @@ impl Guard {
                 && s.registry_revision == self.registry
                 && s.edit_revision == self.edits
                 && (!reload
-                    || (s.player.changed_slots(&self.player) == 0
+                    || (s.machines.revision == self.machines
+                        && s.player.changed_slots(&self.player) == 0
                         && s.player.active == self.player.active))
         })
     }
@@ -329,6 +332,11 @@ impl Service {
                                             )?);
                                         }
                                         if let Some(home) = owned_root {
+                                            client.scene.engine.as_mut().unwrap().ui = Arc::new(
+                                                crate::engine::ui::framework::Library::read_home(
+                                                    &home,
+                                                )?,
+                                            );
                                             client.owned_materials =
                                                 Some(crate::engine_materials::load(
                                                     &client.scene.engine.as_ref().unwrap().registry,

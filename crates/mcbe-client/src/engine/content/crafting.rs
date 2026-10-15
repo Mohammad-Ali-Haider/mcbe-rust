@@ -1,4 +1,4 @@
-//! Bounded engine 2x2 shaped recipes, translated inside the input grid.
+//! Bounded shaped recipes, translated/mirrored in shared 2x2 and 3x3 grids.
 use crate::{
     engine_blocks::Registry,
     engine_inventory::{Inventory, Stack},
@@ -75,33 +75,47 @@ impl Recipes {
             if r.id.is_empty()
                 || !names.insert(&r.id)
                 || r.pattern.is_empty()
-                || r.pattern.len() > 2
+                || r.pattern.len() > 3
                 || cols == 0
-                || cols > 2
+                || cols > 3
                 || r.pattern.iter().any(|row| row.len() != cols)
                 || r.pattern.iter().flatten().all(String::is_empty)
                 || r.count == 0
                 || r.count > 64
                 || r.result.is_empty()
             {
-                return Err("Invalid 2x2 recipe definition".into());
+                return Err("Invalid shaped recipe definition".into());
             }
         }
         Ok(())
     }
     pub fn find(&self, registry: &Registry, player: &Inventory) -> Option<Match> {
+        self.find_grid(registry, &player.crafting, 2)
+    }
+    pub fn find_grid(
+        &self,
+        registry: &Registry,
+        grid: &[Option<Stack>],
+        side: usize,
+    ) -> Option<Match> {
+        if !(2..=3).contains(&side) || grid.len() != side * side {
+            return None;
+        }
         for r in &self.recipes {
             let result = registry.find(&r.result).ok();
             let width = r.pattern[0].len();
             let height = r.pattern.len();
-            for oy in 0..=2 - height {
-                for ox in 0..=2 - width {
+            if width > side || height > side {
+                continue;
+            }
+            for oy in 0..=side - height {
+                for ox in 0..=side - width {
                     for mirror in [false, true] {
                         let mut consumed = Vec::new();
                         let mut valid = true;
-                        for i in 0..4 {
-                            let x = i % 2;
-                            let y = i / 2;
+                        for (i, slot) in grid.iter().enumerate() {
+                            let x = i % side;
+                            let y = i / side;
                             let expected =
                                 if x >= ox && y >= oy && x < ox + width && y < oy + height {
                                     let cx = x - ox;
@@ -121,7 +135,7 @@ impl Recipes {
                                 } else {
                                     None
                                 };
-                            if player.crafting[i].map(|s| s.id) != expected {
+                            if slot.map(|s| s.id) != expected {
                                 valid = false;
                             }
                             if expected.is_some() {
@@ -140,13 +154,24 @@ impl Recipes {
         }
         None
     }
-    pub fn take(&self, registry: &Registry, player: &mut Inventory, all: bool) -> usize {
+    pub fn take_grid(
+        &self,
+        registry: &Registry,
+        player: &mut Inventory,
+        all: bool,
+        table: bool,
+    ) -> usize {
         let mut made = 0;
         for _ in 0..256 {
-            let Some(m) = self.find(registry, player) else {
+            let found = if table {
+                self.find_grid(registry, &player.table, 3)
+            } else {
+                self.find(registry, player)
+            };
+            let Some(m) = found else {
                 break;
             };
-            if !player.accept_output(m.stack, &m.consumed, all) {
+            if !player.accept_grid_output(m.stack, &m.consumed, all, table) {
                 break;
             }
             made += usize::from(m.stack.count);
@@ -160,6 +185,49 @@ impl Recipes {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn table_matches_three_wide_and_mirrored_recipes_but_inventory_cannot() {
+        let r = Registry::built_in();
+        let recipes = Recipes::built_in();
+        let mut p = Inventory::empty();
+        let cobble = r.find("cobblestone").unwrap();
+        for i in [0, 1, 2, 3, 5, 6, 7, 8] {
+            p.table[i] = Some(Stack {
+                id: cobble,
+                count: 2,
+            });
+        }
+        let found = recipes.find_grid(&r, &p.table, 3).unwrap();
+        assert_eq!(found.stack.id, r.find("furnace").unwrap());
+        assert_eq!(found.consumed.len(), 8);
+        p.cursor = Some(Stack {
+            id: cobble,
+            count: 64,
+        });
+        assert_eq!(recipes.take_grid(&r, &mut p, false, true), 0);
+        assert_eq!(p.table[0].unwrap().count, 2);
+        p.cursor = None;
+        assert_eq!(recipes.take_grid(&r, &mut p, true, true), 2);
+        assert!(p.table.iter().all(Option::is_none));
+        let oak = r.find("oak_planks").unwrap();
+        for i in [2, 4, 5, 6, 7, 8] {
+            p.table[i] = Some(Stack { id: oak, count: 1 });
+        }
+        assert_eq!(
+            recipes.find_grid(&r, &p.table, 3).unwrap().stack.id,
+            r.find("oak_stairs_north").unwrap()
+        );
+        p.crafting = [Some(Stack {
+            id: cobble,
+            count: 1,
+        }); 4];
+        assert!(recipes.find(&r, &p).is_none());
+        p.table = [None; 9];
+        for i in [6, 7, 8] {
+            p.table[i] = Some(Stack { id: oak, count: 1 });
+        }
+        assert_eq!(recipes.find_grid(&r, &p.table, 3).unwrap().stack.count, 6);
+    }
     #[test]
     fn translated_input_and_atomic_output_capacity() {
         let r = Recipes::built_in();
@@ -175,17 +243,17 @@ mod tests {
                 count: 4
             }
         );
-        assert_eq!(r.take(&registry, &mut p, false), 4);
+        assert_eq!(r.take_grid(&registry, &mut p, false, false), 4);
         assert_eq!(p.crafting[3].unwrap().count, 1);
         assert_eq!(p.cursor.unwrap().count, 4);
         p.cursor = Some(Stack {
             id: planks,
             count: 63,
         });
-        assert_eq!(r.take(&registry, &mut p, false), 0);
+        assert_eq!(r.take_grid(&registry, &mut p, false, false), 0);
         assert_eq!(p.crafting[3].unwrap().count, 1);
         p.cursor = None;
-        assert_eq!(r.take(&registry, &mut p, true), 4);
+        assert_eq!(r.take_grid(&registry, &mut p, true, false), 4);
         assert!(p.crafting[3].is_none());
         assert_eq!(p.slots[0].unwrap().count, 4);
     }

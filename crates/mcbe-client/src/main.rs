@@ -149,14 +149,7 @@ struct App {
 }
 impl App {
     fn new(client: Client, root: PathBuf, inventory_start: bool, smoke: bool) -> Result<Self> {
-        let mut palette = engine_ui::Palette::default();
-        if client.scene.engine.as_ref().is_some_and(|s| {
-            s.player.cursor.is_some() || s.player.crafting.iter().any(Option::is_some)
-        }) {
-            palette.open = true;
-            palette.viewport = [480., 270.];
-            palette.pointer = [240., 135.];
-        }
+        let palette = engine_ui::Palette::recover(&client);
         Ok(Self {
             preview_test: None,
             preview_trace: Vec::new(),
@@ -326,6 +319,17 @@ impl App {
             next
         ));
         Ok(())
+    }
+    fn advance_machines(&mut self, dt: f32) {
+        // World machines continue with inventory open; menus/loading pause them.
+        if !self.startup_blocked()
+            && !self.menu.open()
+            && !self.load_busy()
+            && !self.close_after_save
+            && let Some(state) = self.client.scene.engine.as_mut()
+        {
+            state.machines.advance_seconds(dt, &state.smelting);
+        }
     }
     fn engine_key(&mut self, code: KeyCode) -> Result<bool> {
         if self.startup_blocked()
@@ -646,12 +650,7 @@ impl App {
                 self.accumulator = 0.;
                 self.previous = Instant::now();
                 if event.reload {
-                    self.palette.cursor = 0;
-                    self.palette.hover = None;
-                    self.palette.revision = self.palette.revision.wrapping_add(1);
-                    let player = &self.client.scene.engine.as_ref().unwrap().player;
-                    self.palette.open =
-                        player.cursor.is_some() || player.crafting.iter().any(Option::is_some);
+                    self.palette = engine_ui::Palette::recover(&self.client);
                     self.notice = Some("Reloaded saved world and inventory".into());
                 } else {
                     self.notice = Some("Destination ready | F10 next | R return".into());
@@ -867,13 +866,7 @@ impl App {
                 self.accumulator = 0.;
                 self.previous = Instant::now();
                 self.frames = 0;
-                self.palette = engine_ui::Palette::default();
-                let player = &self.client.scene.engine.as_ref().unwrap().player;
-                if player.cursor.is_some() || player.crafting.iter().any(Option::is_some) {
-                    self.palette.open = true;
-                    self.palette.viewport = [480., 270.];
-                    self.palette.pointer = [240., 135.];
-                }
+                self.palette = engine_ui::Palette::recover(&self.client);
                 self.notice = Some("Uploading graphics... | Escape close".into());
             } else if startup.blocked() {
                 self.notice = Some(startup.message());
@@ -1137,6 +1130,9 @@ impl App {
         let now = Instant::now();
         let dt = (now - self.previous).as_secs_f32().min(0.25);
         self.previous = now;
+        if !self.smoke {
+            self.advance_machines(dt);
+        }
         if self.window.as_ref().is_some_and(|w| w.has_focus())
             && !self.smoke
             && !self.startup_blocked()
@@ -1798,6 +1794,20 @@ impl ApplicationHandler for App {
                                 let _ = state.player.assign(id, state.player.active);
                             }
                         }
+                    }
+                } else if button == MouseButton::Right
+                    && !self.modifiers.shift_key()
+                    && self.client.scene.engine.is_some()
+                    && match self.palette.open_target(&mut self.client) {
+                        Ok(opened) => opened,
+                        Err(error) => {
+                            self.notice = Some(error.to_string());
+                            true
+                        }
+                    }
+                {
+                    if self.palette.open {
+                        self.capture(false);
                     }
                 } else if button == MouseButton::Right
                     && self.client.target().ok().flatten().is_some_and(|hit| {

@@ -3,6 +3,7 @@
   "label": "Crafting Table",
   "extends": "templates/solid.json",
   "components": {
+    "interaction": "crafting_table",
     "visual": {
       "model": "models/cube.json",
       "color": [

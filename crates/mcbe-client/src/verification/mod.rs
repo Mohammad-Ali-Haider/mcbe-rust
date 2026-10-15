@@ -7,3 +7,5 @@ pub(crate) mod stream;
 pub(crate) mod v1;
 
 pub(crate) mod ui;
+
+pub(crate) mod stations;

@@ -47,6 +47,7 @@ struct UiKey {
     scale: u32,
     active: usize,
     player_revision: u64,
+    machine_revision: u64,
     palette_revision: u64,
     cursor: usize,
     palette: bool,
@@ -1083,6 +1084,11 @@ impl Renderer {
             scale: self.stats.gui_scale.to_bits(),
             active: state.player.active,
             player_revision: state.player.revision,
+            machine_revision: if palette.open && palette.station.is_some() {
+                state.machines.revision
+            } else {
+                0
+            },
             palette_revision: palette.revision,
             cursor: palette.cursor,
             greedy: self.stats.greedy_meshing,

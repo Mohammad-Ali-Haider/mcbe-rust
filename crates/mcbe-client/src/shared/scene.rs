@@ -235,6 +235,19 @@ impl Scene {
         if id.is_some_and(|id| usize::from(id) >= state.registry.blocks.len()) {
             return Err("Unknown engine block".into());
         }
+        let keeps_furnace = id.is_some_and(|i| {
+            state.registry.get(i).interaction
+                == Some(crate::engine::blocks::components::Interaction::Furnace)
+        });
+        if !keeps_furnace
+            && state
+                .machines
+                .furnaces
+                .get(&p)
+                .is_some_and(|f| f.slots.iter().any(Option::is_some))
+        {
+            return Err("Empty the furnace before breaking or replacing it".into());
+        }
         if let Some(stream) = &mut state.stream {
             stream.record(p, id)?;
             let positions = stream
@@ -249,6 +262,9 @@ impl Scene {
             {
                 positions.swap_remove(i);
             }
+        }
+        if !keeps_furnace {
+            state.machines.remove(p)?;
         }
         match id {
             Some(id) => {

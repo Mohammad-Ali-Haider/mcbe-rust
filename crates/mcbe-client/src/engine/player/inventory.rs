@@ -9,6 +9,7 @@ pub struct Stack {
 pub enum Slot {
     Player(usize),
     Craft(usize),
+    Table(usize),
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Button {
@@ -19,6 +20,7 @@ pub enum Button {
 pub struct Inventory {
     pub slots: [Option<Stack>; 36],
     pub crafting: [Option<Stack>; 4],
+    pub table: [Option<Stack>; 9],
     pub cursor: Option<Stack>,
     pub active: usize,
     pub revision: u64,
@@ -28,6 +30,7 @@ impl Inventory {
         Self {
             slots: [None; 36],
             crafting: [None; 4],
+            table: [None; 9],
             cursor: None,
             active: 0,
             revision: 0,
@@ -60,6 +63,7 @@ impl Inventory {
                 .slots
                 .iter()
                 .chain(&self.crafting)
+                .chain(&self.table)
                 .chain(std::iter::once(&self.cursor))
                 .flatten()
                 .any(|s| s.count == 0 || s.count > 64 || usize::from(s.id) >= definitions)
@@ -80,12 +84,19 @@ impl Inventory {
                 .zip(&base.crafting)
                 .filter(|(a, b)| a != b)
                 .count()
+            + self
+                .table
+                .iter()
+                .zip(&base.table)
+                .filter(|(a, b)| a != b)
+                .count()
             + usize::from(self.cursor != base.cursor)
     }
     pub fn total(&self) -> usize {
         self.slots
             .iter()
             .chain(&self.crafting)
+            .chain(&self.table)
             .chain(std::iter::once(&self.cursor))
             .flatten()
             .map(|s| usize::from(s.count))
@@ -95,6 +106,7 @@ impl Inventory {
         match slot {
             Slot::Player(i) => self.slots.get(i),
             Slot::Craft(i) => self.crafting.get(i),
+            Slot::Table(i) => self.table.get(i),
         }
         .copied()
         .ok_or_else(|| "Invalid inventory slot".into())
@@ -103,6 +115,7 @@ impl Inventory {
         let destination = match slot {
             Slot::Player(i) => self.slots.get_mut(i),
             Slot::Craft(i) => self.crafting.get_mut(i),
+            Slot::Table(i) => self.table.get_mut(i),
         }
         .ok_or("Invalid inventory slot")?;
         *destination = value;
@@ -186,7 +199,7 @@ impl Inventory {
         let order: Vec<_> = match slot {
             Slot::Player(i) if i < 9 => (9..36).collect(),
             Slot::Player(_) => (0..9).collect(),
-            Slot::Craft(_) => (0..36).collect(),
+            Slot::Craft(_) | Slot::Table(_) => (0..36).collect(),
         };
         let mut next = self.clone();
         next.set(slot, None)?;
@@ -206,45 +219,76 @@ impl Inventory {
         let before = self.get(slot)?;
         let mut value = before;
         let old_cursor = self.cursor;
-        match (button, self.cursor, value) {
-            (Button::Left, None, _) => {
-                self.cursor = value;
-                value = None;
-            }
-            (Button::Right, None, Some(mut s)) => {
-                let n = s.count.div_ceil(2);
-                self.cursor = Some(Stack { count: n, ..s });
-                s.count -= n;
-                value = (s.count > 0).then_some(s);
-            }
-            (_, Some(mut held), Some(mut s)) if held.id == s.id => {
-                let n = if button == Button::Right {
-                    1.min(64 - s.count)
-                } else {
-                    held.count.min(64 - s.count)
-                };
-                s.count += n;
-                held.count -= n;
-                value = Some(s);
-                self.cursor = (held.count > 0).then_some(held);
-            }
-            (Button::Right, Some(mut held), None) => {
-                value = Some(Stack { count: 1, ..held });
-                held.count -= 1;
-                self.cursor = (held.count > 0).then_some(held);
-            }
-            (_, Some(held), _) => {
-                self.cursor = value;
-                value = Some(held);
-            }
-            _ => {}
-        }
+        transfer(&mut self.cursor, &mut value, button);
         self.set(slot, value)?;
         let changed = before != value || old_cursor != self.cursor;
         if changed {
             self.revision = self.revision.wrapping_add(1);
         }
         Ok(changed)
+    }
+    pub fn click_external(
+        &mut self,
+        value: &mut Option<Stack>,
+        button: Button,
+        shift: bool,
+        output: bool,
+    ) -> bool {
+        let old = *value;
+        let cursor = self.cursor;
+        if shift {
+            if let Some(s) = *value {
+                *value = self.add(s, &(0..36).collect::<Vec<_>>());
+            }
+        } else if output {
+            if let Some(mut s) = *value {
+                let capacity = self
+                    .cursor
+                    .map_or(64, |c| if c.id == s.id { 64 - c.count } else { 0 });
+                let amount = capacity.min(if button == Button::Right {
+                    if self.cursor.is_none() {
+                        s.count.div_ceil(2)
+                    } else {
+                        1
+                    }
+                } else {
+                    s.count
+                });
+                if amount > 0 {
+                    self.cursor = Some(Stack {
+                        id: s.id,
+                        count: self.cursor.map_or(0, |c| c.count) + amount,
+                    });
+                    s.count -= amount;
+                    *value = (s.count > 0).then_some(s);
+                }
+            }
+        } else {
+            transfer(&mut self.cursor, value, button);
+        }
+        let changed = old != *value || cursor != self.cursor;
+        if changed {
+            self.revision = self.revision.wrapping_add(1);
+        }
+        changed
+    }
+    pub fn quick_to_external(&mut self, slot: Slot, value: &mut Option<Stack>) -> Result<bool> {
+        let Some(mut s) = self.get(slot)? else {
+            return Ok(false);
+        };
+        let capacity = value.map_or(64, |v| if v.id == s.id { 64 - v.count } else { 0 });
+        let n = capacity.min(s.count);
+        if n == 0 {
+            return Ok(false);
+        }
+        *value = Some(Stack {
+            id: s.id,
+            count: value.map_or(0, |v| v.count) + n,
+        });
+        s.count -= n;
+        self.set(slot, (s.count > 0).then_some(s))?;
+        self.revision = self.revision.wrapping_add(1);
+        Ok(true)
     }
     pub fn settle_cursor(&mut self) -> bool {
         let Some(held) = self.cursor else {
@@ -268,18 +312,31 @@ impl Inventory {
                 return false;
             }
         }
+        for i in 0..9 {
+            if let Some(stack) = next.table[i].take()
+                && next.add(stack, &order).is_some()
+            {
+                return false;
+            }
+        }
         if self.changed_slots(&next) != 0 {
             next.revision = self.revision.wrapping_add(1);
             *self = next;
         }
         true
     }
-    pub fn accept_output(&mut self, result: Stack, consumed: &[usize], all: bool) -> bool {
+    pub fn accept_grid_output(
+        &mut self,
+        result: Stack,
+        consumed: &[usize],
+        all: bool,
+        table: bool,
+    ) -> bool {
         if result.count == 0 || result.count > 64 {
             return false;
         }
         if consumed.is_empty()
-            || consumed.iter().any(|i| *i >= 4)
+            || consumed.iter().any(|i| *i >= if table { 9 } else { 4 })
             || consumed
                 .iter()
                 .copied()
@@ -307,20 +364,88 @@ impl Inventory {
             }
         }
         for i in consumed {
-            let Some(mut stack) = next.crafting[*i] else {
+            let grid = if table {
+                &mut next.table[..]
+            } else {
+                &mut next.crafting[..]
+            };
+            let Some(mut stack) = grid[*i] else {
                 return false;
             };
             stack.count -= 1;
-            next.crafting[*i] = (stack.count > 0).then_some(stack);
+            grid[*i] = (stack.count > 0).then_some(stack);
         }
         next.revision = next.revision.wrapping_add(1);
         *self = next;
         true
     }
 }
+fn transfer(cursor: &mut Option<Stack>, value: &mut Option<Stack>, button: Button) {
+    match (button, *cursor, *value) {
+        (Button::Left, None, _) => {
+            *cursor = *value;
+            *value = None;
+        }
+        (Button::Right, None, Some(mut s)) => {
+            let n = s.count.div_ceil(2);
+            *cursor = Some(Stack { count: n, ..s });
+            s.count -= n;
+            *value = (s.count > 0).then_some(s);
+        }
+        (_, Some(mut held), Some(mut s)) if held.id == s.id => {
+            let n = if button == Button::Right {
+                1.min(64 - s.count)
+            } else {
+                held.count.min(64 - s.count)
+            };
+            s.count += n;
+            held.count -= n;
+            *value = Some(s);
+            *cursor = (held.count > 0).then_some(held);
+        }
+        (Button::Right, Some(mut held), None) => {
+            *value = Some(Stack { count: 1, ..held });
+            held.count -= 1;
+            *cursor = (held.count > 0).then_some(held);
+        }
+        (_, Some(held), _) => {
+            *cursor = *value;
+            *value = Some(held);
+        }
+        _ => {}
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn table_inputs_return_atomically_and_external_outputs_only_withdraw() {
+        let mut p = Inventory::empty();
+        p.table[8] = Some(Stack { id: 1, count: 64 });
+        let total = p.total();
+        assert!(p.close_inventory());
+        assert_eq!(p.total(), total);
+        assert!(p.table.iter().all(Option::is_none));
+        p.slots = [Some(Stack { id: 0, count: 64 }); 36];
+        p.table[0] = Some(Stack { id: 1, count: 3 });
+        let old = p.clone();
+        assert!(!p.close_inventory());
+        assert_eq!(p.changed_slots(&old), 0);
+        let mut output = Some(Stack { id: 2, count: 10 });
+        p.cursor = Some(Stack { id: 1, count: 4 });
+        assert!(!p.click_external(&mut output, Button::Left, false, true));
+        assert_eq!(output.unwrap().count, 10);
+        p.cursor = Some(Stack { id: 2, count: 60 });
+        assert!(p.click_external(&mut output, Button::Left, false, true));
+        assert_eq!(p.cursor.unwrap().count, 64);
+        assert_eq!(output.unwrap().count, 6);
+        assert!(!p.click_external(&mut output, Button::Left, true, true));
+        assert_eq!(output.unwrap().count, 6);
+        p.slots[2] = None;
+        assert!(p.click_external(&mut output, Button::Left, true, true));
+        assert!(output.is_none());
+        assert_eq!(p.slots[2].unwrap().count, 6);
+    }
     #[test]
     fn closing_returns_inputs_and_is_atomic_when_full() {
         let mut p = Inventory::starter(15, 3);

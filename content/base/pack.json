@@ -27,7 +27,8 @@
     "blocks/oak_stairs.json",
     "blocks/oak_window.json",
     "blocks/glass.json",
-    "blocks/blue_glass.json"
+    "blocks/blue_glass.json",
+    "blocks/furnace.json"
   ],
   "recipes": "recipes/crafting.json",
   "state_order": [
@@ -66,6 +67,7 @@
     "oak_stairs_south_upper",
     "oak_stairs_west_upper",
     "glass",
-    "blue_glass"
+    "blue_glass",
+    "furnace"
   ]
 }

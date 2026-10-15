@@ -121,6 +121,20 @@ impl Options {
                 client.scene.engine.as_mut().unwrap().recipes = pack.recipes;
             }
         }
+        if new_world {
+            let state = client.scene.engine.as_mut().unwrap();
+            let definitions = crate::engine::machines::recipes::Definitions::read_home(&self.home)?;
+            let definitions = if self
+                .home
+                .join("content/base/recipes/smelting.json")
+                .is_file()
+            {
+                definitions
+            } else {
+                definitions.available(&state.registry)
+            };
+            state.smelting = definitions.compile(&state.registry)?;
+        }
         client.scene.engine.as_mut().unwrap().ui = std::sync::Arc::new(
             crate::engine::ui::framework::Library::read_home(&self.home)?,
         );

@@ -188,8 +188,8 @@ mod tests {
         let mut client = crate::engine::generate(360036).unwrap();
         let plan = Prepared::build(&client).unwrap();
         assert!(plan.matches(&client));
-        assert_eq!(plan.layers, 216);
-        assert_eq!(plan.steps.len(), 216 * 6 + 16);
+        assert_eq!(plan.layers, 222);
+        assert_eq!(plan.steps.len(), 222 * 6 + 16);
         let mut cursor = 0;
         let mut bytes = 0;
         let mut frames = 0;
@@ -206,8 +206,8 @@ mod tests {
             cursor = batch.end;
             frames += 1;
         }
-        assert_eq!(bytes, 216 * 5460 + 1024 * 1024 * 4);
-        assert_eq!(frames, 57);
+        assert_eq!(bytes, 222 * 5460 + 1024 * 1024 * 4);
+        assert_eq!(frames, 58);
         let Step::Terrain { rgba: base, .. } = &plan.steps[0] else {
             panic!()
         };

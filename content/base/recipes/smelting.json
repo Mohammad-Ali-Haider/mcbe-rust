@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "smelting": [
+    {
+      "input": "sand",
+      "result": "glass",
+      "count": 1,
+      "cook_ms": 10000
+    },
+    {
+      "input": "cobblestone",
+      "result": "slate",
+      "count": 1,
+      "cook_ms": 10000
+    }
+  ],
+  "fuels": [
+    {
+      "item": "oak_log",
+      "burn_ms": 15000
+    },
+    {
+      "item": "oak_planks",
+      "burn_ms": 15000
+    },
+    {
+      "item": "oak_slab",
+      "burn_ms": 7500
+    },
+    {
+      "item": "oak_stairs_north",
+      "burn_ms": 15000
+    }
+  ]
+}

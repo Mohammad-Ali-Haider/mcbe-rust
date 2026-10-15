@@ -52,6 +52,8 @@ pub enum Pattern {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Block {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interaction: Option<super::components::Interaction>,
     #[serde(
         default,
         skip_serializing_if = "super::components::BehaviorComponent::passive"

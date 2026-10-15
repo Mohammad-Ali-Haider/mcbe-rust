@@ -1,0 +1,1091 @@
+{
+  "version": 1,
+  "root": {
+    "id": "table_root",
+    "kind": "panel",
+    "layout": {
+      "anchor": [
+        "center",
+        "center"
+      ],
+      "offset": [
+        0,
+        0
+      ],
+      "size": [
+        176,
+        166
+      ]
+    },
+    "children": [
+      {
+        "id": "title",
+        "kind": "label",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            8,
+            7
+          ],
+          "size": [
+            160,
+            10
+          ]
+        },
+        "text": "Crafting Table"
+      },
+      {
+        "id": "inventory_label",
+        "kind": "label",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            8,
+            74
+          ],
+          "size": [
+            160,
+            10
+          ]
+        },
+        "text": "Inventory"
+      },
+      {
+        "id": "table_0",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            30,
+            18
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "table",
+          "index": 0
+        }
+      },
+      {
+        "id": "table_1",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            48,
+            18
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "table",
+          "index": 1
+        }
+      },
+      {
+        "id": "table_2",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            66,
+            18
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "table",
+          "index": 2
+        }
+      },
+      {
+        "id": "table_3",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            30,
+            36
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "table",
+          "index": 3
+        }
+      },
+      {
+        "id": "table_4",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            48,
+            36
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "table",
+          "index": 4
+        }
+      },
+      {
+        "id": "table_5",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            66,
+            36
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "table",
+          "index": 5
+        }
+      },
+      {
+        "id": "table_6",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            30,
+            54
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "table",
+          "index": 6
+        }
+      },
+      {
+        "id": "table_7",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            48,
+            54
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "table",
+          "index": 7
+        }
+      },
+      {
+        "id": "table_8",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            66,
+            54
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "table",
+          "index": 8
+        }
+      },
+      {
+        "id": "arrow",
+        "kind": "label",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            99,
+            41
+          ],
+          "size": [
+            20,
+            10
+          ]
+        },
+        "text": "->"
+      },
+      {
+        "id": "result",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            124,
+            39
+          ],
+          "size": [
+            22,
+            22
+          ]
+        },
+        "binding": {
+          "source": "table_result"
+        }
+      },
+      {
+        "id": "player_0",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            7,
+            143
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 0
+        }
+      },
+      {
+        "id": "player_1",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            25,
+            143
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 1
+        }
+      },
+      {
+        "id": "player_2",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            43,
+            143
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 2
+        }
+      },
+      {
+        "id": "player_3",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            61,
+            143
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 3
+        }
+      },
+      {
+        "id": "player_4",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            79,
+            143
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 4
+        }
+      },
+      {
+        "id": "player_5",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            97,
+            143
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 5
+        }
+      },
+      {
+        "id": "player_6",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            115,
+            143
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 6
+        }
+      },
+      {
+        "id": "player_7",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            133,
+            143
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 7
+        }
+      },
+      {
+        "id": "player_8",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            151,
+            143
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 8
+        }
+      },
+      {
+        "id": "player_9",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            7,
+            86
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 9
+        }
+      },
+      {
+        "id": "player_10",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            25,
+            86
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 10
+        }
+      },
+      {
+        "id": "player_11",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            43,
+            86
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 11
+        }
+      },
+      {
+        "id": "player_12",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            61,
+            86
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 12
+        }
+      },
+      {
+        "id": "player_13",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            79,
+            86
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 13
+        }
+      },
+      {
+        "id": "player_14",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            97,
+            86
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 14
+        }
+      },
+      {
+        "id": "player_15",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            115,
+            86
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 15
+        }
+      },
+      {
+        "id": "player_16",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            133,
+            86
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 16
+        }
+      },
+      {
+        "id": "player_17",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            151,
+            86
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 17
+        }
+      },
+      {
+        "id": "player_18",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            7,
+            104
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 18
+        }
+      },
+      {
+        "id": "player_19",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            25,
+            104
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 19
+        }
+      },
+      {
+        "id": "player_20",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            43,
+            104
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 20
+        }
+      },
+      {
+        "id": "player_21",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            61,
+            104
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 21
+        }
+      },
+      {
+        "id": "player_22",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            79,
+            104
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 22
+        }
+      },
+      {
+        "id": "player_23",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            97,
+            104
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 23
+        }
+      },
+      {
+        "id": "player_24",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            115,
+            104
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 24
+        }
+      },
+      {
+        "id": "player_25",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            133,
+            104
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 25
+        }
+      },
+      {
+        "id": "player_26",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            151,
+            104
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 26
+        }
+      },
+      {
+        "id": "player_27",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            7,
+            122
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 27
+        }
+      },
+      {
+        "id": "player_28",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            25,
+            122
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 28
+        }
+      },
+      {
+        "id": "player_29",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            43,
+            122
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 29
+        }
+      },
+      {
+        "id": "player_30",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            61,
+            122
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 30
+        }
+      },
+      {
+        "id": "player_31",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            79,
+            122
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 31
+        }
+      },
+      {
+        "id": "player_32",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            97,
+            122
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 32
+        }
+      },
+      {
+        "id": "player_33",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            115,
+            122
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 33
+        }
+      },
+      {
+        "id": "player_34",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            133,
+            122
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 34
+        }
+      },
+      {
+        "id": "player_35",
+        "kind": "slot",
+        "layout": {
+          "anchor": [
+            "start",
+            "start"
+          ],
+          "offset": [
+            151,
+            122
+          ],
+          "size": [
+            18,
+            18
+          ]
+        },
+        "binding": {
+          "source": "player",
+          "index": 35
+        }
+      }
+    ]
+  }
+}

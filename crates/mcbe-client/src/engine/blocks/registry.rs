@@ -29,6 +29,11 @@ impl Registry {
             }
         }
         for b in &built.blocks {
+            let i = next.find(&b.id)? as usize;
+            if next.blocks[i].interaction.is_none() && b.interaction.is_some() {
+                next.blocks[i].interaction = b.interaction;
+                changed = true;
+            }
             if let Some(rule) = &b.placement {
                 let refs = rule.state_names();
                 let canonical = refs.iter().all(|name| {
@@ -185,7 +190,7 @@ mod tests {
             b.placement = None;
         }
         let mut upgraded = old.with_new_builtins().unwrap().unwrap();
-        assert_eq!(upgraded.blocks.len(), 36);
+        assert_eq!(upgraded.blocks.len(), 37);
         assert!(upgraded.with_new_builtins().unwrap().is_none());
         assert!(
             upgraded
@@ -213,6 +218,7 @@ mod tests {
         for i in 0..100 {
             r.blocks.push(Block {
                 behavior: Default::default(),
+                interaction: None,
                 state: None,
                 selection: None,
                 signal: None,

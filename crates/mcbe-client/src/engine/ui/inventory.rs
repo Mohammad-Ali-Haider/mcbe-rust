@@ -14,8 +14,10 @@ pub enum Target {
     Catalog(BlockId),
     Slot(Slot),
     Output,
+    TableOutput,
     Search,
     Button(u16),
+    Machine(usize),
 }
 pub struct Pointer {
     pub position: [f32; 2],
@@ -26,6 +28,7 @@ pub struct Pointer {
 #[derive(Default)]
 pub struct Palette {
     pub screen: String,
+    pub station: Option<[i32; 3]>,
     pub model: super::framework::screen::Model,
     pub open: bool,
     pub cursor: usize,
@@ -37,11 +40,60 @@ pub struct Palette {
     pub revision: u64,
 }
 impl Palette {
+    pub fn recover(client: &Client) -> Self {
+        let Some(s) = &client.scene.engine else {
+            return Self::default();
+        };
+        let table = s.player.table.iter().any(Option::is_some);
+        Self {
+            open: table
+                || s.player.cursor.is_some()
+                || s.player.crafting.iter().any(Option::is_some),
+            screen: if table { "crafting_table" } else { "inventory" }.into(),
+            viewport: [480., 270.],
+            pointer: [240., 135.],
+            ..Default::default()
+        }
+    }
+    pub fn open_target(&mut self, client: &mut Client) -> Result<bool> {
+        let Some(hit) = client.target()? else {
+            return Ok(false);
+        };
+        let p = [hit.position.x, hit.position.y, hit.position.z];
+        let Some(state) = &client.scene.engine else {
+            return Ok(false);
+        };
+        let Some(interaction) = state
+            .blocks
+            .get(&p)
+            .and_then(|id| state.registry.get(*id).interaction)
+        else {
+            return Ok(false);
+        };
+        self.open_screen(client, interaction.screen())?;
+        self.station = Some(p);
+        if interaction == crate::engine::blocks::components::Interaction::Furnace {
+            client.scene.engine.as_mut().unwrap().machines.ensure(p)?;
+        }
+        Ok(true)
+    }
+    pub fn crafting_result(
+        &self,
+        client: &Client,
+        table: bool,
+    ) -> Option<crate::engine_crafting::Match> {
+        let s = client.scene.engine.as_ref()?;
+        if table {
+            s.recipes.find_grid(&s.registry, &s.player.table, 3)
+        } else {
+            s.recipes.find(&s.registry, &s.player)
+        }
+    }
     pub fn observation(&self, client: &Client) -> serde_json::Value {
         let document = self.document(client, self.viewport);
         match document {
             Ok(document) => {
-                serde_json::json!({"screen":self.screen_id(),"counter":self.model.number("counter"),"viewport":self.viewport,"layout_scale":document.scale,"widgets":document.widgets.iter().map(|w|serde_json::json!({"id":w.widget.id,"rect":w.rect.0,"clip":w.clip.0,"widget":w.widget})).collect::<Vec<_>>()})
+                serde_json::json!({"screen":self.screen_id(),"counter":self.model.number("counter"),"model":self.ui_model(client).numbers,"viewport":self.viewport,"layout_scale":document.scale,"widgets":document.widgets.iter().map(|w|serde_json::json!({"id":w.widget.id,"rect":w.rect.0,"clip":w.clip.0,"widget":w.widget})).collect::<Vec<_>>()})
             }
             Err(error) => serde_json::json!({"error":error.to_string()}),
         }
@@ -71,6 +123,15 @@ impl Palette {
     }
     pub fn ui_model(&self, client: &Client) -> super::framework::screen::Model {
         let mut model = self.model.clone();
+        let state = client.scene.engine.as_ref().unwrap();
+        if let Some(f) = self.station.and_then(|p| state.machines.furnaces.get(&p)) {
+            model
+                .numbers
+                .insert("cook_progress".into(), f.cook_fraction(&state.smelting));
+            model
+                .numbers
+                .insert("burn_progress".into(), f.burn_fraction());
+        }
         model.numbers.insert(
             "catalog_count".into(),
             self.visible(&client.scene.engine.as_ref().unwrap().registry)
@@ -97,6 +158,7 @@ impl Palette {
         if !client.scene.engine.as_ref().unwrap().ui.contains(id) {
             return Err("UI screen not registered".into());
         }
+        self.station = None;
         self.screen = id.into();
         self.open = true;
         self.search = false;
@@ -123,6 +185,7 @@ impl Palette {
         if self.open {
             return self.close(client);
         }
+        self.station = None;
         self.screen = "inventory".into();
         self.open = true;
         self.cursor = 0;
@@ -146,6 +209,7 @@ impl Palette {
             return Err("Make space for the held stack and crafting inputs before closing".into());
         }
         self.open = false;
+        self.station = None;
         self.search = false;
         self.revision = self.revision.wrapping_add(1);
         Ok(())
@@ -318,6 +382,12 @@ impl Palette {
                 18.,
                 18.,
             ],
+            Slot::Table(i) => [
+                right + 30. + (i % 3) as f32 * 18.,
+                y + 18. + (i / 3) as f32 * 18.,
+                18.,
+                18.,
+            ],
             Slot::Craft(i) => [
                 right + 96. + (i % 2) as f32 * 18.,
                 y + 18. + (i / 2) as f32 * 18.,
@@ -333,7 +403,10 @@ impl Palette {
             Hit::Search => Some(Target::Search),
             Hit::Slot(Binding::Player(i)) => Some(Target::Slot(Slot::Player(i))),
             Hit::Slot(Binding::Craft(i)) => Some(Target::Slot(Slot::Craft(i))),
+            Hit::Slot(Binding::Machine(i)) => Some(Target::Machine(i)),
+            Hit::Slot(Binding::Table(i)) => Some(Target::Slot(Slot::Table(i))),
             Hit::Slot(Binding::Result) => Some(Target::Output),
+            Hit::Slot(Binding::TableResult) => Some(Target::TableOutput),
             Hit::Catalog(index) => self
                 .visible(&client.scene.engine.as_ref().unwrap().registry)
                 .get(self.cursor / self.page_size(client) * self.page_size(client) + index)
@@ -373,6 +446,22 @@ impl Palette {
             self.revision = self.revision.wrapping_add(1);
             return Ok(());
         }
+        if let Some(p) = self.station {
+            if let Some(Target::Machine(i)) = self.hover {
+                super::stations::click(client, p, i, pointer.button, pointer.shift)?;
+                self.revision = self.revision.wrapping_add(1);
+                return Ok(());
+            }
+            if pointer.shift
+                && self.screen_id() == "furnace"
+                && let Some(Target::Slot(slot)) = self.hover
+            {
+                super::stations::quick_from_player(client, p, slot)?;
+                self.revision = self.revision.wrapping_add(1);
+                return Ok(());
+            }
+        }
+        let table = self.hover == Some(Target::TableOutput);
         let state = client.scene.engine.as_mut().unwrap();
         match self.hover {
             Some(Target::Catalog(id)) => {
@@ -385,10 +474,10 @@ impl Palette {
             Some(Target::Slot(slot)) => {
                 state.player.click(slot, pointer.button, pointer.shift)?;
             }
-            Some(Target::Output) => {
+            Some(Target::Output | Target::TableOutput) => {
                 state
                     .recipes
-                    .take(&state.registry, &mut state.player, pointer.shift);
+                    .take_grid(&state.registry, &mut state.player, pointer.shift, table);
             }
             _ => {}
         }
@@ -690,6 +779,27 @@ pub fn draw(client: &Client, palette: &Palette, p: &mut [u32], w: usize, h: usiz
 mod tests {
     use super::*;
     #[test]
+    fn saved_table_inputs_recover_into_a_visible_grid_and_close_safely() {
+        let mut c = crate::engine::generate(37).unwrap();
+        c.scene.engine.as_mut().unwrap().player.table[8] =
+            Some(crate::engine_inventory::Stack { id: 1, count: 3 });
+        let mut palette = Palette::recover(&c);
+        assert!(palette.open);
+        assert_eq!(palette.screen_id(), "crafting_table");
+        assert!(palette.station.is_none());
+        assert!(
+            palette
+                .document(&c, palette.viewport)
+                .unwrap()
+                .binding(super::super::framework::widgets::Binding::Table(8))
+                .is_some()
+        );
+        let count = c.scene.engine.as_ref().unwrap().player.total();
+        palette.key(&mut c, KeyCode::Escape).unwrap();
+        assert!(!palette.open);
+        assert_eq!(c.scene.engine.as_ref().unwrap().player.total(), count);
+    }
+    #[test]
     fn selecting_new_definition_uses_owned_id() {
         let mut client = crate::engine::generate(37).unwrap();
         let mut palette = Palette::default();
@@ -706,7 +816,7 @@ mod tests {
                     .as_ref()
                     .unwrap()
                     .registry
-                    .find("blue_glass")
+                    .find("furnace")
                     .unwrap()
             )
         );

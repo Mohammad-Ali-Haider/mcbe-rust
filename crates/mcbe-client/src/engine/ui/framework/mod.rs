@@ -32,6 +32,22 @@ impl Library {
         result
             .register("inventory", Arc::new(document))
             .expect("Inventory screen");
+        let furnace: Document = serde_json::from_slice(include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../content/base/ui/furnace.json"
+        )))
+        .expect("Furnace UI");
+        result
+            .register("furnace", Arc::new(furnace))
+            .expect("Furnace screen");
+        let table: Document = serde_json::from_slice(include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../content/base/ui/crafting_table.json"
+        )))
+        .expect("Table UI");
+        result
+            .register("crafting_table", Arc::new(table))
+            .expect("Table screen");
         result
             .register("ui_lab", Arc::new(Laboratory))
             .expect("Code-built UI laboratory");
@@ -124,6 +140,35 @@ mod tests {
         screen::{Action, Effect, Screen},
         widgets::{Binding, Kind, Widget},
     };
+    #[test]
+    fn station_layouts_fit_and_hit_all_shared_bindings() {
+        let library = Library::built_in();
+        for viewport in [[480., 270.], [200., 130.]] {
+            for name in ["crafting_table", "furnace"] {
+                let document = library.resolve(name, &Model::default(), viewport).unwrap();
+                let extra: Vec<_> = if name == "furnace" {
+                    (0..3).map(Binding::Machine).collect()
+                } else {
+                    (0..9)
+                        .map(Binding::Table)
+                        .chain([Binding::TableResult])
+                        .collect()
+                };
+                for b in (0..36).map(Binding::Player).chain(extra) {
+                    let r = document.binding(b).unwrap().0;
+                    assert!(
+                        r[0] >= 0.
+                            && r[1] >= 0.
+                            && r[0] + r[2] <= viewport[0]
+                            && r[1] + r[3] <= viewport[1]
+                    );
+                    assert!(
+                        matches!(document.hit([r[0]+r[2]/2.,r[1]+r[3]/2.]),Some(Hit::Slot(actual)) if actual==b)
+                    );
+                }
+            }
+        }
+    }
     #[test]
     fn layout_and_hit_testing_share_slots_and_fit_small_viewports() {
         let library = Library::built_in();

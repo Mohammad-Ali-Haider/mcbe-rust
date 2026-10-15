@@ -6,7 +6,10 @@ use serde::{Deserialize, Serialize};
 pub enum Binding {
     Player(usize),
     Craft(usize),
+    Table(usize),
+    Machine(usize),
     Result,
+    TableResult,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -62,6 +65,12 @@ impl Widget {
             Kind::Slot {
                 binding: Binding::Craft(i),
             } if *i >= 4 => return Err("Craft slot outside grid".into()),
+            Kind::Slot {
+                binding: Binding::Machine(i),
+            } if *i >= 3 => return Err("Machine slot outside furnace".into()),
+            Kind::Slot {
+                binding: Binding::Table(i),
+            } if *i >= 9 => return Err("Table slot outside grid".into()),
             Kind::Label { text } | Kind::Button { text, .. } if text.len() > 512 => {
                 return Err("UI label exceeds512 bytes".into());
             }

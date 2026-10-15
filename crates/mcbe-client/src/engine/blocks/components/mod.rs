@@ -1,5 +1,7 @@
 //! Typed capabilities resolved once when registering a block.
 pub(crate) mod collision;
+pub(crate) mod interaction;
+pub use interaction::Interaction;
 pub(crate) mod visual;
 pub use collision::ShapeComponent;
 use serde::{Deserialize, Serialize};
@@ -13,6 +15,7 @@ pub use signal::SignalComponent;
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BlockComponents {
+    pub interaction: Option<Interaction>,
     #[serde(default)]
     pub behavior: BehaviorComponent,
     #[serde(default)]

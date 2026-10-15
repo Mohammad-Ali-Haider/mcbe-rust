@@ -536,7 +536,8 @@ impl Atlas {
             use crate::engine::ui::framework::widgets::{Binding, Kind};
             c.rect([0., 0., width, height], [0., 0., 0., 0.4]);
             let model = palette.ui_model(client);
-            let result = state.recipes.find(&state.registry, player);
+            let result = palette.crafting_result(client, false);
+            let table_result = palette.crafting_result(client, true);
             match palette.document(client, viewport) {
                 Err(error) => {
                     self.text(&mut c, 8., 40., &format!("UI: {error}"), [1., 0.4, 0.3, 1.])
@@ -633,8 +634,8 @@ impl Atlas {
                             }
                             Kind::Catalog { columns, rows } => {
                                 let visible = palette.visible(&state.registry);
-                                let base = palette.cursor / crate::engine_ui::PAGE
-                                    * crate::engine_ui::PAGE;
+                                let page = columns * rows;
+                                let base = palette.cursor / page * page;
                                 let cell_width = r[2] / *columns as f32;
                                 let cell_height = r[3] / *rows as f32;
                                 for i in 0..columns * rows {
@@ -682,6 +683,21 @@ impl Atlas {
                                     Binding::Craft(i) => (
                                         player.get(Slot::Craft(*i)).ok().flatten(),
                                         Target::Slot(Slot::Craft(*i)),
+                                    ),
+                                    Binding::Machine(i) => (
+                                        palette
+                                            .station
+                                            .and_then(|p| state.machines.furnaces.get(&p))
+                                            .and_then(|f| f.slots.get(*i).copied().flatten()),
+                                        Target::Machine(*i),
+                                    ),
+                                    Binding::Table(i) => (
+                                        player.get(Slot::Table(*i)).ok().flatten(),
+                                        Target::Slot(Slot::Table(*i)),
+                                    ),
+                                    Binding::TableResult => (
+                                        table_result.as_ref().map(|m| m.stack),
+                                        Target::TableOutput,
                                     ),
                                     Binding::Result => {
                                         (result.as_ref().map(|m| m.stack), Target::Output)
@@ -770,6 +786,12 @@ impl Atlas {
                 Some(Target::Catalog(id)) => Some(id),
                 Some(Target::Slot(slot)) => player.get(slot).ok().flatten().map(|s| s.id),
                 Some(Target::Output) => result.map(|m| m.stack.id),
+                Some(Target::TableOutput) => table_result.map(|m| m.stack.id),
+                Some(Target::Machine(i)) => palette
+                    .station
+                    .and_then(|p| state.machines.furnaces.get(&p))
+                    .and_then(|f| f.slots.get(i).copied().flatten())
+                    .map(|s| s.id),
                 _ => None,
             };
             if player.cursor.is_none()
