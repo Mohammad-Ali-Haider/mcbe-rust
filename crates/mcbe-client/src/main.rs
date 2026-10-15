@@ -472,7 +472,7 @@ impl App {
             self.request_travel(engine_loading::Destination::Exhibit(self.travel_index))?;
             return Ok(true);
         }
-        if self.palette.open {
+        if self.palette.open && code != KeyCode::F6 {
             self.palette.viewport = self.inventory_pointer().1;
             self.palette.key(&mut self.client, code)?;
             if !self.palette.open {
@@ -484,6 +484,15 @@ impl App {
         match code {
             KeyCode::KeyI | KeyCode::KeyE => {
                 self.palette.toggle(&mut self.client)?;
+                let (position, viewport) = self.inventory_pointer();
+                self.palette.move_pointer(&self.client, position, viewport);
+                self.keys.clear();
+                self.capture(false);
+                self.accumulator = 0.;
+                Ok(true)
+            }
+            KeyCode::F12 => {
+                self.palette.open_screen(&self.client, "ui_lab")?;
                 let (position, viewport) = self.inventory_pointer();
                 self.palette.move_pointer(&self.client, position, viewport);
                 self.keys.clear();
@@ -527,7 +536,7 @@ impl App {
                     &mut self.client,
                     &crate::engine::content::loader::entry(&self.root),
                 )?;
-                self.notice = Some("Reloaded block definitions and textures".into());
+                self.notice = Some("Reloaded content, UI layouts and textures".into());
                 Ok(true)
             }
             _ => Ok(false),
@@ -2749,14 +2758,14 @@ fn run_window(mut app: App, out: Option<PathBuf>) -> Result<()> {
             std::fs::write(
                 out.join("gpu.json"),
                 serde_json::to_vec_pretty(
-                    &serde_json::json!({"complete":app.close_completed||app.frames>=app.frame_limit,"statistics":gpu.stats,"menu":format!("{:?}",app.menu.page),"settings":app.settings,"settings_trace":app.settings_trace,"lod_motion_trace":app.lod_motion_trace,"player_position":app.client.actor.position,"player_preview":gpu.preview_observation(),"preview_case":app.preview_test,"preview_trace":app.preview_trace,"saving":app.saving_observation(),"loading":app.loading_observation(),"timing":timing,"wireframe":app.wireframe,"palette_open":app.palette.open,"window_transitions":app.window_transitions,"live_edit_test":app.edit_test,"pending_edits":app.client.pending_edits(),"inventory_save_mesh_check":app.inventory_mesh_check,"mesh_toggle_trace":app.mesh_toggle_trace,"streaming":engine_stream::observation(&app.client),"stream_trace":app.stream_trace,"profile_seconds":app.profile_seconds,"profile_elapsed_seconds":app.profile_started.map(|t|t.elapsed().as_secs_f32()),"target":app.client.target()?.map(|h|[h.position.x,h.position.y,h.position.z]),"uncapped_event_loop":true,"back_face_culling":true,"frustum_culling":true,"internal_faces_removed":true,"depth_testing":true,"dirty_chunk_rebuilds":true}),
+                    &serde_json::json!({"complete":app.close_completed||app.frames>=app.frame_limit,"statistics":gpu.stats,"menu":format!("{:?}",app.menu.page),"settings":app.settings,"settings_trace":app.settings_trace,"lod_motion_trace":app.lod_motion_trace,"player_position":app.client.actor.position,"player_preview":gpu.preview_observation(),"preview_case":app.preview_test,"preview_trace":app.preview_trace,"saving":app.saving_observation(),"loading":app.loading_observation(),"timing":timing,"wireframe":app.wireframe,"palette_open":app.palette.open,"ui":app.palette.observation(&app.client),"window_transitions":app.window_transitions,"live_edit_test":app.edit_test,"pending_edits":app.client.pending_edits(),"inventory_save_mesh_check":app.inventory_mesh_check,"mesh_toggle_trace":app.mesh_toggle_trace,"streaming":engine_stream::observation(&app.client),"stream_trace":app.stream_trace,"profile_seconds":app.profile_seconds,"profile_elapsed_seconds":app.profile_started.map(|t|t.elapsed().as_secs_f32()),"target":app.client.target()?.map(|h|[h.position.x,h.position.y,h.position.z]),"uncapped_event_loop":true,"back_face_culling":true,"frustum_culling":true,"internal_faces_removed":true,"depth_testing":true,"dirty_chunk_rebuilds":true}),
                 )?,
             )?;
         }
         std::fs::write(
             out.join("window.json"),
             serde_json::to_vec_pretty(
-                &serde_json::json!({"complete":app.close_completed||app.frames>=app.frame_limit,"presented_frames":app.frames,"inventory_presented_frames":app.inventory_frames,"inventory_open":app.inventory_open,"palette_open":app.palette.open,"maximized":app.window.as_ref().is_some_and(|w|w.is_maximized()),"fullscreen":app.window.as_ref().is_some_and(|w|w.fullscreen().is_some()),"world_inventory":app.world_inventory,"selected_containers":app.inventory.as_ref().map(|p|p.positions()),"inventory_state":app.inventory.as_ref().map(|p|p.containers.observation()),"backend":if app.gpu.is_some(){"wgpu Direct3D 12 native-resolution meshes + winit events"}else{"Windows GDI framebuffer + winit events"},"width":app.gpu.as_ref().map_or(render::WIDTH as u32,|g|g.stats.width),"height":app.gpu.as_ref().map_or(render::HEIGHT as u32,|g|g.stats.height)}),
+                &serde_json::json!({"complete":app.close_completed||app.frames>=app.frame_limit,"presented_frames":app.frames,"inventory_presented_frames":app.inventory_frames,"inventory_open":app.inventory_open,"palette_open":app.palette.open,"ui":app.palette.observation(&app.client),"maximized":app.window.as_ref().is_some_and(|w|w.is_maximized()),"fullscreen":app.window.as_ref().is_some_and(|w|w.fullscreen().is_some()),"world_inventory":app.world_inventory,"selected_containers":app.inventory.as_ref().map(|p|p.positions()),"inventory_state":app.inventory.as_ref().map(|p|p.containers.observation()),"backend":if app.gpu.is_some(){"wgpu Direct3D 12 native-resolution meshes + winit events"}else{"Windows GDI framebuffer + winit events"},"width":app.gpu.as_ref().map_or(render::WIDTH as u32,|g|g.stats.width),"height":app.gpu.as_ref().map_or(render::HEIGHT as u32,|g|g.stats.height)}),
             )?,
         )?;
     }

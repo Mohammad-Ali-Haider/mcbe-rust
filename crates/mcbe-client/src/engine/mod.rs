@@ -33,6 +33,7 @@ pub const BOUNDS: Bounds = Bounds {
 pub const SPAWN: Vec3 = Vec3::new(0.5, 4., -9.5);
 #[derive(Clone)]
 pub struct WorldState {
+    pub ui: std::sync::Arc<ui::framework::Library>,
     pub simulation: blocks::systems::simulation::Simulation,
     pub geometry: std::sync::Arc<crate::engine_geometry::Library>,
     pub instance: u64,
@@ -61,6 +62,7 @@ impl WorldState {
         let player = crate::engine_inventory::Inventory::starter(registry.blocks.len(), selected);
         let recipes = crate::engine_crafting::Recipes::built_in().available(&registry);
         Self {
+            ui: std::sync::Arc::new(ui::framework::Library::built_in()),
             simulation: blocks::systems::simulation::Simulation::new(&registry),
             geometry: std::sync::Arc::new(
                 crate::engine_geometry::Library::compile(&registry)
@@ -923,7 +925,9 @@ pub fn reload_definitions(client: &mut Client, path: &Path) -> Result<()> {
         .or(pack_home)
         .unwrap_or(path.parent().unwrap().parent().unwrap_or(Path::new(".")));
     let owned = crate::engine_materials::load(&registry, home)?;
+    let ui = std::sync::Arc::new(ui::framework::Library::read_home(home)?);
     apply_registry(client, registry)?;
+    client.scene.engine.as_mut().unwrap().ui = ui;
     client.owned_materials = Some(owned);
     client.scene.engine.as_mut().unwrap().recipes = recipes;
     client.engine_assets = assets;
@@ -960,7 +964,7 @@ pub fn launch(args: &[String]) -> Result<()> {
             "--engine-naive" => {},
             "--engine-stream" | "--engine-finite" | "--engine-sync-mesh" => {},
             "--engine-continue" => resume = true,
-            "--engine-render-distance" | "--engine-home" | "--engine-load" | "--engine-study" | "--engine-distance-motion-smoke" | "--engine-distance-smoke" | "--engine-distance-settings-smoke" | "--engine-distance-shrink-smoke" | "--engine-features-smoke" | "--engine-settings-smoke" | "--engine-preview-smoke" | "--engine-preview-case" | "--engine-startup-gpu-close-smoke" | "--engine-startup-retry-smoke" | "--engine-startup-smoke" | "--engine-startup-close-smoke" | "--engine-startup-error-smoke" | "--engine-v1-study" | "--engine-v1-smoke" | "--engine-v1-wire-smoke" | "--engine-v1-fly-smoke" | "--engine-v1-noclip-smoke" | "--engine-v1-sneak-smoke" | "--engine-loading-study" | "--engine-loading-smoke" | "--engine-loading-close-smoke" | "--engine-save-study" | "--engine-save-smoke" | "--engine-save-close-smoke" | "--engine-async-smoke" | "--engine-stream-profile" | "--engine-stream-study" | "--engine-stream-smoke" | "--engine-stream-wire-smoke" | "--engine-smoke" | "--engine-palette-smoke" | "--engine-wire-smoke" | "--engine-window-smoke" | "--engine-edit-smoke" | "--engine-benchmark" | "--engine-profile" | "--engine-render-smoke" | "--engine-mesh-smoke" | "--engine-camera" | "--engine-inventory-study" | "--engine-inventory-smoke" | "--engine-seed" | "--engine-blocks" | "--engine-pack-root" => {
+            "--engine-ui-smoke" | "--engine-ui-lab-smoke" | "--engine-render-distance" | "--engine-home" | "--engine-load" | "--engine-study" | "--engine-distance-motion-smoke" | "--engine-distance-smoke" | "--engine-distance-settings-smoke" | "--engine-distance-shrink-smoke" | "--engine-features-smoke" | "--engine-settings-smoke" | "--engine-preview-smoke" | "--engine-preview-case" | "--engine-startup-gpu-close-smoke" | "--engine-startup-retry-smoke" | "--engine-startup-smoke" | "--engine-startup-close-smoke" | "--engine-startup-error-smoke" | "--engine-v1-study" | "--engine-v1-smoke" | "--engine-v1-wire-smoke" | "--engine-v1-fly-smoke" | "--engine-v1-noclip-smoke" | "--engine-v1-sneak-smoke" | "--engine-loading-study" | "--engine-loading-smoke" | "--engine-loading-close-smoke" | "--engine-save-study" | "--engine-save-smoke" | "--engine-save-close-smoke" | "--engine-async-smoke" | "--engine-stream-profile" | "--engine-stream-study" | "--engine-stream-smoke" | "--engine-stream-wire-smoke" | "--engine-smoke" | "--engine-palette-smoke" | "--engine-wire-smoke" | "--engine-window-smoke" | "--engine-edit-smoke" | "--engine-benchmark" | "--engine-profile" | "--engine-render-smoke" | "--engine-mesh-smoke" | "--engine-camera" | "--engine-inventory-study" | "--engine-inventory-smoke" | "--engine-seed" | "--engine-blocks" | "--engine-pack-root" => {
                 let flag = &args[i]; i+=1; let value = args.get(i).ok_or("Engine option requires a value")?;
                 match flag.as_str() {
                     "--engine-render-distance" => {let distance:i32=value.parse()?;if !(2..=crate::engine_stream::MAX_RADIUS).contains(&distance) {return Err("Render distance must be 2..255 chunks".into());}render_distance=Some(distance);},
@@ -1054,7 +1058,16 @@ pub fn launch(args: &[String]) -> Result<()> {
         app.frame_limit = 4;
     }
     if let Some(out) = &out {
-        if args.iter().any(|a| a.starts_with("--engine-distance-")) {
+        if args
+            .iter()
+            .any(|a| matches!(a.as_str(), "--engine-ui-smoke" | "--engine-ui-lab-smoke"))
+        {
+            crate::verification::ui::prepare(
+                &mut app,
+                out,
+                args.iter().any(|a| a == "--engine-ui-lab-smoke"),
+            )?;
+        } else if args.iter().any(|a| a.starts_with("--engine-distance-")) {
             app.lod_motion_test = args.iter().any(|a| a == "--engine-distance-motion-smoke");
             crate::engine_features_study::distance(
                 &mut app,

@@ -15,6 +15,7 @@ pub enum Target {
     Slot(Slot),
     Output,
     Search,
+    Button(u16),
 }
 pub struct Pointer {
     pub position: [f32; 2],
@@ -24,6 +25,8 @@ pub struct Pointer {
 }
 #[derive(Default)]
 pub struct Palette {
+    pub screen: String,
+    pub model: super::framework::screen::Model,
     pub open: bool,
     pub cursor: usize,
     pub hover: Option<Target>,
@@ -34,6 +37,74 @@ pub struct Palette {
     pub revision: u64,
 }
 impl Palette {
+    pub fn observation(&self, client: &Client) -> serde_json::Value {
+        let document = self.document(client, self.viewport);
+        match document {
+            Ok(document) => {
+                serde_json::json!({"screen":self.screen_id(),"counter":self.model.number("counter"),"viewport":self.viewport,"layout_scale":document.scale,"widgets":document.widgets.iter().map(|w|serde_json::json!({"id":w.widget.id,"rect":w.rect.0,"clip":w.clip.0,"widget":w.widget})).collect::<Vec<_>>()})
+            }
+            Err(error) => serde_json::json!({"error":error.to_string()}),
+        }
+    }
+    pub fn screen_id(&self) -> &str {
+        if self.screen.is_empty() {
+            "inventory"
+        } else {
+            &self.screen
+        }
+    }
+    pub fn catalog_dimensions(&self, client: &Client) -> [usize; 2] {
+        client
+            .scene
+            .engine
+            .as_ref()
+            .unwrap()
+            .ui
+            .resolve(self.screen_id(), &self.model, self.viewport)
+            .ok()
+            .and_then(|d| d.catalog().map(|(_, columns, rows)| [columns, rows]))
+            .unwrap_or([COLS, ROWS])
+    }
+    pub fn page_size(&self, client: &Client) -> usize {
+        let [c, r] = self.catalog_dimensions(client);
+        c * r
+    }
+    pub fn ui_model(&self, client: &Client) -> super::framework::screen::Model {
+        let mut model = self.model.clone();
+        model.numbers.insert(
+            "catalog_count".into(),
+            self.visible(&client.scene.engine.as_ref().unwrap().registry)
+                .len() as f64,
+        );
+        model.numbers.insert(
+            "page".into(),
+            (self.cursor / self.page_size(client) + 1) as f64,
+        );
+        model
+    }
+    pub fn document(
+        &self,
+        client: &Client,
+        viewport: [f32; 2],
+    ) -> Result<super::framework::layout::ResolvedScreen> {
+        client.scene.engine.as_ref().unwrap().ui.resolve(
+            self.screen_id(),
+            &self.ui_model(client),
+            viewport,
+        )
+    }
+    pub fn open_screen(&mut self, client: &Client, id: &str) -> Result<()> {
+        if !client.scene.engine.as_ref().unwrap().ui.contains(id) {
+            return Err("UI screen not registered".into());
+        }
+        self.screen = id.into();
+        self.open = true;
+        self.search = false;
+        self.hover = None;
+        self.revision = self.revision.wrapping_add(1);
+        Ok(())
+    }
+
     pub fn visible(&self, r: &Registry) -> Vec<usize> {
         let term = self.filter.to_ascii_lowercase();
         r.blocks
@@ -52,6 +123,7 @@ impl Palette {
         if self.open {
             return self.close(client);
         }
+        self.screen = "inventory".into();
         self.open = true;
         self.cursor = 0;
         self.hover = None;
@@ -95,6 +167,46 @@ impl Palette {
         {
             return self.close(client);
         }
+        if self.screen_id() != "inventory" {
+            let document = self.document(client, self.viewport)?;
+            let direction = match key {
+                KeyCode::ArrowLeft => Some([-1., 0.]),
+                KeyCode::ArrowRight => Some([1., 0.]),
+                KeyCode::ArrowUp => Some([0., -1.]),
+                KeyCode::ArrowDown => Some([0., 1.]),
+                _ => None,
+            };
+            let points = document.focus_targets();
+            let destination = if let Some(direction) = direction {
+                document
+                    .neighbor(self.pointer, direction)
+                    .or_else(|| points.first().copied())
+            } else if key == KeyCode::Tab {
+                let index = points
+                    .iter()
+                    .position(|p| *p == self.pointer)
+                    .map_or(0, |i| (i + 1) % points.len().max(1));
+                points.get(index).copied()
+            } else {
+                None
+            };
+            if let Some(position) = destination {
+                self.move_pointer(client, position, self.viewport);
+            }
+            if matches!(key, KeyCode::Enter | KeyCode::Space) {
+                self.click(
+                    client,
+                    Pointer {
+                        position: self.pointer,
+                        viewport: self.viewport,
+                        button: Button::Left,
+                        shift: false,
+                    },
+                )?;
+            }
+            self.revision = self.revision.wrapping_add(1);
+            return Ok(());
+        }
         if key == KeyCode::Tab {
             self.search = !self.search;
             self.revision = self.revision.wrapping_add(1);
@@ -114,6 +226,8 @@ impl Palette {
         }
         let visible = self.visible(&client.scene.engine.as_ref().unwrap().registry);
         let count = visible.len();
+        let columns = self.catalog_dimensions(client)[0];
+        let page = self.page_size(client);
         let digit = match key {
             KeyCode::Digit1 => Some(0),
             KeyCode::Digit2 => Some(1),
@@ -153,10 +267,10 @@ impl Palette {
         match key {
             KeyCode::ArrowLeft => self.cursor = self.cursor.saturating_sub(1),
             KeyCode::ArrowRight => self.cursor = (self.cursor + 1).min(count - 1),
-            KeyCode::ArrowUp => self.cursor = self.cursor.saturating_sub(COLS),
-            KeyCode::ArrowDown => self.cursor = (self.cursor + COLS).min(count - 1),
-            KeyCode::PageUp => self.cursor = self.cursor.saturating_sub(PAGE),
-            KeyCode::PageDown => self.cursor = (self.cursor + PAGE).min(count - 1),
+            KeyCode::ArrowUp => self.cursor = self.cursor.saturating_sub(columns),
+            KeyCode::ArrowDown => self.cursor = (self.cursor + columns).min(count - 1),
+            KeyCode::PageUp => self.cursor = self.cursor.saturating_sub(page),
+            KeyCode::PageDown => self.cursor = (self.cursor + page).min(count - 1),
             KeyCode::Home => self.cursor = 0,
             KeyCode::End => self.cursor = count - 1,
             KeyCode::Enter => {
@@ -169,12 +283,14 @@ impl Palette {
             _ => {}
         }
         self.hover = Some(Target::Catalog(visible[self.cursor] as BlockId));
-        let [x, y] = Self::origin(self.viewport);
-        let cell = self.cursor % PAGE;
-        self.pointer = [
-            x + 10. + (cell % COLS) as f32 * 18.,
-            y + 32. + (cell / COLS) as f32 * 18.,
-        ];
+        if let Some((grid, columns, rows)) = self.document(client, self.viewport)?.catalog() {
+            let r = grid.rect.0;
+            let cell = self.cursor % page;
+            self.pointer = [
+                r[0] + (cell % columns) as f32 * r[2] / columns as f32 + r[2] / columns as f32 / 2.,
+                r[1] + (cell / columns) as f32 * r[3] / rows as f32 + r[3] / rows as f32 / 2.,
+            ];
+        }
         self.revision = self.revision.wrapping_add(1);
         Ok(())
     }
@@ -183,8 +299,8 @@ impl Palette {
             .visible(&client.scene.engine.as_ref().unwrap().registry)
             .len();
         if count > 0 {
-            self.cursor =
-                (self.cursor as i32 + delta * COLS as i32).clamp(0, count as i32 - 1) as usize;
+            self.cursor = (self.cursor as i32 + delta * self.catalog_dimensions(client)[0] as i32)
+                .clamp(0, count as i32 - 1) as usize;
             self.revision = self.revision.wrapping_add(1);
         }
     }
@@ -211,44 +327,19 @@ impl Palette {
         }
     }
     pub fn hit(&self, client: &Client, position: [f32; 2], viewport: [f32; 2]) -> Option<Target> {
-        let contains = |r: [f32; 4]| {
-            position[0] >= r[0]
-                && position[0] < r[0] + r[2]
-                && position[1] >= r[1]
-                && position[1] < r[1] + r[3]
-        };
-        let [left, top] = Self::origin(viewport);
-        if contains([left + 7., top + 8., 132., 14.]) {
-            return Some(Target::Search);
+        use super::framework::{layout::Hit, widgets::Binding};
+        let document = self.document(client, viewport).ok()?;
+        match document.hit(position)? {
+            Hit::Search => Some(Target::Search),
+            Hit::Slot(Binding::Player(i)) => Some(Target::Slot(Slot::Player(i))),
+            Hit::Slot(Binding::Craft(i)) => Some(Target::Slot(Slot::Craft(i))),
+            Hit::Slot(Binding::Result) => Some(Target::Output),
+            Hit::Catalog(index) => self
+                .visible(&client.scene.engine.as_ref().unwrap().registry)
+                .get(self.cursor / self.page_size(client) * self.page_size(client) + index)
+                .map(|i| Target::Catalog(*i as BlockId)),
+            Hit::Button(index) => Some(Target::Button(index as u16)),
         }
-        for i in 0..36 {
-            if contains(Self::slot_rect(Slot::Player(i), viewport)) {
-                return Some(Target::Slot(Slot::Player(i)));
-            }
-        }
-        for i in 0..4 {
-            if contains(Self::slot_rect(Slot::Craft(i), viewport)) {
-                return Some(Target::Slot(Slot::Craft(i)));
-            }
-        }
-        if contains([left + 302., top + 26., 18., 18.]) {
-            return Some(Target::Output);
-        }
-        let visible = self.visible(&client.scene.engine.as_ref().unwrap().registry);
-        for i in 0..PAGE {
-            let id = self.cursor / PAGE * PAGE + i;
-            if id < visible.len()
-                && contains([
-                    left + 7. + (i % COLS) as f32 * 18.,
-                    top + 28. + (i / COLS) as f32 * 18.,
-                    18.,
-                    18.,
-                ])
-            {
-                return Some(Target::Catalog(visible[id] as BlockId));
-            }
-        }
-        None
     }
     pub fn move_pointer(&mut self, client: &Client, position: [f32; 2], viewport: [f32; 2]) {
         let target = self.hit(client, position, viewport);
@@ -262,6 +353,26 @@ impl Palette {
     pub fn click(&mut self, client: &mut Client, pointer: Pointer) -> Result<()> {
         self.move_pointer(client, pointer.position, pointer.viewport);
         self.search = self.hover == Some(Target::Search);
+        if let Some(Target::Button(index)) = self.hover {
+            let document = self.document(client, pointer.viewport)?;
+            if let super::framework::widgets::Kind::Button { action, .. } =
+                &document.widgets[index as usize].widget.kind
+            {
+                let screen_id = self.screen_id().to_owned();
+                let effect = client.scene.engine.as_ref().unwrap().ui.action(
+                    &screen_id,
+                    action,
+                    &mut self.model,
+                )?;
+                match effect {
+                    super::framework::screen::Effect::None => {}
+                    super::framework::screen::Effect::Close => self.close(client)?,
+                    super::framework::screen::Effect::Open(id) => self.open_screen(client, &id)?,
+                }
+            }
+            self.revision = self.revision.wrapping_add(1);
+            return Ok(());
+        }
         let state = client.scene.engine.as_mut().unwrap();
         match self.hover {
             Some(Target::Catalog(id)) => {

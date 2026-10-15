@@ -61,7 +61,7 @@ cargo build --release --locked
 
 Start with [Architecture and source map](docs/ARCHITECTURE.md), then read
 [Edit, run and commit](docs/DEVELOPMENT.md), [Blocks](docs/BLOCKS.md),
-[Controls](docs/CONTROLS.md) and [Milestone history](docs/HISTORY.md).
+[Controls](docs/CONTROLS.md), [UI authoring](docs/UI.md) and [Milestone history](docs/HISTORY.md).
 
 Walking, sprinting, sneaking, flight/noclip, inventory/crafting, JSON models,
 slab/stair states, glass, unified component packs, optional signal behaviors,

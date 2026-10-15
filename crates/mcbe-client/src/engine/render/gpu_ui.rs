@@ -30,6 +30,7 @@ impl Sprite {
     }
 }
 pub struct Atlas {
+    custom_ui: std::collections::BTreeMap<String, Sprite>,
     inventory: std::collections::BTreeMap<&'static str, Sprite>,
     pub rgba: Vec<u8>,
     pub size: u32,
@@ -67,6 +68,7 @@ pub struct Composition {
     pub preview_at: Option<u32>,
 }
 struct Canvas {
+    clip: Option<crate::engine::ui::framework::layout::Rect>,
     preview_at: Option<u32>,
     vertices: Vec<Vertex>,
     width: f32,
@@ -76,13 +78,25 @@ struct Canvas {
 impl Canvas {
     fn quad(&mut self, s: Sprite, r: [f32; 4], color: [f32; 4]) {
         let [x, y, w, h] = r;
-        let pos = [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
-        let uv = [
-            [s.x as f32, s.y as f32],
-            [(s.x + s.w) as f32, s.y as f32],
-            [(s.x + s.w) as f32, (s.y + s.h) as f32],
-            [s.x as f32, (s.y + s.h) as f32],
-        ];
+        if w <= 0. || h <= 0. {
+            return;
+        }
+        let clipped = self
+            .clip
+            .map_or(crate::engine::ui::framework::layout::Rect(r), |clip| {
+                clip.intersect(crate::engine::ui::framework::layout::Rect(r))
+            })
+            .0;
+        if clipped[2] <= 0. || clipped[3] <= 0. {
+            return;
+        }
+        let [cx, cy, cw, ch] = clipped;
+        let pos = [[cx, cy], [cx + cw, cy], [cx + cw, cy + ch], [cx, cy + ch]];
+        let u0 = s.x as f32 + (cx - x) / w * s.w as f32;
+        let u1 = s.x as f32 + (cx + cw - x) / w * s.w as f32;
+        let v0 = s.y as f32 + (cy - y) / h * s.h as f32;
+        let v1 = s.y as f32 + (cy + ch - y) / h * s.h as f32;
+        let uv = [[u0, v0], [u1, v0], [u1, v1], [u0, v1]];
         for i in [0usize, 1, 2, 0, 2, 3] {
             self.vertices.push(Vertex {
                 position: [
@@ -126,6 +140,7 @@ impl Atlas {
     }
     pub fn build(client: &Client) -> Result<Self> {
         let mut a = Self {
+            custom_ui: std::collections::BTreeMap::new(),
             inventory: std::collections::BTreeMap::new(),
             rgba: vec![0; 1024 * 1024 * 4],
             size: 1024,
@@ -208,9 +223,24 @@ impl Atlas {
             })?;
             a.icons.push(s);
         }
+        for (key, texture) in &client.scene.engine.as_ref().unwrap().ui.textures {
+            let sprite = a.add(texture)?;
+            a.custom_ui.insert(key.clone(), sprite);
+        }
         Ok(a)
     }
     fn text(&self, c: &mut Canvas, x: f32, y: f32, message: &str, color: [f32; 4]) {
+        self.text_scaled(c, x, y, message, color, 1.);
+    }
+    fn text_scaled(
+        &self,
+        c: &mut Canvas,
+        x: f32,
+        y: f32,
+        message: &str,
+        color: [f32; 4],
+        scale: f32,
+    ) {
         let Some(font) = self.font else {
             return;
         };
@@ -219,10 +249,14 @@ impl Atlas {
             let n = if ch.is_ascii() { ch as u32 } else { 63 };
             let sprite = font.crop(n % 16 * 8, n / 16 * 8, 8, 8);
             if color[0] > 0.7 {
-                c.quad(sprite, [at + 1., y + 1., 8., 8.], [0., 0., 0., 0.6]);
+                c.quad(
+                    sprite,
+                    [at + scale, y + scale, 8. * scale, 8. * scale],
+                    [0., 0., 0., 0.6],
+                );
             }
-            c.quad(sprite, [at, y, 8., 8.], color);
-            at += self.advances[n as usize] as f32;
+            c.quad(sprite, [at, y, 8. * scale, 8. * scale], color);
+            at += self.advances[n as usize] as f32 * scale;
         }
     }
     fn label_width(&self, text: &str) -> f32 {
@@ -230,7 +264,7 @@ impl Atlas {
             .map(|c| self.advances[if c.is_ascii() { c as usize } else { 63 }])
             .sum::<u32>() as f32
     }
-    fn panel(&self, c: &mut Canvas, r: [f32; 4]) {
+    fn panel(&self, c: &mut Canvas, r: [f32; 4], tint: [f32; 4]) {
         let [x, y, w, h] = r;
         c.rect([x - 1., y - 1., w + 2., h + 2.], [0.1, 0.1, 0.1, 1.]);
         if let Some(s) = self.panel {
@@ -249,7 +283,7 @@ impl Atlas {
                     c.quad(
                         s.crop(sx, sy, widths[col].max(1), heights[row].max(1)),
                         [xx, yy, dw[col], dh[row]],
-                        [1.; 4],
+                        tint,
                     );
                     xx += dw[col];
                     sx += widths[col];
@@ -276,40 +310,6 @@ impl Atlas {
             );
         }
     }
-    fn slot(
-        &self,
-        c: &mut Canvas,
-        client: &Client,
-        palette: &Palette,
-        slot: crate::engine_inventory::Slot,
-        viewport: [f32; 2],
-    ) {
-        let r = Palette::slot_rect(slot, viewport);
-        c.rect(
-            r,
-            if palette.hover == Some(crate::engine_ui::Target::Slot(slot)) {
-                [1.; 4]
-            } else {
-                [0.45, 0.45, 0.45, 1.]
-            },
-        );
-        if let Some(cell) = self.cell {
-            c.quad(cell, r, [1.; 4]);
-        }
-        if let Ok(Some(stack)) = client.scene.engine.as_ref().unwrap().player.get(slot) {
-            self.stack(c, stack, [r[0] + 1., r[1] + 1., 16., 16.]);
-        }
-        if palette.hover == Some(crate::engine_ui::Target::Slot(slot)) {
-            c.rect(r, [1., 1., 1., 0.25]);
-        }
-    }
-    fn paper_doll(&self, c: &mut Canvas, x: f32, y: f32) {
-        c.rect([x + 26., y + 8., 52., 70.], [0., 0., 0., 1.]);
-        if let Some(border) = self.inventory.get("preview_border") {
-            c.quad(*border, [x + 25., y + 7., 54., 72.], [1.; 4]);
-        }
-        c.preview_at = Some(c.vertices.len() as u32);
-    }
     pub fn preview(
         &self,
         client: &Client,
@@ -321,10 +321,9 @@ impl Atlas {
         }
         let assets = client.engine_assets.as_ref()?;
         let sprite = self.inventory.get("skin")?;
-        let [left, top] = Palette::origin(viewport);
-        let right = left + 150.;
+        let rectangle = palette.document(client, viewport).ok()?.preview()?.0;
         Some(assets.preview.mesh(
-            [right + 26., top + 8., 52., 70.],
+            rectangle,
             palette.pointer,
             viewport,
             [
@@ -346,6 +345,7 @@ impl Atlas {
         let height = ctx.height as f32 / ctx.scale;
         let viewport = [width, height];
         let mut c = Canvas {
+            clip: None,
             preview_at: None,
             vertices: Vec::new(),
             width,
@@ -533,122 +533,239 @@ impl Atlas {
             self.text(&mut c, 6., height - 49., notice, [1.; 4]);
         }
         if palette.open {
+            use crate::engine::ui::framework::widgets::{Binding, Kind};
             c.rect([0., 0., width, height], [0., 0., 0., 0.4]);
-            let [left, top] = Palette::origin(viewport);
-            let right = left + 150.;
-            self.panel(&mut c, [left, top, 146., 166.]);
-            self.panel(&mut c, [right, top, 176., 166.]);
-            if let Some(fold) = self.inventory.get("fold") {
-                c.quad(*fold, [left + 142., top + 3., 12., 160.], [1.; 4]);
-            }
-            c.rect(
-                [left + 6., top + 7., 134., 16.],
-                if palette.search {
-                    [1.; 4]
-                } else {
-                    [0.35, 0.35, 0.35, 1.]
-                },
-            );
-            c.rect([left + 7., top + 8., 132., 14.], [0.15, 0.15, 0.15, 1.]);
-            let search = if palette.filter.is_empty() {
-                "Search...".to_string()
-            } else {
-                palette
-                    .filter
-                    .chars()
-                    .rev()
-                    .take(20)
-                    .collect::<String>()
-                    .chars()
-                    .rev()
-                    .collect()
-            };
-            self.text(&mut c, left + 10., top + 11., &search, [0.9, 0.9, 0.9, 1.]);
-            let visible = palette.visible(&state.registry);
-            let base = palette.cursor / crate::engine_ui::PAGE * crate::engine_ui::PAGE;
-            for i in 0..crate::engine_ui::PAGE {
-                let xx = left + 7. + (i % crate::engine_ui::COLS) as f32 * 18.;
-                let yy = top + 28. + (i / crate::engine_ui::COLS) as f32 * 18.;
-                let r = [xx, yy, 18., 18.];
-                if let Some(cell) = self.cell {
-                    c.quad(cell, r, [1.; 4]);
-                } else {
-                    c.rect(r, [0.45, 0.45, 0.45, 1.]);
-                }
-                if let Some(id) = visible.get(base + i) {
-                    if let Some(icon) = self.icons.get(*id) {
-                        c.quad(*icon, [xx + 1., yy + 1., 16., 16.], [1.; 4]);
-                    }
-                    if palette.hover == Some(Target::Catalog(*id as u16)) {
-                        c.rect(r, [1., 1., 1., 0.3]);
-                    }
-                }
-            }
-            self.text(
-                &mut c,
-                left + 7.,
-                top + 143.,
-                &format!(
-                    "{} blocks / page {}",
-                    visible.len(),
-                    palette.cursor / crate::engine_ui::PAGE + 1
-                ),
-                [0.25, 0.25, 0.25, 1.],
-            );
-            self.text(
-                &mut c,
-                left + 7.,
-                top + 154.,
-                "Shift-click to collect",
-                [0.25, 0.25, 0.25, 1.],
-            );
-            self.paper_doll(&mut c, right, top);
-            for (i, key) in ["helmet", "chestplate", "leggings", "boots"]
-                .iter()
-                .enumerate()
-            {
-                let r = [right + 7., top + 7. + i as f32 * 18., 18., 18.];
-                if let Some(cell) = self.cell {
-                    c.quad(cell, r, [1.; 4]);
-                }
-                if let Some(s) = self.inventory.get(key) {
-                    c.quad(*s, [r[0] + 1., r[1] + 1., 16., 16.], [1.; 4]);
-                }
-            }
-            let offhand = [right + 79., top + 61., 18., 18.];
-            if let Some(cell) = self.cell {
-                c.quad(cell, offhand, [1.; 4]);
-            }
-            if let Some(s) = self.inventory.get("shield") {
-                c.quad(*s, [offhand[0] + 1., offhand[1] + 1., 16., 16.], [1.; 4]);
-            }
-            self.text(
-                &mut c,
-                right + 96.,
-                top + 7.,
-                "Crafting",
-                [0.25, 0.25, 0.25, 1.],
-            );
-            for i in 0..4 {
-                self.slot(&mut c, client, palette, Slot::Craft(i), viewport);
-            }
-            if let Some(arrow) = self.inventory.get("arrow") {
-                c.quad(*arrow, [right + 134., top + 29., 16., 13.], [1.; 4]);
-            }
-            let output = [right + 152., top + 26., 18., 18.];
-            if let Some(cell) = self.cell {
-                c.quad(cell, output, [1.; 4]);
-            }
+            let model = palette.ui_model(client);
             let result = state.recipes.find(&state.registry, player);
-            if let Some(m) = &result {
-                self.stack(&mut c, m.stack, [output[0] + 1., output[1] + 1., 16., 16.]);
+            match palette.document(client, viewport) {
+                Err(error) => {
+                    self.text(&mut c, 8., 40., &format!("UI: {error}"), [1., 0.4, 0.3, 1.])
+                }
+                Ok(document) => {
+                    for (index, node) in document.widgets.iter().enumerate() {
+                        let r = node.rect.0;
+                        let scale = document.scale;
+                        c.clip = Some(node.clip);
+                        let role = if node.widget.style.is_empty() {
+                            match node.widget.kind {
+                                Kind::Button { .. } => "button",
+                                _ => "",
+                            }
+                        } else {
+                            node.widget.style.as_str()
+                        };
+                        let style = state.ui.theme.style(role);
+                        match &node.widget.kind {
+                            Kind::Panel => {
+                                if let Some(sprite) = style
+                                    .sprite
+                                    .as_ref()
+                                    .and_then(|key| self.custom_ui.get(key))
+                                {
+                                    c.quad(*sprite, r, style.fill);
+                                } else {
+                                    self.panel(&mut c, r, style.fill);
+                                }
+                            }
+                            Kind::Label { text } => self.text_scaled(
+                                &mut c,
+                                r[0],
+                                r[1],
+                                &model.text(text),
+                                style.text,
+                                scale,
+                            ),
+                            Kind::Image { sprite } => {
+                                if let Some(sprite) = self
+                                    .custom_ui
+                                    .get(sprite)
+                                    .or_else(|| self.inventory.get(sprite.as_str()))
+                                {
+                                    c.quad(*sprite, r, style.fill);
+                                }
+                            }
+                            Kind::Preview => {
+                                c.rect(r, [0., 0., 0., 1.]);
+                                if let Some(border) = self.inventory.get("preview_border") {
+                                    c.quad(
+                                        *border,
+                                        [
+                                            r[0] - scale,
+                                            r[1] - scale,
+                                            r[2] + 2. * scale,
+                                            r[3] + 2. * scale,
+                                        ],
+                                        [1.; 4],
+                                    );
+                                }
+                                c.preview_at = Some(c.vertices.len() as u32);
+                            }
+                            Kind::Search => {
+                                c.rect(
+                                    r,
+                                    if palette.search {
+                                        [0.18, 0.23, 0.22, 1.]
+                                    } else {
+                                        [0.15, 0.15, 0.15, 1.]
+                                    },
+                                );
+                                let search = if palette.filter.is_empty() {
+                                    "Search...".to_string()
+                                } else {
+                                    palette
+                                        .filter
+                                        .chars()
+                                        .rev()
+                                        .take(20)
+                                        .collect::<String>()
+                                        .chars()
+                                        .rev()
+                                        .collect()
+                                };
+                                self.text_scaled(
+                                    &mut c,
+                                    r[0] + 3. * scale,
+                                    r[1] + 3. * scale,
+                                    &search,
+                                    [0.9, 0.9, 0.9, 1.],
+                                    scale,
+                                );
+                            }
+                            Kind::Catalog { columns, rows } => {
+                                let visible = palette.visible(&state.registry);
+                                let base = palette.cursor / crate::engine_ui::PAGE
+                                    * crate::engine_ui::PAGE;
+                                let cell_width = r[2] / *columns as f32;
+                                let cell_height = r[3] / *rows as f32;
+                                for i in 0..columns * rows {
+                                    let cell = [
+                                        r[0] + (i % columns) as f32 * cell_width,
+                                        r[1] + (i / columns) as f32 * cell_height,
+                                        cell_width,
+                                        cell_height,
+                                    ];
+                                    if let Some(sprite) = style
+                                        .sprite
+                                        .as_ref()
+                                        .and_then(|key| self.custom_ui.get(key))
+                                        .or(self.cell.as_ref())
+                                    {
+                                        c.quad(*sprite, cell, [1.; 4]);
+                                    } else {
+                                        c.rect(cell, [0.45, 0.45, 0.45, 1.]);
+                                    }
+                                    if let Some(id) = visible.get(base + i) {
+                                        if let Some(icon) = self.icons.get(*id) {
+                                            c.quad(
+                                                *icon,
+                                                [
+                                                    cell[0] + scale,
+                                                    cell[1] + scale,
+                                                    cell[2] - 2. * scale,
+                                                    cell[3] - 2. * scale,
+                                                ],
+                                                [1.; 4],
+                                            );
+                                        }
+                                        if palette.hover == Some(Target::Catalog(*id as u16)) {
+                                            c.rect(cell, [1., 1., 1., 0.3]);
+                                        }
+                                    }
+                                }
+                            }
+                            Kind::Slot { binding } => {
+                                let (stack, target) = match binding {
+                                    Binding::Player(i) => (
+                                        player.get(Slot::Player(*i)).ok().flatten(),
+                                        Target::Slot(Slot::Player(*i)),
+                                    ),
+                                    Binding::Craft(i) => (
+                                        player.get(Slot::Craft(*i)).ok().flatten(),
+                                        Target::Slot(Slot::Craft(*i)),
+                                    ),
+                                    Binding::Result => {
+                                        (result.as_ref().map(|m| m.stack), Target::Output)
+                                    }
+                                };
+                                if let Some(sprite) = style
+                                    .sprite
+                                    .as_ref()
+                                    .and_then(|key| self.custom_ui.get(key))
+                                    .or(self.cell.as_ref())
+                                {
+                                    c.quad(*sprite, r, [1.; 4]);
+                                } else {
+                                    c.rect(r, [0.45, 0.45, 0.45, 1.]);
+                                }
+                                if let Some(stack) = stack {
+                                    self.stack(
+                                        &mut c,
+                                        stack,
+                                        [
+                                            r[0] + scale,
+                                            r[1] + scale,
+                                            r[2] - 2. * scale,
+                                            r[3] - 2. * scale,
+                                        ],
+                                    );
+                                }
+                                if palette.hover == Some(target) {
+                                    c.rect(r, [1., 1., 1., 0.25]);
+                                }
+                            }
+                            Kind::Button { text, .. } => {
+                                c.rect(r, style.border);
+                                let inside = [
+                                    r[0] + scale,
+                                    r[1] + scale,
+                                    r[2] - 2. * scale,
+                                    r[3] - 2. * scale,
+                                ];
+                                if let Some(sprite) = style
+                                    .sprite
+                                    .as_ref()
+                                    .and_then(|key| self.custom_ui.get(key))
+                                {
+                                    c.quad(*sprite, inside, style.fill);
+                                } else {
+                                    c.rect(inside, style.fill);
+                                }
+                                if palette.hover == Some(Target::Button(index as u16)) {
+                                    c.rect(inside, [1., 1., 1., 0.2]);
+                                }
+                                self.text_scaled(
+                                    &mut c,
+                                    r[0] + (r[2] - self.label_width(text) * scale) / 2.,
+                                    r[1] + (r[3] - 8. * scale) / 2.,
+                                    &model.text(text),
+                                    style.text,
+                                    scale,
+                                );
+                            }
+                            Kind::Progress { value, maximum } => {
+                                c.rect(r, style.border);
+                                let fraction = (model.number(value) / maximum).clamp(0., 1.) as f32;
+                                let fill = [
+                                    r[0] + scale,
+                                    r[1] + scale,
+                                    (r[2] - 2. * scale).max(0.) * fraction,
+                                    (r[3] - 2. * scale).max(0.),
+                                ];
+                                if let Some(sprite) = style
+                                    .sprite
+                                    .as_ref()
+                                    .and_then(|key| self.custom_ui.get(key))
+                                {
+                                    c.quad(*sprite, fill, style.fill);
+                                } else {
+                                    c.rect(fill, style.fill);
+                                }
+                            }
+                        }
+                    }
+                }
             }
-            if palette.hover == Some(Target::Output) {
-                c.rect(output, [1., 1., 1., 0.25]);
-            }
-            for i in 0..36 {
-                self.slot(&mut c, client, palette, Slot::Player(i), viewport);
-            }
+            c.clip = None;
             let hovered = match palette.hover {
                 Some(Target::Catalog(id)) => Some(id),
                 Some(Target::Slot(slot)) => player.get(slot).ok().flatten().map(|s| s.id),

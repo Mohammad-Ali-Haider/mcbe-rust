@@ -121,6 +121,9 @@ impl Options {
                 client.scene.engine.as_mut().unwrap().recipes = pack.recipes;
             }
         }
+        client.scene.engine.as_mut().unwrap().ui = std::sync::Arc::new(
+            crate::engine::ui::framework::Library::read_home(&self.home)?,
+        );
         progress.phase(4)?;
         if !self.original {
             client.engine_assets = Some(crate::engine_assets::load(

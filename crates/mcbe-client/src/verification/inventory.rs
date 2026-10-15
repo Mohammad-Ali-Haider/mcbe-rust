@@ -40,6 +40,15 @@ fn point(app: &App, target: Target) -> Result<[f32; 2]> {
         Target::Slot(slot) => center(Palette::slot_rect(slot, VIEW)),
         Target::Output => [x + 311., y + 35.],
         Target::Search => [x + 20., y + 15.],
+        Target::Button(index) => center(
+            app.palette
+                .document(&app.client, VIEW)?
+                .widgets
+                .get(index as usize)
+                .ok_or("UI button missing")?
+                .rect
+                .0,
+        ),
         Target::Catalog(id) => {
             let visible = app
                 .palette
