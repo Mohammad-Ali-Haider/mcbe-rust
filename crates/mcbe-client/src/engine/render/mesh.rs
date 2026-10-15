@@ -286,8 +286,8 @@ impl Snapshot {
                         key[1] * 16 + y as i32 - 1,
                         key[2] * 16 + z as i32 - 1,
                     ];
-                    if let Some(id) = state.blocks.get(&p) {
-                        cells[(x * 18 + y) * 18 + z] = *id;
+                    if let Some(id) = crate::engine::world::volume::remesh_block(state, p) {
+                        cells[(x * 18 + y) * 18 + z] = id;
                         if (1..17).contains(&x) && (1..17).contains(&y) && (1..17).contains(&z) {
                             solid += 1;
                         }
@@ -471,12 +471,12 @@ mod tests {
         let reference: BTreeSet<_> = state
             .blocks
             .iter()
-            .filter(|(p, _)| chunk(**p) == key)
+            .filter(|(p, _)| chunk(*p) == key)
             .flat_map(|(p, id)| {
                 DIRECTIONS.iter().enumerate().filter_map(move |(face, d)| {
                     let neighbor = std::array::from_fn(|a| p[a] + d[a]);
                     (!state.blocks.contains_key(&neighbor))
-                        .then_some((*p, u32::from(*id) * 6 + face as u32))
+                        .then_some((p, u32::from(*id) * 6 + face as u32))
                 })
             })
             .collect();
@@ -520,7 +520,7 @@ mod tests {
     fn greedy_surface_matches_generated_world_and_negative_chunk_boundaries() {
         let mut client = crate::engine::generate(39).unwrap();
         let state = client.scene.engine.as_mut().unwrap();
-        let keys: std::collections::BTreeSet<_> = state.blocks.keys().copied().map(chunk).collect();
+        let keys: std::collections::BTreeSet<_> = state.blocks.keys().map(chunk).collect();
         for key in keys {
             compare_surface(state, key);
         }
@@ -534,7 +534,7 @@ mod tests {
                 }
             }
         }
-        let keys: std::collections::BTreeSet<_> = state.blocks.keys().copied().map(chunk).collect();
+        let keys: std::collections::BTreeSet<_> = state.blocks.keys().map(chunk).collect();
         for key in keys {
             compare_surface(state, key);
         }

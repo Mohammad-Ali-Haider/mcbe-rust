@@ -14,9 +14,13 @@ use std::{
 };
 pub type Column = [i32; 2];
 pub type Position = [i32; 3];
-pub const BOUNDS: Bounds = Bounds {
+pub const LEGACY_BOUNDS: Bounds = Bounds {
     min: [-8192, 0, -8192],
     max: [8192, 64, 8192],
+};
+pub const BOUNDS: Bounds = Bounds {
+    min: [-8192, i32::MIN + 16, -8192],
+    max: [8192, i32::MAX - 16, 8192],
 };
 pub const MAX_EDITS: usize = 200_000;
 pub const MAX_RADIUS: i32 = 255;
@@ -25,6 +29,8 @@ pub const DETAIL_RADIUS: i32 = 8;
 #[serde(deny_unknown_fields)]
 pub struct Config {
     pub version: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terrain: Option<super::terrain::Settings>,
     pub radius: i32,
     pub exhibits: Vec<String>,
 }
@@ -32,6 +38,7 @@ impl Config {
     pub fn new(registry: &Registry) -> Self {
         Self {
             version: 1,
+            terrain: None,
             radius: 3,
             exhibits: registry
                 .blocks
@@ -42,7 +49,8 @@ impl Config {
         }
     }
     fn validate(&self, registry: &Registry) -> Result<()> {
-        if self.version != 1
+        if ![1, 2].contains(&self.version)
+            || (self.version == 2) != self.terrain.is_some()
             || !(2..=MAX_RADIUS).contains(&self.radius)
             || self.exhibits.len() > 15
             || self.exhibits.iter().collect::<BTreeSet<_>>().len() != self.exhibits.len()
@@ -57,6 +65,7 @@ impl Config {
 }
 #[derive(Clone)]
 pub struct Generator {
+    pub terrain: Option<super::terrain::Terrain>,
     pub config: Config,
     pub seed: u64,
     court: HashMap<Position, BlockId>,
@@ -84,10 +93,14 @@ impl Generator {
                 .find("oak_log")
                 .or_else(|_| registry.find("clay"))?,
         ];
-        let mut court = engine::playground_blocks(seed, registry)?;
+        let mut court = if config.version == 1 {
+            engine::playground_blocks(seed, registry)?
+        } else {
+            HashMap::new()
+        };
         // Exhibit positions depend on saved stable IDs, never the current registry order.
         let ivory = registry.find("ivory")?;
-        for i in 0..15 {
+        for i in 0..if config.version == 1 { 15 } else { 0 } {
             let x = -11 + (i % 8) as i32 * 3;
             let z = 14 + (i / 8) as i32 * 4;
             for y in 4..=7 {
@@ -101,14 +114,30 @@ impl Generator {
                 court.insert([x, 7, z], ivory);
             }
         }
+        let terrain = config
+            .terrain
+            .clone()
+            .map(|s| super::terrain::Terrain::new(seed, registry, s))
+            .transpose()?;
         Ok(Self {
+            terrain,
             config,
             seed,
             court,
             ids,
         })
     }
+    pub fn bounds(&self) -> Bounds {
+        if self.config.version == 1 {
+            LEGACY_BOUNDS
+        } else {
+            BOUNDS
+        }
+    }
     pub fn height(&self, x: i32, z: i32) -> i32 {
+        if let Some(t) = &self.terrain {
+            return t.sample(x, z).height;
+        }
         let gx = x.div_euclid(32);
         let gz = z.div_euclid(32);
         let u = x.rem_euclid(32);
@@ -124,6 +153,9 @@ impl Generator {
         (edge * (24 - distance) + smooth * distance) / 24
     }
     pub(crate) fn tree(&self, c: Column) -> Option<[i32; 3]> {
+        if let Some(t) = &self.terrain {
+            return t.tree(c);
+        }
         let n = engine::noise(c[0], c[1], self.seed ^ 0x38c6f01c);
         if !n.is_multiple_of(3) {
             return None;
@@ -135,7 +167,17 @@ impl Generator {
         }
         Some([x, self.height(x, z), z])
     }
+    pub fn visible_surface(&self, x: i32, z: i32) -> (i32, BlockId) {
+        if let Some(t) = &self.terrain {
+            t.surface(t.sample(x, z))
+        } else {
+            (self.ground_height(x, z), self.ids[0])
+        }
+    }
     pub(crate) fn ground_height(&self, x: i32, z: i32) -> i32 {
+        if self.terrain.is_some() {
+            return self.height(x, z);
+        }
         if (-40..40).contains(&x) && (-40..40).contains(&z) {
             if x.abs() <= 16 && z.abs() <= 18 {
                 4
@@ -153,8 +195,11 @@ impl Generator {
             .map(|(p, id)| (*p, *id))
     }
     pub fn block(&self, p: Position) -> Option<BlockId> {
-        if !BOUNDS.contains(p) {
+        if !self.bounds().contains(p) {
             return None;
+        }
+        if let Some(t) = &self.terrain {
+            return t.block(p, t.sample(p[0], p[2]), t.tree(column(p)));
         }
         let [x, y, z] = p;
         if (-40..40).contains(&x) && (-40..40).contains(&z) {
@@ -203,6 +248,8 @@ impl Generator {
 }
 #[derive(Clone)]
 pub struct State {
+    pub volume: Option<super::volume::Volume>,
+    pub edit_chunks: BTreeMap<[i32; 3], BTreeMap<Position, Option<BlockId>>>,
     pub generator: Arc<Generator>,
     pub residents: BTreeMap<Column, Vec<Position>>,
     pub wanted: BTreeSet<Column>,
@@ -217,6 +264,8 @@ pub struct State {
 impl State {
     pub fn new(generator: Generator) -> Self {
         Self {
+            volume: (generator.config.version == 2).then(super::volume::Volume::default),
+            edit_chunks: BTreeMap::new(),
             generator: Arc::new(generator),
             residents: BTreeMap::new(),
             wanted: BTreeSet::new(),
@@ -227,6 +276,24 @@ impl State {
             evicted: 0,
             discarded: 0,
             generation_ms: 0.,
+        }
+    }
+    pub fn ready_chunk(&self, k: [i32; 3]) -> bool {
+        self.volume.as_ref().map_or_else(
+            || self.residents.contains_key(&[k[0], k[2]]),
+            |v| v.residents.contains(&k),
+        )
+    }
+    pub fn ready(&self, p: Position) -> bool {
+        self.ready_chunk(super::storage::key(p))
+    }
+    pub fn reindex(&mut self) {
+        self.edit_chunks.clear();
+        for (p, id) in &self.edits {
+            self.edit_chunks
+                .entry(super::storage::key(*p))
+                .or_default()
+                .insert(*p, *id);
         }
     }
     pub fn pending(&self) -> usize {
@@ -249,6 +316,15 @@ impl State {
             }
             self.edits.insert(p, value);
         }
+        let k = super::storage::key(p);
+        if let Some(id) = self.edits.get(&p) {
+            self.edit_chunks.entry(k).or_default().insert(p, *id);
+        } else if let Some(chunk) = self.edit_chunks.get_mut(&k) {
+            chunk.remove(&p);
+            if chunk.is_empty() {
+                self.edit_chunks.remove(&k);
+            }
+        }
         Ok(())
     }
     pub fn observed(&self, p: Position) -> Option<BlockId> {
@@ -260,9 +336,11 @@ impl State {
 }
 enum Job {
     Generate(Column),
+    Chunk([i32; 3]),
     Stop,
 }
-struct Generated {
+pub(crate) struct Generated {
+    pub chunk: Option<([i32; 3], Arc<super::storage::Chunk>)>,
     column: Column,
     blocks: HashMap<Position, BlockId>,
     milliseconds: f64,
@@ -272,6 +350,7 @@ pub struct Worker {
     receiver: mpsc::Receiver<Generated>,
     thread: Option<thread::JoinHandle<()>>,
     pending: BTreeSet<Column>,
+    pub(crate) chunks_pending: BTreeSet<[i32; 3]>,
 }
 impl Worker {
     pub fn new(generator: Arc<Generator>) -> Result<Self> {
@@ -280,17 +359,24 @@ impl Worker {
         let thread = thread::Builder::new()
             .name("blockwork-terrain".into())
             .spawn(move || {
-                while let Ok(Job::Generate(column)) = jobs.recv() {
+                while let Ok(job) = jobs.recv() {
                     let started = Instant::now();
-                    let blocks = generator.generate(column);
-                    if completed
-                        .send(Generated {
+                    let generated = match job {
+                        Job::Stop => break,
+                        Job::Generate(column) => Generated {
+                            chunk: None,
                             column,
-                            blocks,
+                            blocks: generator.generate(column),
                             milliseconds: started.elapsed().as_secs_f64() * 1000.,
-                        })
-                        .is_err()
-                    {
+                        },
+                        Job::Chunk(key) => Generated {
+                            chunk: Some((key, super::volume::generate(&generator, key))),
+                            column: [key[0], key[2]],
+                            blocks: HashMap::new(),
+                            milliseconds: started.elapsed().as_secs_f64() * 1000.,
+                        },
+                    };
+                    if completed.send(generated).is_err() {
                         break;
                     }
                 }
@@ -300,6 +386,7 @@ impl Worker {
             receiver,
             thread: Some(thread),
             pending: BTreeSet::new(),
+            chunks_pending: BTreeSet::new(),
         })
     }
 }
@@ -341,6 +428,10 @@ fn dirty(scene: &mut Scene, c: Column, ys: BTreeSet<i32>) {
         .retain(|k, _| stream.residents.contains_key(&[k[0], k[2]]));
 }
 fn insert(scene: &mut Scene, generated: Generated) {
+    if let Some((key, chunk)) = generated.chunk {
+        super::volume::insert(scene, key, chunk, generated.milliseconds);
+        return;
+    }
     let c = generated.column;
     let state = scene.engine.as_mut().unwrap();
     let stream = state.stream.as_mut().unwrap();
@@ -363,7 +454,9 @@ fn insert(scene: &mut Scene, generated: Generated) {
     let positions: Vec<_> = blocks.keys().copied().collect();
     let ys = positions.iter().map(|p| p[1].div_euclid(16)).collect();
     scene.cells.extend(positions.iter().copied());
-    state.simulation.hydrate(&state.registry, &blocks);
+    state
+        .simulation
+        .hydrate(&state.registry, blocks.iter().map(|(p, id)| (*p, *id)));
     state.blocks.extend(blocks);
     stream.residents.insert(c, positions);
     stream.generated += 1;
@@ -415,7 +508,22 @@ pub fn set_radius(client: &mut Client, radius: i32) -> Result<()> {
         return Ok(());
     }
     Arc::make_mut(&mut stream.generator).config.radius = radius;
-    recenter_inner(&mut client.scene, c, true);
+    if client
+        .scene
+        .engine
+        .as_ref()
+        .unwrap()
+        .stream
+        .as_ref()
+        .unwrap()
+        .volume
+        .is_some()
+    {
+        let position = client.streaming_position();
+        super::volume::recenter(&mut client.scene, position, true);
+    } else {
+        recenter_inner(&mut client.scene, c, true);
+    }
     Ok(())
 }
 /// Teleports and save loading prepare the whole bounded destination before movement.
@@ -425,6 +533,7 @@ pub fn prepare(client: &mut Client, position: Vec3) -> Result<()> {
     if !position.finite() {
         return Err("Finite streamed position required".into());
     }
+    let bounds = stream.generator.bounds();
     let body = client.movement.body();
     let half = body.width * 0.5;
     let low = [position.x - half, position.y, position.z - half];
@@ -433,7 +542,7 @@ pub fn prepare(client: &mut Client, position: Vec3) -> Result<()> {
         position.y + body.height,
         position.z + half,
     ];
-    if (0..3).any(|a| low[a] < BOUNDS.min[a] as f32 || high[a] > BOUNDS.max[a] as f32) {
+    if (0..3).any(|a| low[a] < bounds.min[a] as f32 || high[a] > bounds.max[a] as f32) {
         return Err("Streamed body exceeds world coordinate bounds".into());
     }
     for x in (position.x - half).floor() as i32..(position.x + half).ceil() as i32 {
@@ -453,6 +562,46 @@ pub fn prepare(client: &mut Client, position: Vec3) -> Result<()> {
                 }
             }
         }
+    }
+    if stream.volume.is_some() {
+        super::volume::recenter(&mut client.scene, position, false);
+        let state = client.scene.engine.as_ref().unwrap();
+        let stream = state.stream.as_ref().unwrap();
+        let generator = stream.generator.clone();
+        let keys = stream
+            .volume
+            .as_ref()
+            .unwrap()
+            .wanted
+            .iter()
+            .copied()
+            .collect::<Vec<_>>();
+        for key in keys {
+            if client
+                .scene
+                .engine
+                .as_ref()
+                .unwrap()
+                .stream
+                .as_ref()
+                .unwrap()
+                .ready_chunk(key)
+            {
+                continue;
+            }
+            let start = Instant::now();
+            let chunk = super::volume::generate(&generator, key);
+            super::volume::insert(
+                &mut client.scene,
+                key,
+                chunk,
+                start.elapsed().as_secs_f64() * 1000.,
+            );
+        }
+        if client.engine_worker.is_none() {
+            client.engine_worker = Some(Worker::new(generator)?);
+        }
+        return Ok(());
     }
     recenter(&mut client.scene, center(position));
     let stream = client
@@ -476,6 +625,7 @@ pub fn prepare(client: &mut Client, position: Vec3) -> Result<()> {
         insert(
             &mut client.scene,
             Generated {
+                chunk: None,
                 column: c,
                 blocks,
                 milliseconds: started.elapsed().as_secs_f64() * 1000.,
@@ -500,7 +650,21 @@ pub fn update(client: &mut Client) -> Result<bool> {
     }
     let before = client.scene.engine.as_ref().unwrap().revision;
     let position = client.streaming_position();
-    recenter(&mut client.scene, center(position));
+    let modern = client
+        .scene
+        .engine
+        .as_ref()
+        .unwrap()
+        .stream
+        .as_ref()
+        .unwrap()
+        .volume
+        .is_some();
+    if modern {
+        super::volume::recenter(&mut client.scene, position, false);
+    } else {
+        recenter(&mut client.scene, center(position));
+    }
     let worker = client
         .engine_worker
         .as_mut()
@@ -508,6 +672,9 @@ pub fn update(client: &mut Client) -> Result<bool> {
     match worker.receiver.try_recv() {
         Ok(generated) => {
             worker.pending.remove(&generated.column);
+            if let Some((key, _)) = &generated.chunk {
+                worker.chunks_pending.remove(key);
+            }
             insert(&mut client.scene, generated);
         }
         Err(mpsc::TryRecvError::Empty) => {}
@@ -523,6 +690,28 @@ pub fn update(client: &mut Client) -> Result<bool> {
         .stream
         .as_ref()
         .unwrap();
+    if modern {
+        let volume = stream.volume.as_ref().unwrap();
+        while worker.chunks_pending.len() < 2 {
+            let next = volume
+                .wanted
+                .iter()
+                .filter(|k| !volume.residents.contains(*k) && !worker.chunks_pending.contains(*k))
+                .min_by_key(|k| {
+                    let dx = i64::from(k[0] - volume.center[0]);
+                    let dy = i64::from(k[1] - volume.center[1]);
+                    let dz = i64::from(k[2] - volume.center[2]);
+                    dx * dx + dy * dy + dz * dz
+                })
+                .copied();
+            let Some(key) = next else {
+                break;
+            };
+            worker.sender.send(Job::Chunk(key))?;
+            worker.chunks_pending.insert(key);
+        }
+        return Ok(before != client.scene.engine.as_ref().unwrap().revision);
+    }
     while worker.pending.len() < 2 {
         let next = stream
             .wanted
@@ -544,24 +733,65 @@ pub fn generate(seed: u64, registry: Registry) -> Result<Client> {
     let mut state = WorldState::new(seed, registry, clay, None);
     state.stream = Some(State::new(generator));
     let mut client = Client::new(Scene::from_engine(HashMap::new(), state)?)?;
-    client.scene.bounds = BOUNDS;
+    client.scene.bounds = LEGACY_BOUNDS;
     client.set_spawn(engine::SPAWN)?;
     client.yaw = 0.;
     client.pitch = -0.08;
     Ok(client)
 }
+pub fn generate_modern(
+    seed: u64,
+    registry: Registry,
+    terrain: super::terrain::Settings,
+) -> Result<Client> {
+    let config = Config {
+        version: 2,
+        terrain: Some(terrain),
+        radius: 3,
+        exhibits: Vec::new(),
+    };
+    let generator = Generator::new(seed, &registry, config)?;
+    let spawn = generator.terrain.as_ref().unwrap().spawn();
+    let mut state = WorldState::new(seed, registry, 0, None);
+    state.stream = Some(State::new(generator));
+    let mut client = Client::new(Scene::from_engine(HashMap::new(), state)?)?;
+    client.scene.bounds = BOUNDS;
+    client.set_spawn(Vec3::new(
+        spawn[0] as f32 + 0.5,
+        spawn[1] as f32,
+        spawn[2] as f32 + 0.5,
+    ))?;
+    client.yaw = 0.7;
+    client.pitch = -0.15;
+    Ok(client)
+}
 pub fn jump(client: &mut Client, index: usize) -> Result<()> {
-    let [x, z] = [[0, -10], [128, 128], [-161, 65], [320, -257]][index % 4];
     let stream = client
         .scene
         .engine
         .as_ref()
         .and_then(|s| s.stream.as_ref())
         .ok_or("Start a new streamed world to explore distant terrain")?;
-    let y = (1..62)
+    let [x, z] = if let Some(t) = &stream.generator.terrain {
+        let p = t.landmark(index);
+        [p[0], p[2]]
+    } else {
+        [[0, -10], [128, 128], [-161, 65], [320, -257]][index % 4]
+    };
+    let top = stream.generator.visible_surface(x, z).0;
+    let scan = if stream.generator.terrain.is_some() {
+        top..top + 8
+    } else {
+        1..62
+    };
+    let y = scan
         .rev()
         .find(|y| stream.observed([x, *y, z]).is_some())
-        .unwrap_or(0)
+        .unwrap_or(if stream.generator.terrain.is_some() {
+            top - 1
+        } else {
+            0
+        })
         + 1;
     client.set_spawn(Vec3::new(x as f32 + 0.5, y as f32, z as f32 + 0.5))?;
     client.yaw = 0.8;
@@ -575,11 +805,28 @@ pub fn observation(client: &Client) -> serde_json::Value {
     let Some(s) = &state.stream else {
         return serde_json::Value::Null;
     };
-    serde_json::json!({"generator_version":s.generator.config.version,"radius":s.generator.config.radius,"full_detail_radius":s.generator.config.radius.min(DETAIL_RADIUS),"far_terrain_lod":s.generator.config.radius>DETAIL_RADIUS,"center":s.center,"resident_columns":s.residents.len(),"wanted_columns":s.wanted.len(),"generated_columns":s.generated,"evicted_columns":s.evicted,"discarded_jobs":s.discarded,"generation_ms":s.generation_ms,"resident_blocks":state.blocks.len(),"sparse_edits":s.edits.len(),"pending_edits":state.pending(),"queued_jobs":client.engine_worker.as_ref().map_or(0,|w|w.pending.len()),"dirty_keys":state.dirty_chunks.len()})
+    serde_json::json!({"generator_version":s.generator.config.version,"radius":s.generator.config.radius,"full_detail_radius":s.generator.config.radius.min(DETAIL_RADIUS),"far_terrain_lod":s.generator.config.radius>DETAIL_RADIUS,"center":s.center,"resident_columns":s.residents.len(),"wanted_columns":s.wanted.len(),"generated_columns":s.generated,"evicted_columns":s.evicted,"discarded_jobs":s.discarded,"generation_ms":s.generation_ms,"resident_blocks":state.blocks.len(),"chunk_bytes":state.blocks.allocated_bytes(),"resident_chunks":s.volume.as_ref().map(|v|v.residents.len()),"wanted_chunks":s.volume.as_ref().map(|v|v.wanted.len()),"vertical_center":s.volume.as_ref().map(|v|v.center[1]),"sparse_edits":s.edits.len(),"pending_edits":state.pending(),"queued_jobs":client.engine_worker.as_ref().map_or(0,|w|w.pending.len()+w.chunks_pending.len()),"dirty_keys":state.dirty_chunks.len()})
 }
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn legacy_travel_to_cleared_column_still_lands_on_protected_foundation() {
+        let mut c = generate(360036, Registry::built_in()).unwrap();
+        for y in 1..4 {
+            c.scene.change_engine([0, y, -10], None).unwrap();
+        }
+        jump(&mut c, 0).unwrap();
+        assert_eq!(c.actor.position.y, 1.);
+        assert!(
+            c.scene
+                .engine
+                .as_ref()
+                .unwrap()
+                .blocks
+                .contains_key(&[0, 0, -10])
+        );
+    }
     #[test]
     fn live_radius_change_evicts_residents_but_preserves_distant_edits_and_bounded_jobs() {
         let mut c = generate(360036, Registry::built_in()).unwrap();

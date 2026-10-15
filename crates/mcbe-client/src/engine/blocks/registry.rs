@@ -190,7 +190,7 @@ mod tests {
             b.placement = None;
         }
         let mut upgraded = old.with_new_builtins().unwrap().unwrap();
-        assert_eq!(upgraded.blocks.len(), 37);
+        assert_eq!(upgraded.blocks.len(), 40);
         assert!(upgraded.with_new_builtins().unwrap().is_none());
         assert!(
             upgraded
@@ -217,8 +217,10 @@ mod tests {
         let mut r = Registry::built_in();
         for i in 0..100 {
             r.blocks.push(Block {
+                texture_tint: None,
                 behavior: Default::default(),
                 interaction: None,
+                fluid: None,
                 state: None,
                 selection: None,
                 signal: None,

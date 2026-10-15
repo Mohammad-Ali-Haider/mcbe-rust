@@ -552,6 +552,23 @@ impl Atlas {
                 stream.edits.len()
             );
             self.text(&mut c, 6., 28., &line, [1.; 4]);
+            if let Some(t) = &stream.generator.terrain {
+                let sample = t.sample(p.x.floor() as i32, p.z.floor() as i32);
+                let label = &t.settings.biomes[sample.biome].label;
+                let v = stream.volume.as_ref().unwrap();
+                self.text(
+                    &mut c,
+                    6.,
+                    39.,
+                    &format!(
+                        "Biome {label} | 3D chunks {}/{} | dense {:.1} MiB",
+                        v.residents.len(),
+                        v.wanted.len(),
+                        state.blocks.allocated_bytes() as f64 / 1048576.
+                    ),
+                    [0.7, 1., 0.8, 1.],
+                );
+            }
         }
         if ctx.loading {
             self.text(&mut c, 6., height - 60., "Preparing terrain...", [1.; 4]);

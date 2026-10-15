@@ -51,8 +51,8 @@ pub struct WorldState {
     pub player: crate::engine_inventory::Inventory,
     pub original_player: crate::engine_inventory::Inventory,
     pub recipes: crate::engine_crafting::Recipes,
-    pub blocks: HashMap<[i32; 3], BlockId>,
-    pub original_blocks: HashMap<[i32; 3], BlockId>,
+    pub blocks: world::storage::Store,
+    pub original_blocks: world::storage::Store,
     pub stream: Option<crate::engine_stream::State>,
 }
 impl WorldState {
@@ -90,8 +90,8 @@ impl WorldState {
             player,
             recipes,
             loaded,
-            blocks: HashMap::new(),
-            original_blocks: HashMap::new(),
+            blocks: world::storage::Store::new(),
+            original_blocks: world::storage::Store::new(),
             stream: None,
         }
     }
@@ -103,12 +103,12 @@ impl WorldState {
         }
         self.blocks
             .iter()
-            .filter(|(p, id)| self.original_blocks.get(*p) != Some(*id))
+            .filter(|(p, id)| self.original_blocks.get(p) != Some(*id))
             .count()
             + self
                 .original_blocks
                 .keys()
-                .filter(|p| !self.blocks.contains_key(*p))
+                .filter(|p| !self.blocks.contains_key(p))
                 .count()
             + self.player.changed_slots(&self.original_player)
             + self.machines.changed(&self.original_machines)
@@ -350,7 +350,7 @@ pub fn playground_blocks(seed: u64, registry: &Registry) -> Result<HashMap<[i32;
 }
 #[derive(Clone)]
 enum SavedTerrain {
-    Finite(HashMap<[i32; 3], BlockId>),
+    Finite(world::storage::Store),
     Stream(
         crate::engine_stream::Config,
         BTreeMap<[i32; 3], Option<BlockId>>,
@@ -431,7 +431,7 @@ impl SaveSnapshot {
         };
         let (cells, generator, edits) = match &self.terrain {
             SavedTerrain::Finite(blocks) => {
-                let sorted: BTreeMap<_, _> = blocks.iter().map(|(p, id)| (*p, *id)).collect();
+                let sorted: BTreeMap<_, _> = blocks.iter().map(|(p, id)| (p, *id)).collect();
                 (
                     sorted
                         .into_iter()
@@ -470,7 +470,7 @@ impl SaveSnapshot {
             smelting: Some(self.smelting.clone()),
             movement: Some(self.movement),
             format: "blockwork-world".into(),
-            version: 6,
+            version: 7,
             seed: self.seed,
             player: self.position,
             yaw: self.yaw,
@@ -625,7 +625,7 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
     }
     let d: Document = serde_json::from_slice(bytes)?;
     if d.format != "blockwork-world"
-        || ![1, 2, 3, 4, 5, 6].contains(&d.version)
+        || ![1, 2, 3, 4, 5, 6, 7].contains(&d.version)
         || d.cells.len() > BOUNDS.volume()?
         || !d.yaw.is_finite()
         || !d.pitch.is_finite()
@@ -639,7 +639,7 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
             r.blocks.truncate(8);
             r
         }
-        (2..=6, Some(r)) => {
+        (2..=7, Some(r)) => {
             r.validate()?;
             r
         }
@@ -650,7 +650,7 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
             registry.blocks.len(),
             registry.find(&d.selected)?,
         ),
-        (3..=6, Some(p)) => p.restore(&registry)?,
+        (3..=7, Some(p)) => p.restore(&registry)?,
         _ => return Err("Save inventory/version mismatch".into()),
     };
     if d.version >= 3
@@ -663,14 +663,14 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
     }
     let recipes = match (d.version, d.recipes) {
         (1 | 2, None) => crate::engine_crafting::Recipes::built_in().available(&registry),
-        (3..=6, Some(r)) => {
+        (3..=7, Some(r)) => {
             r.validate_registry(&registry)?;
             r
         }
         _ => return Err("Save recipe/version mismatch".into()),
     };
     let movement = match (d.version, d.movement) {
-        (5 | 6, Some(m)) => m,
+        (5..=7, Some(m)) => m,
         (1..=4, None) => Default::default(),
         _ => return Err("Save movement/version mismatch".into()),
     };
@@ -687,8 +687,8 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
         }
         for edit in edits {
             let id = edit.material.map(|id| registry.find(&id)).transpose()?;
-            if !crate::engine_stream::BOUNDS.contains(edit.position)
-                || edit.position[1] == 0
+            if !stream.generator.bounds().contains(edit.position)
+                || (stream.generator.config.version == 1 && edit.position[1] == 0)
                 || stream.generator.block(edit.position) == id
                 || stream.edits.insert(edit.position, id).is_some()
             {
@@ -698,13 +698,23 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
             }
         }
         stream.original_edits = stream.edits.clone();
+        stream.reindex();
         let mut state = WorldState::new(d.seed, registry, player.selected().unwrap_or(0), loaded);
         state.player = player.clone();
         state.original_player = player;
         state.recipes = recipes;
         state.stream = Some(stream);
         let mut client = Client::new(Scene::from_engine(HashMap::new(), state)?)?;
-        client.scene.bounds = crate::engine_stream::BOUNDS;
+        client.scene.bounds = client
+            .scene
+            .engine
+            .as_ref()
+            .unwrap()
+            .stream
+            .as_ref()
+            .unwrap()
+            .generator
+            .bounds();
         client.movement = movement;
         client.set_spawn(d.player)?;
         client.yaw = d.yaw;
@@ -843,10 +853,10 @@ pub fn color(m: &Block, face: usize, u: f64, v: f64) -> [f64; 3] {
 pub fn apply_registry(client: &mut Client, registry: Registry) -> Result<()> {
     registry.validate()?;
     let state = client.scene.engine.as_ref().ok_or("Engine world missing")?;
-    let remap = |blocks: &HashMap<[i32; 3], BlockId>| -> Result<HashMap<[i32; 3], BlockId>> {
+    let remap = |blocks: &world::storage::Store| -> Result<world::storage::Store> {
         blocks
             .iter()
-            .map(|(p, id)| Ok((*p, registry.find(&state.registry.get(*id).id)?)))
+            .map(|(p, id)| Ok((p, registry.find(&state.registry.get(*id).id)?)))
             .collect()
     };
     let stream = if let Some(old) = &state.stream {
@@ -859,6 +869,7 @@ pub fn apply_registry(client: &mut Client, registry: Registry) -> Result<()> {
         let remap_edits=|edits:&BTreeMap<[i32;3],Option<BlockId>>|->Result<BTreeMap<[i32;3],Option<BlockId>>> { edits.iter().map(|(p,id)|Ok((*p,id.map(|id|registry.find(&state.registry.get(id).id)).transpose()?))).collect() };
         next.edits = remap_edits(&old.edits)?;
         next.original_edits = remap_edits(&old.original_edits)?;
+        next.reindex();
         Some(next)
     } else {
         None
@@ -923,7 +934,7 @@ pub fn apply_registry(client: &mut Client, registry: Registry) -> Result<()> {
     let geometry = std::sync::Arc::new(crate::engine_geometry::Library::compile(&registry)?);
     if client.movement.mode != crate::engine_player::Mode::Noclip
         && blocks.iter().any(|(p, id)| {
-            blocks::systems::collision::intersects_actor(&geometry, *id, *p, &client.actor)
+            blocks::systems::collision::intersects_actor(&geometry, *id, p, &client.actor)
         })
     {
         return Err("Updated model overlaps the player; move to clear space before F6".into());
@@ -941,7 +952,9 @@ pub fn apply_registry(client: &mut Client, registry: Registry) -> Result<()> {
     state.original_machines = original_machines;
     state.smelting = smelting;
     state.simulation = blocks::systems::simulation::Simulation::new(&registry);
-    state.simulation.hydrate(&registry, &state.blocks);
+    state
+        .simulation
+        .hydrate(&registry, state.blocks.iter().map(|(p, id)| (p, *id)));
     state.registry = registry;
     state.revision = state.revision.wrapping_add(1);
     state.registry_revision = state.revision;
@@ -1048,6 +1061,7 @@ pub fn launch(args: &[String]) -> Result<()> {
     let mut camera = 0u8;
     let mut preview_case = "neutral".to_owned();
     let mut player_case = "first".to_owned();
+    let mut terrain_case = "plains".to_owned();
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -1056,7 +1070,7 @@ pub fn launch(args: &[String]) -> Result<()> {
             "--engine-naive" => {},
             "--engine-stream" | "--engine-finite" | "--engine-sync-mesh" => {},
             "--engine-continue" => resume = true,
-            "--engine-player-smoke" | "--engine-player-case" | "--engine-table-smoke" | "--engine-furnace-smoke" | "--engine-ui-smoke" | "--engine-ui-lab-smoke" | "--engine-render-distance" | "--engine-home" | "--engine-load" | "--engine-study" | "--engine-distance-motion-smoke" | "--engine-distance-smoke" | "--engine-distance-settings-smoke" | "--engine-distance-shrink-smoke" | "--engine-features-smoke" | "--engine-settings-smoke" | "--engine-preview-smoke" | "--engine-preview-case" | "--engine-startup-gpu-close-smoke" | "--engine-startup-retry-smoke" | "--engine-startup-smoke" | "--engine-startup-close-smoke" | "--engine-startup-error-smoke" | "--engine-v1-study" | "--engine-v1-smoke" | "--engine-v1-wire-smoke" | "--engine-v1-fly-smoke" | "--engine-v1-noclip-smoke" | "--engine-v1-sneak-smoke" | "--engine-loading-study" | "--engine-loading-smoke" | "--engine-loading-close-smoke" | "--engine-save-study" | "--engine-save-smoke" | "--engine-save-close-smoke" | "--engine-async-smoke" | "--engine-stream-profile" | "--engine-stream-study" | "--engine-stream-smoke" | "--engine-stream-wire-smoke" | "--engine-smoke" | "--engine-palette-smoke" | "--engine-wire-smoke" | "--engine-window-smoke" | "--engine-edit-smoke" | "--engine-benchmark" | "--engine-profile" | "--engine-render-smoke" | "--engine-mesh-smoke" | "--engine-camera" | "--engine-inventory-study" | "--engine-inventory-smoke" | "--engine-seed" | "--engine-blocks" | "--engine-pack-root" => {
+            "--engine-terrain-smoke" | "--engine-terrain-case" | "--engine-player-smoke" | "--engine-player-case" | "--engine-table-smoke" | "--engine-furnace-smoke" | "--engine-ui-smoke" | "--engine-ui-lab-smoke" | "--engine-render-distance" | "--engine-home" | "--engine-load" | "--engine-study" | "--engine-distance-motion-smoke" | "--engine-distance-smoke" | "--engine-distance-settings-smoke" | "--engine-distance-shrink-smoke" | "--engine-features-smoke" | "--engine-settings-smoke" | "--engine-preview-smoke" | "--engine-preview-case" | "--engine-startup-gpu-close-smoke" | "--engine-startup-retry-smoke" | "--engine-startup-smoke" | "--engine-startup-close-smoke" | "--engine-startup-error-smoke" | "--engine-v1-study" | "--engine-v1-smoke" | "--engine-v1-wire-smoke" | "--engine-v1-fly-smoke" | "--engine-v1-noclip-smoke" | "--engine-v1-sneak-smoke" | "--engine-loading-study" | "--engine-loading-smoke" | "--engine-loading-close-smoke" | "--engine-save-study" | "--engine-save-smoke" | "--engine-save-close-smoke" | "--engine-async-smoke" | "--engine-stream-profile" | "--engine-stream-study" | "--engine-stream-smoke" | "--engine-stream-wire-smoke" | "--engine-smoke" | "--engine-palette-smoke" | "--engine-wire-smoke" | "--engine-window-smoke" | "--engine-edit-smoke" | "--engine-benchmark" | "--engine-profile" | "--engine-render-smoke" | "--engine-mesh-smoke" | "--engine-camera" | "--engine-inventory-study" | "--engine-inventory-smoke" | "--engine-seed" | "--engine-blocks" | "--engine-pack-root" => {
                 let flag = &args[i]; i+=1; let value = args.get(i).ok_or("Engine option requires a value")?;
                 match flag.as_str() {
                     "--engine-render-distance" => {let distance:i32=value.parse()?;if !(2..=crate::engine_stream::MAX_RADIUS).contains(&distance) {return Err("Render distance must be 2..255 chunks".into());}render_distance=Some(distance);},
@@ -1067,6 +1081,7 @@ pub fn launch(args: &[String]) -> Result<()> {
                     "--engine-seed" => seed=value.parse()?,
                     "--engine-preview-case" => preview_case=value.clone(),
                     "--engine-player-case" => player_case=value.clone(),
+                    "--engine-terrain-case" => terrain_case=value.clone(),
                     "--engine-camera" => { camera=value.parse()?; if camera>3 { return Err("Engine camera must be 0..3".into()); } },
                     _ => { out=Some(PathBuf::from(value)); smoke = !flag.ends_with("-study"); },
                 }
@@ -1080,7 +1095,8 @@ pub fn launch(args: &[String]) -> Result<()> {
         && (out.is_none()
             || startup_test
             || args.iter().any(|a| {
-                a == "--engine-stream"
+                a.starts_with("--engine-terrain-")
+                    || a == "--engine-stream"
                     || a.starts_with("--engine-save-")
                     || a.starts_with("--engine-loading-")
                     || a.starts_with("--engine-v1-")
@@ -1095,6 +1111,7 @@ pub fn launch(args: &[String]) -> Result<()> {
         pack_root,
         resume,
         streamed,
+        modern: out.is_none() || args.iter().any(|a| a == "--engine-terrain-smoke"),
         seed,
     };
     let background = out.is_none() || startup_test;
@@ -1151,7 +1168,9 @@ pub fn launch(args: &[String]) -> Result<()> {
         app.frame_limit = 4;
     }
     if let Some(out) = &out {
-        if args.iter().any(|a| a == "--engine-player-smoke") {
+        if args.iter().any(|a| a == "--engine-terrain-smoke") {
+            crate::verification::terrain::prepare(&mut app, out, &terrain_case)?;
+        } else if args.iter().any(|a| a == "--engine-player-smoke") {
             crate::verification::player::prepare(&mut app, out, &player_case)?;
         } else if args.iter().any(|a| {
             matches!(
@@ -1567,6 +1586,42 @@ fn verify(app: &mut App, out: &Path) -> Result<()> {
 mod tests {
     use super::*;
     #[test]
+    fn modern_vertical_edits_and_generator_profile_roundtrip_beyond_old_bounds() {
+        let mut settings = world::terrain::Settings::built_in();
+        settings.caves = false;
+        let mut c =
+            crate::engine_stream::generate_modern(360036, Registry::built_in(), settings).unwrap();
+        crate::engine_player::mode(&mut c, crate::engine_player::Mode::Noclip).unwrap();
+        let id = c
+            .scene
+            .engine
+            .as_ref()
+            .unwrap()
+            .registry
+            .find("clay")
+            .unwrap();
+        for y in [10000, -10000, 0] {
+            c.set_spawn(Vec3::new(0.5, y as f32 + 2., 0.5)).unwrap();
+            c.scene.change_engine([0, y, 0], Some(id)).unwrap();
+        }
+        let bytes = serde_json::to_vec(&document(&c).unwrap()).unwrap();
+        let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(value["version"], 7);
+        assert_eq!(value["generator"]["version"], 2);
+        assert!(value.get("cells").is_none());
+        assert_eq!(value["edits"].as_array().unwrap().len(), 3);
+        let mut copy = decode(&bytes, None).unwrap();
+        assert_eq!(copy.actor.position, c.actor.position);
+        assert_eq!(copy.pending_edits(), 0);
+        for y in [10000, -10000, 0] {
+            copy.set_spawn(Vec3::new(0.5, y as f32 + 2., 0.5)).unwrap();
+            assert_eq!(
+                copy.scene.engine.as_ref().unwrap().blocks.get(&[0, y, 0]),
+                Some(&id)
+            );
+        }
+    }
+    #[test]
     fn movement_and_partial_models_roundtrip_with_crouched_and_noclip_spawns() {
         let mut c = generate(360036).unwrap();
         let slab = c
@@ -1668,7 +1723,7 @@ mod tests {
         let bytes = serde_json::to_vec(&document(&c).unwrap()).unwrap();
         assert!(bytes.len() < 16_384);
         let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-        assert_eq!(value["version"], 6);
+        assert_eq!(value["version"], 7);
         assert!(value.get("cells").is_none());
         assert_eq!(value["edits"].as_array().unwrap().len(), 3);
         let mut copy = decode(&bytes, None).unwrap();
@@ -1777,7 +1832,9 @@ mod tests {
         let mut client = generate(38).unwrap();
         let mut registry = client.scene.engine.as_ref().unwrap().registry.clone();
         registry.blocks.push(crate::engine_blocks::Block {
+            texture_tint: None,
             interaction: None,
+            fluid: None,
             behavior: Default::default(),
             state: None,
             selection: None,

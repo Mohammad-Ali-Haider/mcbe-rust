@@ -1,0 +1,20 @@
+{
+  "id": "snow",
+  "label": "Snow",
+  "extends": "templates/solid.json",
+  "components": {
+    "visual": {
+      "model": "models/cube.json",
+      "color": [
+        245,
+        248,
+        250
+      ],
+      "pattern": "solid",
+      "local": {
+        "pack": "vanilla",
+        "block": "snow"
+      }
+    }
+  }
+}

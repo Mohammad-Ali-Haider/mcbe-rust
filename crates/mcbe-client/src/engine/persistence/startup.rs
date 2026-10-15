@@ -27,6 +27,7 @@ pub struct Options {
     pub pack_root: PathBuf,
     pub resume: bool,
     pub streamed: bool,
+    pub modern: bool,
     pub seed: u64,
 }
 #[derive(Default)]
@@ -75,7 +76,15 @@ impl Options {
                     Registry::built_in()
                 };
                 if self.streamed {
-                    crate::engine_stream::generate(self.seed, registry)?
+                    if self.modern {
+                        crate::engine_stream::generate_modern(
+                            self.seed,
+                            registry,
+                            crate::engine::world::terrain::Settings::read_home(&self.home)?,
+                        )?
+                    } else {
+                        crate::engine_stream::generate(self.seed, registry)?
+                    }
                 } else {
                     engine::generate_with_registry(self.seed, registry)?
                 }
@@ -414,6 +423,7 @@ mod tests {
             pack_root: PathBuf::new(),
             resume: false,
             streamed: false,
+            modern: false,
             seed: 1,
         };
         let mut service = Service::new(options);
@@ -462,6 +472,7 @@ mod tests {
             pack_root: PathBuf::new(),
             resume: false,
             streamed: true,
+            modern: false,
             seed: 1,
         };
         let progress = Progress::default();

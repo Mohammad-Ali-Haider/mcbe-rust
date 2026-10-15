@@ -26,6 +26,7 @@ pub struct Model {
 }
 pub struct Library {
     collision: Vec<Vec<[f32; 6]>>,
+    fluids: Vec<bool>,
     layers: Vec<crate::engine_blocks::RenderLayer>,
     groups: Vec<Option<String>>,
     models: Vec<Model>,
@@ -236,6 +237,7 @@ impl Library {
                     })
                 })
                 .collect(),
+            fluids: registry.blocks.iter().map(|b| b.fluid.is_some()).collect(),
             layers: registry.blocks.iter().map(|b| b.render_layer).collect(),
             groups: registry
                 .blocks
@@ -260,7 +262,11 @@ impl Library {
         self.layers[usize::from(id)]
     }
     pub fn flags(&self, id: BlockId) -> u32 {
-        match self.layer(id) {
+        (if self.fluids[id as usize] {
+            0x00400000
+        } else {
+            0
+        }) | match self.layer(id) {
             crate::engine_blocks::RenderLayer::Opaque => 0,
             crate::engine_blocks::RenderLayer::Cutout => 0x20000000,
             crate::engine_blocks::RenderLayer::Translucent => 0x40000000,

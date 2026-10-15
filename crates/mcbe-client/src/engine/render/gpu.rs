@@ -70,6 +70,7 @@ pub struct Statistics {
     pub distant_previous_vertices: usize,
     pub distant_ready: bool,
     pub distant_vertices: usize,
+    pub distant_water_vertices: usize,
     pub distant_bytes: usize,
     pub distant_leaves: usize,
     pub distant_area_blocks: u64,
@@ -156,6 +157,7 @@ pub struct Renderer {
     character: super::character::Renderer,
     distant: crate::engine_distance::Distant,
     previous_lod_pipeline: wgpu::RenderPipeline,
+    previous_water_pipeline: wgpu::RenderPipeline,
     transparent_pipeline: wgpu::RenderPipeline,
     transparency: crate::engine_transparency::Batch,
     transparent_revision: usize,
@@ -280,6 +282,10 @@ impl Renderer {
         });
         let transparent_pipeline=device.create_render_pipeline(&wgpu::RenderPipelineDescriptor{
             label:Some("sorted blended terrain"),layout:Some(&terrain_layout),vertex:wgpu::VertexState{module:&world_shader,entry_point:Some("vs"),compilation_options:Default::default(),buffers:&[wgpu::VertexBufferLayout{array_stride:std::mem::size_of::<Vertex>()as u64,step_mode:wgpu::VertexStepMode::Vertex,attributes:&wgpu::vertex_attr_array![0=>Float32x3,1=>Float32x2,2=>Uint32,3=>Float32,4=>Float32x3]}]},
+            primitive:wgpu::PrimitiveState{cull_mode:Some(wgpu::Face::Back),..Default::default()},depth_stencil:Some(wgpu::DepthStencilState{format:wgpu::TextureFormat::Depth32Float,depth_write_enabled:false,depth_compare:wgpu::CompareFunction::Less,stencil:Default::default(),bias:Default::default()}),multisample:Default::default(),fragment:Some(wgpu::FragmentState{module:&world_shader,entry_point:Some("fs"),compilation_options:Default::default(),targets:&[Some(wgpu::ColorTargetState{format:config.format,blend:Some(wgpu::BlendState::ALPHA_BLENDING),write_mask:wgpu::ColorWrites::ALL})]}),multiview:None,cache:None,
+        });
+        let previous_water_pipeline=device.create_render_pipeline(&wgpu::RenderPipelineDescriptor{
+            label:Some("previous blended water"),layout:Some(&terrain_layout),vertex:wgpu::VertexState{module:&world_shader,entry_point:Some("vs_previous"),compilation_options:Default::default(),buffers:&[wgpu::VertexBufferLayout{array_stride:std::mem::size_of::<Vertex>()as u64,step_mode:wgpu::VertexStepMode::Vertex,attributes:&wgpu::vertex_attr_array![0=>Float32x3,1=>Float32x2,2=>Uint32,3=>Float32,4=>Float32x3]}]},
             primitive:wgpu::PrimitiveState{cull_mode:Some(wgpu::Face::Back),..Default::default()},depth_stencil:Some(wgpu::DepthStencilState{format:wgpu::TextureFormat::Depth32Float,depth_write_enabled:false,depth_compare:wgpu::CompareFunction::Less,stencil:Default::default(),bias:Default::default()}),multisample:Default::default(),fragment:Some(wgpu::FragmentState{module:&world_shader,entry_point:Some("fs"),compilation_options:Default::default(),targets:&[Some(wgpu::ColorTargetState{format:config.format,blend:Some(wgpu::BlendState::ALPHA_BLENDING),write_mask:wgpu::ColorWrites::ALL})]}),multiview:None,cache:None,
         });
         let previous_lod_pipeline=device.create_render_pipeline(&wgpu::RenderPipelineDescriptor{
@@ -421,6 +427,7 @@ impl Renderer {
             distant_previous_vertices: 0,
             distant_ready: true,
             distant_vertices: 0,
+            distant_water_vertices: 0,
             distant_bytes: 0,
             distant_leaves: 0,
             distant_area_blocks: 0,
@@ -486,6 +493,7 @@ impl Renderer {
             character,
             distant: Default::default(),
             previous_lod_pipeline,
+            previous_water_pipeline,
             transparent_pipeline,
             transparency: Default::default(),
             transparent_revision: 0,
@@ -851,8 +859,11 @@ impl Renderer {
         self.stats.distant_fine_vertices = self.distant.fine_vertices;
         self.stats.distant_retained_updates = self.distant.retained_updates;
         self.stats.distant_crossfades = self.distant.crossfades;
-        self.stats.distant_previous_vertices = self.distant.previous_vertices as usize;
-        self.stats.distant_vertices = self.distant.vertices as usize;
+        self.stats.distant_previous_vertices =
+            (self.distant.previous_vertices + self.distant.previous_water_vertices) as usize;
+        self.stats.distant_water_vertices = self.distant.water_vertices as usize;
+        self.stats.distant_vertices =
+            (self.distant.vertices + self.distant.water_vertices) as usize;
         self.stats.distant_bytes = self.stats.distant_vertices * std::mem::size_of::<Vertex>();
         self.stats.distant_leaves = self.distant.leaves;
         self.stats.distant_area_blocks = self.distant.area;
@@ -878,18 +889,14 @@ impl Renderer {
             self.mesher.invalidate();
         }
         if let Some(stream) = &state.stream {
-            self.meshes
-                .retain(|k, _| stream.residents.contains_key(&[k[0], k[2]]));
-            self.mesher
-                .retain(|k| stream.residents.contains_key(&[k[0], k[2]]));
+            self.meshes.retain(|k, _| stream.ready_chunk(*k));
+            self.mesher.retain(|k| stream.ready_chunk(k));
         }
         if all || self.revision != state.revision {
             let keys: BTreeSet<_> = if all {
                 state
                     .blocks
-                    .keys()
-                    .copied()
-                    .map(engine_mesh::chunk)
+                    .chunk_keys()
                     .chain(self.meshes.keys().copied())
                     .collect()
             } else {
@@ -956,12 +963,7 @@ impl Renderer {
     }
     pub fn verify_geometry(&self, client: &Client) -> Result<serde_json::Value> {
         let state = client.scene.engine.as_ref().unwrap();
-        let keys: BTreeSet<_> = state
-            .blocks
-            .keys()
-            .copied()
-            .map(engine_mesh::chunk)
-            .collect();
+        let keys: BTreeSet<_> = state.blocks.chunk_keys().collect();
         let mut equal = keys.len() == self.meshes.len();
         let mut faces = 0;
         let mut quads = 0;
@@ -1023,7 +1025,19 @@ impl Renderer {
             (frame.settings.fov as f32).to_radians(),
             self.config.width as f32 / self.config.height as f32,
             0.05,
-            (fog_end + 40.).max(100.),
+            (fog_end
+                + 40.
+                + streamed.filter(|s| s.volume.is_some()).map_or(0., |s| {
+                    (frame.eye[1]
+                        - s.generator
+                            .visible_surface(
+                                frame.eye[0].floor() as i32,
+                                frame.eye[2].floor() as i32,
+                            )
+                            .0 as f32)
+                        .abs()
+                }))
+            .max(100.),
         ) * Mat4::look_to_rh(eye, Vec3::from(dir), Vec3::Y);
         let target = if client.view.is_free() {
             None
@@ -1299,6 +1313,18 @@ impl Renderer {
                 self.world_bind.as_ref().unwrap(),
                 false,
             );
+            if let Some(buffer) = &self.distant.previous_water_buffer {
+                pass.set_pipeline(&self.previous_water_pipeline);
+                pass.set_bind_group(0, self.world_bind.as_ref().unwrap(), &[]);
+                pass.set_vertex_buffer(0, buffer.slice(..));
+                pass.draw(0..self.distant.previous_water_vertices, 0..1);
+            }
+            if let Some(buffer) = &self.distant.water_buffer {
+                pass.set_pipeline(&self.transparent_pipeline);
+                pass.set_bind_group(0, self.world_bind.as_ref().unwrap(), &[]);
+                pass.set_vertex_buffer(0, buffer.slice(..));
+                pass.draw(0..self.distant.water_vertices, 0..1);
+            }
             if let (Some(vertex), Some(index)) =
                 (&self.transparency.vertex, &self.transparency.index)
             {

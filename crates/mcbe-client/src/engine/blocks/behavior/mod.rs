@@ -3,8 +3,8 @@ mod passive;
 pub(crate) mod placement;
 pub(crate) mod wire;
 use super::{BlockId, Registry, components::BehaviorComponent};
+use crate::engine::world::storage::Store;
 use crate::scene::Result;
-use std::collections::HashMap;
 pub type Position = [i32; 3];
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BlockEvent {
@@ -14,7 +14,7 @@ pub enum BlockEvent {
 }
 pub struct EventContext<'a> {
     pub registry: &'a Registry,
-    pub blocks: &'a HashMap<Position, BlockId>,
+    pub blocks: &'a Store,
     pub position: Position,
     pub state: BlockId,
 }

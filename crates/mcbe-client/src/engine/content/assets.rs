@@ -185,6 +185,6 @@ impl Assets {
         } else {
             [texel[0], texel[1], texel[2]]
         };
-        Some(rgb.map(f64::from))
+        Some(crate::engine_materials::tint(rgb, registry.get(id).texture_tint).map(f64::from))
     }
 }

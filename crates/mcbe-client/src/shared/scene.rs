@@ -152,7 +152,7 @@ impl Scene {
                 .engine
                 .as_ref()
                 .and_then(|s| s.stream.as_ref())
-                .is_none_or(|s| s.residents.contains_key(&crate::engine_stream::column(p)))
+                .is_none_or(|s| s.ready(p))
     }
     pub fn from_engine(
         blocks: HashMap<[i32; 3], crate::engine_blocks::BlockId>,
@@ -161,9 +161,11 @@ impl Scene {
         let cells: HashSet<_> = blocks.keys().copied().collect();
         let shapes = state.registry.shapes()?;
         let mut state = state;
-        state.original_blocks = blocks.clone();
-        state.blocks = blocks;
-        state.simulation.hydrate(&state.registry, &state.blocks);
+        state.blocks = blocks.into();
+        state.original_blocks = state.blocks.clone();
+        state
+            .simulation
+            .hydrate(&state.registry, state.blocks.iter().map(|(p, id)| (p, *id)));
         Ok(Self {
             containers: HashMap::new(),
             geometry: Geometry::measured()?,
@@ -228,7 +230,12 @@ impl Scene {
         p: [i32; 3],
         id: Option<crate::engine_blocks::BlockId>,
     ) -> Result<()> {
-        if !self.inside(p) || p[1] == crate::engine::BOUNDS.min[1] {
+        let legacy = self
+            .engine
+            .as_ref()
+            .and_then(|s| s.stream.as_ref())
+            .is_none_or(|s| s.generator.config.version == 1);
+        if !self.inside(p) || (legacy && p[1] == crate::engine::BOUNDS.min[1]) {
             return Err("Outside loaded terrain or protected foundation".into());
         }
         let state = self.engine.as_mut().ok_or("Engine world missing")?;
@@ -250,17 +257,19 @@ impl Scene {
         }
         if let Some(stream) = &mut state.stream {
             stream.record(p, id)?;
-            let positions = stream
-                .residents
-                .get_mut(&crate::engine_stream::column(p))
-                .ok_or("Column unavailable")?;
-            if id.is_some() && !state.blocks.contains_key(&p) {
-                positions.push(p);
-            }
-            if id.is_none()
-                && let Some(i) = positions.iter().position(|v| *v == p)
-            {
-                positions.swap_remove(i);
+            if stream.volume.is_none() {
+                let positions = stream
+                    .residents
+                    .get_mut(&crate::engine_stream::column(p))
+                    .ok_or("Column unavailable")?;
+                if id.is_some() && !state.blocks.contains_key(&p) {
+                    positions.push(p);
+                }
+                if id.is_none()
+                    && let Some(i) = positions.iter().position(|v| *v == p)
+                {
+                    positions.swap_remove(i);
+                }
             }
         }
         if !keeps_furnace {
@@ -269,11 +278,15 @@ impl Scene {
         match id {
             Some(id) => {
                 state.blocks.insert(p, id);
-                self.cells.insert(p);
+                if legacy {
+                    self.cells.insert(p);
+                }
             }
             None => {
                 state.blocks.remove(&p);
-                self.cells.remove(&p);
+                if legacy {
+                    self.cells.remove(&p);
+                }
             }
         }
         state.simulation.changed(&state.registry, p, id);
@@ -294,9 +307,7 @@ impl Scene {
             );
         }
         if let Some(stream) = &state.stream {
-            state.dirty_chunks.retain(|k, _| {
-                (0..4).contains(&k[1]) && stream.residents.contains_key(&[k[0], k[2]])
-            });
+            state.dirty_chunks.retain(|k, _| stream.ready_chunk(*k));
         }
         Ok(())
     }

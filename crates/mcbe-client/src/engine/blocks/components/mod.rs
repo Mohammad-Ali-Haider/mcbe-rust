@@ -15,6 +15,7 @@ pub use signal::SignalComponent;
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BlockComponents {
+    pub fluid: Option<FluidKind>,
     pub interaction: Option<Interaction>,
     #[serde(default)]
     pub behavior: BehaviorComponent,
@@ -45,4 +46,10 @@ impl BehaviorComponent {
     pub fn passive(&self) -> bool {
         *self == Self::Passive
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FluidKind {
+    Water,
 }

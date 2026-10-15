@@ -162,8 +162,10 @@ fn compile<F: FnMut(&str) -> Result<Vec<u8>>>(read: F) -> Result<ContentPack> {
             let collision = c.collision.compile()?;
             let selection = c.selection.compile()?;
             group.push(Block {
+                texture_tint: c.visual.texture_tint,
                 behavior: c.behavior,
                 interaction: c.interaction,
+                fluid: c.fluid,
                 id: v.id,
                 label: v.label.unwrap_or_else(|| d.label.clone()),
                 hidden: v.hidden,
@@ -336,7 +338,10 @@ mod tests {
         .unwrap();
         let new = built_in().unwrap().registry;
         assert_eq!(old.blocks.len(), 36);
-        assert_eq!(new.blocks.len(), 37);
+        assert_eq!(new.blocks.len(), 40);
+        assert_eq!(new.find("water").unwrap(), 37);
+        assert_eq!(new.find("snow").unwrap(), 38);
+        assert_eq!(new.find("oak_leaves").unwrap(), 39);
         assert_eq!(new.find("furnace").unwrap(), 36);
         assert_eq!(
             new.get(16).interaction,

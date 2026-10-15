@@ -816,7 +816,7 @@ mod tests {
                     .as_ref()
                     .unwrap()
                     .registry
-                    .find("furnace")
+                    .find("oak_leaves")
                     .unwrap()
             )
         );

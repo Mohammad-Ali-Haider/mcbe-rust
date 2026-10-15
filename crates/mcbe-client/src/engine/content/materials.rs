@@ -68,6 +68,11 @@ pub fn load(registry: &Registry, home: &Path) -> Result<Owned> {
         textures,
     })
 }
+pub fn tint(rgb: [u8; 3], tint: Option<[u8; 3]>) -> [u8; 3] {
+    tint.map_or(rgb, |t| {
+        std::array::from_fn(|i| (u16::from(rgb[i]) * u16::from(t[i]) / 255) as u8)
+    })
+}
 pub fn color(client: &Client, id: BlockId, face: usize, u: f64, v: f64) -> Option<[f64; 3]> {
     if let Some(t) = client
         .owned_materials
@@ -75,7 +80,8 @@ pub fn color(client: &Client, id: BlockId, face: usize, u: f64, v: f64) -> Optio
         .and_then(|a| a.textures.get(&(id, face)))
     {
         let p = t.sample_repeat(u, if face <= 1 { v } else { 1. - v });
-        return Some([p[0], p[1], p[2]].map(f64::from));
+        let b = client.scene.engine.as_ref()?.registry.get(id);
+        return Some(tint([p[0], p[1], p[2]], b.texture_tint).map(f64::from));
     }
     let state = client.scene.engine.as_ref()?;
     client
@@ -86,6 +92,12 @@ pub fn color(client: &Client, id: BlockId, face: usize, u: f64, v: f64) -> Optio
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn optional_texture_tint_preserves_raw_colors_and_multiplies_channels() {
+        assert_eq!(tint([255, 128, 64], None), [255, 128, 64]);
+        assert_eq!(tint([255, 128, 64], Some([80, 160, 40])), [80, 80, 10]);
+        assert_eq!(tint([20, 80, 255], Some([255; 3])), [20, 80, 255]);
+    }
     #[test]
     fn own_png_paths_are_portable_and_bounded() {
         assert!(valid_path("assets/textures/my_stone.png"));

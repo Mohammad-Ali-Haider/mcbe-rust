@@ -137,7 +137,9 @@ pub fn pose(client: &Client, eye: [f32; 3]) -> Result<Pose> {
                 distance = distance.min((entered - 0.2_f32).max(0.));
                 break;
             }
-            if let Some(id) = state.blocks.get(&cell) {
+            if let Some(id) = state.blocks.get(&cell)
+                && state.registry.get(*id).fluid.is_none()
+            {
                 for cube in state.geometry.boxes(*id) {
                     if let Some((t, _, _)) = crate::render::box_hit(
                         cell,

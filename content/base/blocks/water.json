@@ -1,0 +1,27 @@
+{
+  "id": "water",
+  "label": "Water",
+  "extends": "templates/solid.json",
+  "components": {
+    "fluid": "water",
+    "visual": {
+      "model": "models/cube.json",
+      "color": [
+        45,
+        115,
+        195
+      ],
+      "pattern": "solid"
+    },
+    "collision": {
+      "shape": "none"
+    },
+    "selection": {
+      "shape": "none"
+    },
+    "occlusion": {
+      "layer": "translucent",
+      "cull_group": "water"
+    }
+  }
+}

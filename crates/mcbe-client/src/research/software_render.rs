@@ -23,17 +23,39 @@ pub struct CacheStats {
 }
 pub struct EngineCache {
     revision: u64,
+    bounds: Bounds,
     dense: Vec<Option<Kind>>,
     ready: Vec<bool>,
     pub stats: CacheStats,
 }
+fn render_bounds(client: &Client) -> Bounds {
+    if client
+        .scene
+        .engine
+        .as_ref()
+        .is_some_and(|s| s.stream.is_some())
+    {
+        let p = client.actor.position;
+        let c = [p.x.floor() as i32, p.y.floor() as i32, p.z.floor() as i32]
+            .map(|v| v.div_euclid(16) * 16);
+        Bounds {
+            min: c.map(|v| v.saturating_sub(48)),
+            max: c.map(|v| v.saturating_add(64)),
+        }
+    } else {
+        client.scene.bounds
+    }
+}
 impl EngineCache {
     fn build(client: &Client, rebuilds: usize) -> Self {
         let state = client.scene.engine.as_ref().unwrap();
-        let bounds = client.scene.bounds;
+        let bounds = render_bounds(client);
         let mut dense = vec![None; bounds.volume().unwrap()];
         let mut surface = 0;
         for (p, id) in &state.blocks {
+            if !bounds.contains(p) {
+                continue;
+            }
             let hidden = client.engine_cache_enabled
                 && state.geometry.full(*id)
                 && [
@@ -52,11 +74,12 @@ impl EngineCache {
                         .is_some_and(|id| state.geometry.full(*id))
                 });
             if !hidden {
-                dense[index(bounds, *p)] = Some(Kind::Engine(*id));
+                dense[index(bounds, p)] = Some(Kind::Engine(*id));
                 surface += 1;
             }
         }
         Self {
+            bounds,
             revision: state.revision,
             dense,
             ready: vec![
@@ -76,7 +99,7 @@ fn index(bounds: Bounds, p: [i32; 3]) -> usize {
     bounds.index(p).expect("Checked renderer coordinate")
 }
 pub fn render(client: &Client, width: usize, height: usize) -> Vec<u32> {
-    let bounds = client.scene.bounds;
+    let bounds = render_bounds(client);
     let volume = bounds.volume().expect("Validated scene bounds");
     let mut cache = client.engine_render_cache.borrow_mut();
     let mut owned_dense = Vec::new();
@@ -85,7 +108,9 @@ pub fn render(client: &Client, width: usize, height: usize) -> Vec<u32> {
     let mut container_shapes = Vec::new();
     if let Some(state) = &client.scene.engine {
         if !client.engine_cache_enabled
-            || cache.as_ref().is_none_or(|c| c.revision != state.revision)
+            || cache
+                .as_ref()
+                .is_none_or(|c| c.revision != state.revision || c.bounds != bounds)
         {
             let rebuilds = cache.as_ref().map_or(1, |c| c.stats.rebuilds + 1);
             *cache = Some(EngineCache::build(client, rebuilds));

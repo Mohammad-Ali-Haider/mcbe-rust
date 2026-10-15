@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "sea_level": 64,
+  "caves": true,
+  "ravines": true,
+  "biomes": [
+    {
+      "id": "ocean",
+      "label": "Ocean",
+      "surface": "sand",
+      "subsurface": "sand",
+      "trees": 0,
+      "temperature": [
+        -1,
+        1
+      ],
+      "moisture": [
+        -1,
+        1
+      ],
+      "altitude": [
+        -2147483648,
+        2147483647
+      ]
+    },
+    {
+      "id": "river",
+      "label": "River",
+      "surface": "sand",
+      "subsurface": "clay",
+      "trees": 0,
+      "temperature": [
+        -1,
+        1
+      ],
+      "moisture": [
+        -1,
+        1
+      ],
+      "altitude": [
+        -2147483648,
+        2147483647
+      ]
+    },
+    {
+      "id": "snow",
+      "label": "Snowy Peaks",
+      "surface": "snow",
+      "subsurface": "slate",
+      "trees": 0,
+      "temperature": [
+        -1,
+        0.2
+      ],
+      "moisture": [
+        -1,
+        1
+      ],
+      "altitude": [
+        128,
+        2147483647
+      ]
+    },
+    {
+      "id": "mountains",
+      "label": "Mountains",
+      "surface": "slate",
+      "subsurface": "slate",
+      "trees": 0,
+      "temperature": [
+        -1,
+        1
+      ],
+      "moisture": [
+        -1,
+        1
+      ],
+      "altitude": [
+        120,
+        2147483647
+      ]
+    },
+    {
+      "id": "desert",
+      "label": "Desert",
+      "surface": "sand",
+      "subsurface": "sand",
+      "trees": 0,
+      "temperature": [
+        0.25,
+        1
+      ],
+      "moisture": [
+        -1,
+        0.15
+      ],
+      "altitude": [
+        -2147483648,
+        2147483647
+      ]
+    },
+    {
+      "id": "forest",
+      "label": "Forest",
+      "surface": "meadow",
+      "subsurface": "earth",
+      "trees": 65,
+      "temperature": [
+        -1,
+        1
+      ],
+      "moisture": [
+        0.1,
+        1
+      ],
+      "altitude": [
+        -2147483648,
+        2147483647
+      ]
+    },
+    {
+      "id": "plains",
+      "label": "Plains",
+      "surface": "meadow",
+      "subsurface": "earth",
+      "trees": 16,
+      "temperature": [
+        -1,
+        1
+      ],
+      "moisture": [
+        -1,
+        1
+      ],
+      "altitude": [
+        -2147483648,
+        2147483647
+      ]
+    }
+  ]
+}

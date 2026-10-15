@@ -10,7 +10,7 @@ use mcbe_core::motion::{Actor, Vec3};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     fs,
     path::PathBuf,
     sync::{
@@ -81,7 +81,8 @@ struct Request {
     operation: Operation,
 }
 struct Region {
-    blocks: HashMap<Position, BlockId>,
+    volume: Option<crate::engine::world::volume::Volume>,
+    blocks: crate::engine::world::storage::Store,
     cells: HashSet<Position>,
     residents: BTreeMap<Column, Vec<Position>>,
     wanted: BTreeSet<Column>,
@@ -91,13 +92,13 @@ struct Region {
     chunks: BTreeSet<[i32; 3]>,
 }
 enum Prepared {
-    Travel(Region),
+    Travel(Box<Region>),
     Reload(Box<Client>),
 }
 enum Retired {
     Prepared(Prepared),
     Client(Box<Client>),
-    Region(Region),
+    Region(Box<Region>),
 }
 enum Job {
     Prepare(Box<Request>),
@@ -166,19 +167,45 @@ fn prepare_region(
     let observed = |p| edits.get(&p).copied().unwrap_or_else(|| generator.block(p));
     let (position, yaw, pitch) = match destination {
         Destination::Exhibit(index) => {
-            let [x, z] = [[0, -10], [128, 128], [-161, 65], [320, -257]][index % 4];
-            let y = (1..62)
-                .rev()
-                .find(|y| observed([x, *y, z]).is_some())
-                .unwrap_or(0)
-                + 1;
+            let [x, z] = if let Some(terrain) = &generator.terrain {
+                let p = terrain.landmark(index);
+                [p[0], p[2]]
+            } else {
+                [[0, -10], [128, 128], [-161, 65], [320, -257]][index % 4]
+            };
+            let top = generator.visible_surface(x, z).0;
+            let y = if generator.terrain.is_some() {
+                (top..=top + 6)
+                    .rev()
+                    .find(|y| observed([x, *y, z]).is_some())
+                    .unwrap_or(top - 1)
+                    + 1
+            } else {
+                (1..62)
+                    .rev()
+                    .find(|y| observed([x, *y, z]).is_some())
+                    .unwrap_or(0)
+                    + 1
+            };
             (
                 Vec3::new(x as f32 + 0.5, y as f32, z as f32 + 0.5),
                 0.8,
                 -0.25,
             )
         }
-        Destination::Overlook => (Vec3::new(20.5, 13., 0.5), -1.4, -0.4),
+        Destination::Overlook => (
+            Vec3::new(
+                20.5,
+                if generator.terrain.is_some() {
+                    generator.visible_surface(20, 0).0 as f32 + 8.
+                } else {
+                    13.
+                },
+                0.5,
+            ),
+            -1.4,
+            -0.4,
+        ),
     };
     Actor::new(position, movement.body())?;
     let low = [position.x - 0.3, position.y, position.z - 0.3];
@@ -187,9 +214,9 @@ fn prepare_region(
         position.y + movement.body().height,
         position.z + 0.3,
     ];
-    if (0..3)
-        .any(|a| low[a] < stream::BOUNDS.min[a] as f32 || high[a] > stream::BOUNDS.max[a] as f32)
-    {
+    if (0..3).any(|a| {
+        low[a] < generator.bounds().min[a] as f32 || high[a] > generator.bounds().max[a] as f32
+    }) {
         return Err("Travel body exceeds world bounds".into());
     }
     for x in low[0].floor() as i32..high[0].ceil() as i32 {
@@ -212,7 +239,8 @@ fn prepare_region(
     }
     let wanted = stream::wanted(stream::center(position), generator.config.radius);
     let mut region = Region {
-        blocks: HashMap::new(),
+        volume: None,
+        blocks: crate::engine::world::storage::Store::new(),
         cells: HashSet::new(),
         residents: BTreeMap::new(),
         chunks: BTreeSet::new(),
@@ -221,6 +249,47 @@ fn prepare_region(
         yaw,
         pitch,
     };
+    if generator.terrain.is_some() {
+        use crate::engine::world::{
+            storage::{self, AIR},
+            volume,
+        };
+        let mut window = volume::Volume::wanted(&generator, position);
+        let mut indexed: BTreeMap<_, Vec<_>> = BTreeMap::new();
+        for (p, id) in &edits {
+            indexed.entry(storage::key(*p)).or_default().push((*p, *id));
+        }
+        for key in &window.wanted {
+            if newest.load(Ordering::Acquire) != id {
+                return Err("Preparation superseded".into());
+            }
+            let mut chunk = volume::generate(&generator, *key);
+            if let Some(edits) = indexed.get(key) {
+                let c = Arc::make_mut(&mut chunk);
+                for (p, id) in edits {
+                    let i = storage::index(*p);
+                    let old = c.ids[i];
+                    let next = id.unwrap_or(AIR);
+                    if old == AIR && next != AIR {
+                        c.count += 1;
+                    }
+                    if old != AIR && next == AIR {
+                        c.count -= 1;
+                    }
+                    c.ids[i] = next;
+                }
+            }
+            if chunk.count > 0 {
+                region.chunks.insert(*key);
+            }
+            region.blocks.insert_chunk(*key, chunk);
+            window.residents.insert(*key);
+            region.residents.entry([key[0], key[2]]).or_default();
+        }
+        region.wanted = window.wanted.iter().map(|k| [k[0], k[2]]).collect();
+        region.volume = Some(window);
+        return Ok(region);
+    }
     for c in &region.wanted {
         if newest.load(Ordering::Acquire) != id {
             return Err("Preparation superseded".into());
@@ -283,7 +352,7 @@ impl Service {
                                         movement,
                                         edits,
                                         destination,
-                                    } => Ok(Prepared::Travel(prepare_region(
+                                    } => Ok(Prepared::Travel(Box::new(prepare_region(
                                         generator,
                                         geometry,
                                         movement,
@@ -291,7 +360,7 @@ impl Service {
                                         destination,
                                         id,
                                         &token,
-                                    )?)),
+                                    )?))),
                                     Operation::Reload {
                                         path,
                                         expected,
@@ -498,11 +567,12 @@ impl Service {
                         Prepared::Travel(mut region) => {
                             let state = client.scene.engine.as_mut().unwrap();
                             let s = state.stream.as_mut().unwrap();
-                            let old_chunks = s
-                                .residents
-                                .keys()
-                                .filter(|c| region.wanted.contains(*c))
-                                .flat_map(|c| (0..4).map(move |y| [c[0], y, c[1]]));
+                            let old_chunks = state.blocks.chunk_keys().filter(|k| {
+                                region.volume.as_ref().map_or_else(
+                                    || region.wanted.contains(&[k[0], k[2]]),
+                                    |v| v.residents.contains(k),
+                                )
+                            });
                             region.chunks.extend(old_chunks);
                             state.revision = state.revision.wrapping_add(1);
                             state.dirty_chunks =
@@ -519,11 +589,15 @@ impl Service {
                             std::mem::swap(&mut s.residents, &mut region.residents);
                             std::mem::swap(&mut s.wanted, &mut region.wanted);
                             s.center = stream::center(region.position);
+                            std::mem::swap(&mut s.volume, &mut region.volume);
                             state.simulation =
                                 crate::engine::blocks::systems::simulation::Simulation::new(
                                     &state.registry,
                                 );
-                            state.simulation.hydrate(&state.registry, &state.blocks);
+                            state.simulation.hydrate(
+                                &state.registry,
+                                state.blocks.iter().map(|(p, id)| (p, *id)),
+                            );
                             client.actor = Actor::new(region.position, client.movement.body())?;
                             client.spawn = region.position;
                             client.yaw = region.yaw;
@@ -577,6 +651,49 @@ mod tests {
             thread::sleep(Duration::from_millis(1));
         }
         events
+    }
+    #[test]
+    fn modern_travel_matches_sync_chunks_and_cancellation_preserves_height_edits() {
+        let mut settings = crate::engine::world::terrain::Settings::built_in();
+        settings.caves = false;
+        settings.sea_level = -128;
+        let mut live =
+            stream::generate_modern(360036, Registry::built_in(), settings.clone()).unwrap();
+        crate::engine_player::mode(&mut live, crate::engine_player::Mode::Noclip).unwrap();
+        live.set_spawn(Vec3::new(0.5, 10002., 0.5)).unwrap();
+        live.scene.change_engine([0, 10000, 0], Some(0)).unwrap();
+        let original = live.actor.position;
+        let mut loader = Service::new().unwrap();
+        loader.travel(&live, Destination::Exhibit(1)).unwrap();
+        loader.cancel();
+        assert!(settle(&mut loader, &mut live).iter().all(|e| !e.applied));
+        assert_eq!(live.actor.position, original);
+        loader.travel(&live, Destination::Exhibit(1)).unwrap();
+        assert!(
+            settle(&mut loader, &mut live)
+                .iter()
+                .any(|e| e.applied && e.off_thread)
+        );
+        let mut reference =
+            stream::generate_modern(360036, Registry::built_in(), settings).unwrap();
+        crate::engine_player::mode(&mut reference, crate::engine_player::Mode::Noclip).unwrap();
+        stream::jump(&mut reference, 1).unwrap();
+        assert_eq!(live.actor.position, reference.actor.position);
+        assert_eq!(
+            live.scene.engine.as_ref().unwrap().blocks,
+            reference.scene.engine.as_ref().unwrap().blocks
+        );
+        assert!(live.scene.cells.is_empty());
+        live.set_spawn(original).unwrap();
+        assert_eq!(
+            live.scene
+                .engine
+                .as_ref()
+                .unwrap()
+                .blocks
+                .get(&[0, 10000, 0]),
+            Some(&0)
+        );
     }
     #[test]
     fn latest_travel_matches_synchronous_terrain_and_preserves_unsaved_state() {

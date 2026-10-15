@@ -14,7 +14,7 @@ fn noise(p:vec2<u32>,salt:u32)->f32 {
     return f32(n&65535u)/65536.;
 }
 @fragment fn fs(i:Out)->@location(0) vec4<f32>{
-    let layer=i.layer&0x007fffffu;
+    let layer=i.layer&0x003fffffu;
     let custom=(i.layer&0x80000000u)!=0u;
     let texel=textureSample(terrain,terrain_sampler,i.uv,i32(layer));
     let thickness=max(max(fwidth(i.bary.x),fwidth(i.bary.y)),fwidth(i.bary.z));
@@ -34,7 +34,7 @@ fn noise(p:vec2<u32>,salt:u32)->f32 {
         let b=smoothstep(208.,256.,d);
         let value=noise(pixel,7u);
         let glass=(i.layer&0x40000000u)!=0u;
-        if !far && !glass && value<a {discard;}
+        if !far && (!glass || (i.layer&0x00400000u)!=0u) && value<a {discard;}
         if fine && (value>=a || value<a*b) {discard;}
         if field && value>=a*b {discard;}
         let trunk=(i.layer&0x00800000u)!=0u;

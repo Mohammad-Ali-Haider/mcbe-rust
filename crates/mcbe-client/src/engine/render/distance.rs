@@ -36,17 +36,29 @@ struct Key {
     center: [i32; 2],
     radius: i32,
 }
+#[derive(Clone)]
 struct Request {
+    solid_surface: bool,
     epoch: u64,
     key: Key,
     generator: Arc<Generator>,
     geometry: Arc<crate::engine_geometry::Library>,
     edits: Edits,
-    top: u16,
     side: u16,
     stone: u16,
     log: u16,
     leaf: u16,
+}
+impl Request {
+    fn surface(&self, x: i32, z: i32) -> (i32, u16) {
+        if self.solid_surface
+            && let Some(t) = &self.generator.terrain
+        {
+            t.solid_surface(t.sample(x, z))
+        } else {
+            self.generator.visible_surface(x, z)
+        }
+    }
 }
 struct Finished {
     epoch: u64,
@@ -54,6 +66,7 @@ struct Finished {
     mesh: std::result::Result<Option<Mesh>, String>,
 }
 pub struct Mesh {
+    pub water: Vec<Vertex>,
     pub vertices: Vec<Vertex>,
     pub leaves: usize,
     pub area: u64,
@@ -122,12 +135,12 @@ fn distance(key: Key, x: i32, z: i32) -> i32 {
     let [cx, cz] = center(key);
     (x - cx).abs().max((z - cz).abs())
 }
-fn bilinear(g: &Generator, x: f32, z: f32, step: i32) -> f32 {
+fn bilinear(r: &Request, x: f32, z: f32, step: i32) -> f32 {
     let x0 = (x.floor() as i32).div_euclid(step) * step;
     let z0 = (z.floor() as i32).div_euclid(step) * step;
     let u = (x - x0 as f32) / step as f32;
     let v = (z - z0 as f32) / step as f32;
-    let h = |a, b| g.ground_height(a, b) as f32;
+    let h = |a, b| r.surface(a, b).0 as f32;
     (h(x0, z0) * (1. - u) + h(x0 + step, z0) * u) * (1. - v)
         + (h(x0, z0 + step) * (1. - u) + h(x0 + step, z0 + step) * u) * v
 }
@@ -138,8 +151,7 @@ fn field_height(r: &Request, x: f32, z: f32) -> f32 {
     let step = 1 << lod.floor() as i32;
     let t = lod.fract();
     let t = t * t * (3. - 2. * t);
-    bilinear(&r.generator, x, z, step) * (1. - t)
-        + bilinear(&r.generator, x, z, (step * 2).min(64)) * t
+    bilinear(r, x, z, step) * (1. - t) + bilinear(r, x, z, (step * 2).min(64)) * t
 }
 fn triangle(out: &mut Vec<Vertex>, points: [[f32; 3]; 3], id: u16, flags: u32) {
     for (i, p) in points.into_iter().enumerate() {
@@ -197,7 +209,7 @@ fn field(r: &Request, cells: &[Cell], mesh: &mut Mesh) -> Result<()> {
                 triangle(
                     &mut mesh.vertices,
                     indices.map(|i| corners[i]),
-                    r.top,
+                    r.surface(c.x + c.size / 2, c.z + c.size / 2).1,
                     FIELD,
                 );
             }
@@ -212,7 +224,7 @@ fn field(r: &Request, cells: &[Cell], mesh: &mut Mesh) -> Result<()> {
                         point(ax as f32, az as f32),
                         point(bx as f32, bz as f32),
                     ],
-                    r.top,
+                    r.surface(c.x + c.size / 2, c.z + c.size / 2).1,
                     FIELD,
                 );
             }
@@ -232,11 +244,11 @@ fn observed(r: &Request, p: [i32; 3]) -> Option<u16> {
         .unwrap_or_else(|| r.generator.block(p))
 }
 fn ground(r: &Request, x: i32, z: i32) -> (i32, u16) {
-    let mut h = r.generator.ground_height(x, z);
-    while h > 1 && r.edits.get(&[x, h - 1, z]) == Some(&None) {
+    let mut h = r.surface(x, z).0;
+    while h > r.generator.bounds().min[1] + 1 && r.edits.get(&[x, h - 1, z]) == Some(&None) {
         h -= 1;
     }
-    (h, observed(r, [x, h - 1, z]).unwrap_or(r.top))
+    (h, observed(r, [x, h - 1, z]).unwrap_or(r.surface(x, z).1))
 }
 fn surface(
     out: &mut Vec<Vertex>,
@@ -477,7 +489,7 @@ fn trees(r: &Request, view: [i32; 4], token: &AtomicU64, mesh: &mut Mesh) -> boo
                         face,
                         r.leaf,
                         bounds,
-                        TREE,
+                        TREE | r.geometry.flags(r.leaf),
                     );
                 }
             }
@@ -487,10 +499,10 @@ fn trees(r: &Request, view: [i32; 4], token: &AtomicU64, mesh: &mut Mesh) -> boo
                 [x - 2, y + 2, z - 2],
                 [5., 3., 5.],
                 r.leaf,
-                TREE,
+                TREE | r.geometry.flags(r.leaf),
             );
         }
-        if mesh.vertices.len() + vertices.len() > MAX_VERTICES {
+        if mesh.vertices.len() + mesh.water.len() + vertices.len() > MAX_VERTICES {
             break;
         }
         mesh.vertices.extend(vertices);
@@ -508,6 +520,7 @@ fn build(r: &Request, token: &AtomicU64) -> Result<Option<Mesh>> {
         ((z + radius + 1) * 16).min(8192),
     ];
     let mut mesh = Mesh {
+        water: Vec::new(),
         vertices: Vec::new(),
         leaves: 0,
         area: 0,
@@ -516,7 +529,11 @@ fn build(r: &Request, token: &AtomicU64) -> Result<Option<Mesh>> {
         stitched_edges: 0,
         fine_vertices: 0,
     };
-    if !fine(r, view, token, &mut mesh) {
+    let solid = Request {
+        solid_surface: r.generator.terrain.is_some(),
+        ..r.clone()
+    };
+    if !fine(&solid, view, token, &mut mesh) {
         return Ok(None);
     }
     let mut b = Builder {
@@ -529,12 +546,41 @@ fn build(r: &Request, token: &AtomicU64) -> Result<Option<Mesh>> {
     if !b.node(-8192, -8192, 16384) {
         return Ok(None);
     }
-    field(r, &b.cells, &mut mesh)?;
+    field(&solid, &b.cells, &mut mesh)?;
+    if let Some(terrain) = &r.generator.terrain {
+        let mut visible = Mesh {
+            water: Vec::new(),
+            vertices: Vec::new(),
+            leaves: 0,
+            area: 0,
+            trees: 0,
+            objects: 0,
+            stitched_edges: 0,
+            fine_vertices: 0,
+        };
+        if !fine(r, view, token, &mut visible) {
+            return Ok(None);
+        }
+        field(r, &b.cells, &mut visible)?;
+        mesh.water = visible
+            .vertices
+            .into_iter()
+            .filter_map(|mut vertex| {
+                if (vertex.layer & 0x003fffff) / 6 == u32::from(terrain.water) {
+                    vertex.layer |= 0x40400000;
+                    Some(vertex)
+                } else {
+                    None
+                }
+            })
+            .collect();
+    }
+
     objects(r, &mut mesh);
     if !trees(r, view, token, &mut mesh) {
         return Ok(None);
     }
-    if mesh.vertices.len() > MAX_VERTICES {
+    if mesh.vertices.len() + mesh.water.len() > MAX_VERTICES {
         return Err("Distant terrain budget exceeded".into());
     }
     if token.load(Ordering::Acquire) == r.epoch {
@@ -602,6 +648,10 @@ pub struct Distant {
     fade_started: Option<Instant>,
     previous_key: Option<Key>,
     pub buffer: Option<wgpu::Buffer>,
+    pub water_buffer: Option<wgpu::Buffer>,
+    pub previous_water_buffer: Option<wgpu::Buffer>,
+    pub water_vertices: u32,
+    pub previous_water_vertices: u32,
     pub previous_buffer: Option<wgpu::Buffer>,
     pub previous_vertices: u32,
     pub vertices: u32,
@@ -619,6 +669,10 @@ pub struct Distant {
 impl Distant {
     fn clear(&mut self) {
         self.buffer = None;
+        self.water_buffer = None;
+        self.previous_water_buffer = None;
+        self.water_vertices = 0;
+        self.previous_water_vertices = 0;
         self.previous_buffer = None;
         self.vertices = 0;
         self.previous_vertices = 0;
@@ -644,7 +698,7 @@ impl Distant {
         let [x, z] = center(key);
         let old = center(self.previous_key.unwrap_or(key));
         let t = self.fraction();
-        let previous = self.previous_buffer.is_some();
+        let previous = self.previous_buffer.is_some() || self.previous_water_buffer.is_some();
         (
             [x as f32, z as f32, if previous { t } else { 1. }, 1.],
             [
@@ -658,6 +712,8 @@ impl Distant {
     pub fn update(&mut self, client: &Client, device: &wgpu::Device) -> Result<bool> {
         if self.fraction() >= 1. {
             self.previous_buffer = None;
+            self.previous_water_buffer = None;
+            self.previous_water_vertices = 0;
             self.previous_vertices = 0;
             self.previous_key = None;
         }
@@ -702,6 +758,16 @@ impl Distant {
                             done.mesh.map_err(|e| format!("Distant terrain: {e}"))?
                         {
                             self.previous_buffer = self.buffer.take();
+                            self.previous_water_buffer = self.water_buffer.take();
+                            self.previous_water_vertices = self.water_vertices;
+                            self.water_vertices = mesh.water.len() as u32;
+                            self.water_buffer = (!mesh.water.is_empty()).then(|| {
+                                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                                    label: Some("blended distant water"),
+                                    contents: bytemuck::cast_slice(&mesh.water),
+                                    usage: wgpu::BufferUsages::VERTEX,
+                                })
+                            });
                             self.previous_vertices = self.vertices;
                             self.previous_key = self.adopted;
                             self.crossfades += usize::from(self.previous_buffer.is_some());
@@ -764,19 +830,26 @@ impl Distant {
             let worker = self.worker.as_ref().unwrap();
             worker.token.store(self.epoch, Ordering::Release);
             worker.sender.send(Some(Request {
+                solid_surface: false,
                 epoch: self.epoch,
                 key,
                 generator: state.stream.as_ref().unwrap().generator.clone(),
                 geometry: state.geometry.clone(),
                 edits: self.edits_cache.as_ref().unwrap().3.clone(),
-                top: state.registry.find("meadow")?,
                 side: state.registry.find("earth")?,
                 stone: state.registry.find("slate")?,
                 log: state
                     .registry
                     .find("oak_log")
                     .or_else(|_| state.registry.find("clay"))?,
-                leaf: state.registry.find("moss")?,
+                leaf: state
+                    .stream
+                    .as_ref()
+                    .unwrap()
+                    .generator
+                    .terrain
+                    .as_ref()
+                    .map_or_else(|| state.registry.find("moss"), |t| Ok(t.leaves))?,
             }))?;
             self.busy = true;
             self.jobs += 1;
@@ -792,6 +865,7 @@ mod tests {
         let mut config = engine_stream::Config::new(&r);
         config.radius = 255;
         Request {
+            solid_surface: false,
             epoch: 1,
             key: Key {
                 instance: 1,
@@ -803,12 +877,54 @@ mod tests {
             generator: Arc::new(Generator::new(360036, &r, config).unwrap()),
             geometry: Arc::new(crate::engine_geometry::Library::compile(&r).unwrap()),
             edits: Arc::new(HashMap::new()),
-            top: r.find("meadow").unwrap(),
             side: r.find("earth").unwrap(),
             stone: r.find("slate").unwrap(),
             log: r.find("oak_log").unwrap(),
             leaf: r.find("moss").unwrap(),
         }
+    }
+    #[test]
+    fn modern_ocean_lod_retains_solid_seabed_and_separate_blended_water() {
+        let registry = crate::engine_blocks::Registry::built_in();
+        let mut r = request([-16, 14]);
+        let config = engine_stream::Config {
+            version: 2,
+            terrain: Some(crate::engine::world::terrain::Settings::built_in()),
+            radius: 16,
+            exhibits: Vec::new(),
+        };
+        r.generator = Arc::new(Generator::new(360036, &registry, config).unwrap());
+        r.key.radius = 16;
+        r.leaf = registry.find("oak_leaves").unwrap();
+        let mesh = build(&r, &AtomicU64::new(1)).unwrap().unwrap();
+        let water = registry.find("water").unwrap();
+        assert!(!mesh.water.is_empty() && !mesh.vertices.is_empty());
+        assert!(
+            mesh.water
+                .iter()
+                .all(|v| (v.layer & 0x003fffff) / 6 == u32::from(water)
+                    && v.layer & 0x40400000 == 0x40400000)
+        );
+        assert!(
+            mesh.vertices
+                .iter()
+                .all(|v| (v.layer & 0x003fffff) / 6 != u32::from(water))
+        );
+        let wet = mesh
+            .water
+            .iter()
+            .find(|v| {
+                v.layer & FINE != 0
+                    && v.position[1] == 64.
+                    && distance(r.key, v.position[0] as i32, v.position[2] as i32) < 127
+            })
+            .unwrap();
+        let p = wet.position;
+        assert!(mesh.vertices.iter().any(|v| v.layer & FINE != 0
+            && v.position[0] == p[0]
+            && v.position[2] == p[2]
+            && v.position[1] < p[1]));
+        assert!(mesh.water.len() + mesh.vertices.len() <= MAX_VERTICES);
     }
     #[test]
     fn maximum_range_has_stitched_heights_fine_overlap_and_distant_trees() {

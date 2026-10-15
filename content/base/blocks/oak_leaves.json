@@ -1,0 +1,29 @@
+{
+  "id": "oak_leaves",
+  "label": "Oak Leaves",
+  "extends": "templates/solid.json",
+  "components": {
+    "visual": {
+      "model": "models/cube.json",
+      "color": [
+        65,
+        115,
+        40
+      ],
+      "pattern": "meadow",
+      "local": {
+        "pack": "vanilla",
+        "block": "leaves"
+      },
+      "texture_tint": [
+        95,
+        165,
+        60
+      ]
+    },
+    "occlusion": {
+      "layer": "cutout",
+      "cull_group": "oak_leaves"
+    }
+  }
+}

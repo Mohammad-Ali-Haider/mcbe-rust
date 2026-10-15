@@ -11,3 +11,5 @@ pub(crate) mod ui;
 pub(crate) mod stations;
 
 pub(crate) mod player;
+
+pub(crate) mod terrain;

@@ -4,8 +4,9 @@ use super::super::{
     BlockId, Registry,
     behavior::{self, BlockEvent, Command, EventContext, Position},
 };
+use crate::engine::world::storage::Store;
 use crate::scene::{Client, Result};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 const BUDGET: usize = 512;
 const QUEUE_LIMIT: usize = 65536;
 #[derive(Clone, Copy, Debug)]
@@ -70,12 +71,32 @@ impl Simulation {
             self.enqueue(n, BlockEvent::NeighborChanged);
         }
     }
-    /// Seed only on load/registry replacement or newly resident columns.
-    pub fn hydrate(&mut self, registry: &Registry, blocks: &HashMap<Position, BlockId>) {
+    pub fn evict_chunk(&mut self, registry: &Registry, key: [i32; 3]) {
         if !self.enabled {
             return;
         }
-        for (&p, &id) in blocks {
+        let lo = [key[0] * 16, i32::MIN, i32::MIN];
+        let hi = [key[0] * 16 + 16, i32::MIN, i32::MIN];
+        let positions = self
+            .active
+            .range(lo..hi)
+            .map(|(p, _)| *p)
+            .filter(|p| crate::engine::world::storage::key(*p) == key)
+            .collect::<Vec<_>>();
+        for p in positions {
+            self.changed(registry, p, None);
+        }
+    }
+    /// Seed only on load/registry replacement or newly resident columns.
+    pub fn hydrate(
+        &mut self,
+        registry: &Registry,
+        blocks: impl IntoIterator<Item = (Position, BlockId)>,
+    ) {
+        if !self.enabled {
+            return;
+        }
+        for (p, id) in blocks {
             if registry.get(id).signal.is_some() || registry.get(id).behavior.receives_events() {
                 self.changed(registry, p, Some(id));
             }
@@ -122,11 +143,7 @@ impl Simulation {
             self.enqueue(p, BlockEvent::NeighborChanged);
         }
     }
-    pub fn advance(
-        &mut self,
-        registry: &Registry,
-        blocks: &HashMap<Position, BlockId>,
-    ) -> Result<Vec<Command>> {
+    pub fn advance(&mut self, registry: &Registry, blocks: &Store) -> Result<Vec<Command>> {
         if !self.enabled {
             return Ok(vec![]);
         }
@@ -205,7 +222,7 @@ pub fn tick(client: &mut Client) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn apply(sim: &mut Simulation, r: &Registry, blocks: &mut HashMap<Position, BlockId>) -> usize {
+    fn apply(sim: &mut Simulation, r: &Registry, blocks: &mut Store) -> usize {
         let commands = sim.advance(r, blocks).unwrap();
         let count = commands.len();
         for c in commands {
@@ -229,14 +246,14 @@ mod tests {
             .registry;
         let source = r.find("power_source").unwrap();
         let wire = r.find("wire_0").unwrap();
-        let mut blocks = HashMap::from([
+        let mut blocks = Store::from([
             ([0, 4, 0], source),
             ([1, 4, 0], wire),
             ([2, 4, 0], wire),
             ([3, 4, 0], wire),
         ]);
         let mut sim = Simulation::new(&r);
-        sim.hydrate(&r, &blocks);
+        sim.hydrate(&r, blocks.iter().map(|(p, id)| (p, *id)));
         for _ in 0..20 {
             apply(&mut sim, &r, &mut blocks);
         }
@@ -251,7 +268,7 @@ mod tests {
         let r = Registry::parse(&bytes).unwrap();
         blocks.remove(&[0, 4, 0]);
         sim = Simulation::new(&r);
-        sim.hydrate(&r, &blocks);
+        sim.hydrate(&r, blocks.iter().map(|(p, id)| (p, *id)));
         for _ in 0..100 {
             apply(&mut sim, &r, &mut blocks);
         }
@@ -270,9 +287,9 @@ mod tests {
         let wire = r.find("wire_0").unwrap();
         let source = r.find("power_source").unwrap();
         let p = [1, 4, 0];
-        let mut blocks = HashMap::from([(p, wire), ([0, 4, 0], source)]);
+        let mut blocks = Store::from([(p, wire), ([0, 4, 0], source)]);
         let mut sim = Simulation::new(&r);
-        sim.hydrate(&r, &blocks);
+        sim.hydrate(&r, blocks.iter().map(|(p, id)| (p, *id)));
         assert_eq!(apply(&mut sim, &r, &mut blocks), 0);
         assert_eq!(sim.scheduled.len(), 1);
         for _ in 0..100 {
@@ -369,7 +386,7 @@ mod tests {
         }
         assert_eq!(sim.pending.len(), QUEUE_LIMIT);
         assert!(sim.rescan);
-        let mut blocks: HashMap<_, _> = sim.active.iter().map(|(p, id)| (*p, *id)).collect();
+        let mut blocks: Store = sim.active.iter().map(|(p, id)| (*p, *id)).collect();
         blocks.insert(
             [(QUEUE_LIMIT + 7) as i32, 4, 0],
             r.find("power_source").unwrap(),
@@ -389,7 +406,7 @@ mod tests {
         let r = Registry::built_in();
         let mut idle = Simulation::new(&r);
         idle.changed(&r, [0, 4, 0], Some(0));
-        assert!(idle.advance(&r, &HashMap::new()).unwrap().is_empty());
+        assert!(idle.advance(&r, &Store::new()).unwrap().is_empty());
         assert!(idle.active.is_empty());
     }
 }
