@@ -64,7 +64,8 @@ Start with [Architecture and source map](docs/ARCHITECTURE.md), then read
 [Controls](docs/CONTROLS.md) and [Milestone history](docs/HISTORY.md).
 
 Walking, sprinting, sneaking, flight/noclip, inventory/crafting, JSON models,
-slab/stair states, glass, own PNG materials, settings, background saves/loading
+slab/stair states, glass, unified component packs, optional signal behaviors,
+settings, own PNG materials, background saves/loading
 and 2–255 chunk views are implemented. Nearby blocks retain full collision and
 detail within 8 chunks. Distant hills/trees use stitched, progressively blended
 geometry. Caves, transparent buildings and edits to distant generated trees are
