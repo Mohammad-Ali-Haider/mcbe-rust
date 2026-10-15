@@ -1,20 +1,11 @@
 //! Shared Rust behavior traits: one implementation per policy, no objects per cell.
+mod passive;
 pub(crate) mod placement;
-pub(crate) mod signal;
-use super::{BlockId, Placement, Registry, components::BehaviorComponent};
+pub(crate) mod wire;
+use super::{BlockId, Registry, components::BehaviorComponent};
 use crate::scene::Result;
-use mcbe_core::raycast::Hit;
 use std::collections::HashMap;
 pub type Position = [i32; 3];
-pub type PlacementResult = Option<(Position, BlockId)>;
-pub struct PlacementContext<'a> {
-    pub registry: &'a Registry,
-    pub selected: BlockId,
-    pub hit: &'a Hit,
-    pub yaw: f32,
-    pub target: Option<BlockId>,
-    pub adjacent: Option<BlockId>,
-}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BlockEvent {
     Placed,
@@ -41,11 +32,10 @@ pub enum Command {
     },
 }
 pub trait BlockBehavior: Sync {
-    fn place(&self, c: &PlacementContext<'_>) -> Result<PlacementResult> {
-        Ok(c.adjacent
-            .is_none()
-            .then(|| (placement::neighbor(c.hit), c.selected)))
+    fn validate(&self, _registry: &Registry, _id: BlockId) -> Result<()> {
+        Ok(())
     }
+
     fn on_event(
         &self,
         _c: &EventContext<'_>,
@@ -55,19 +45,13 @@ pub trait BlockBehavior: Sync {
         Ok(())
     }
 }
+/// Event dispatch does not select or override a block's placement policy.
 pub fn get(registry: &Registry, id: BlockId) -> &'static dyn BlockBehavior {
-    static STANDARD: placement::Standard = placement::Standard;
-    static SLAB: placement::Slab = placement::Slab;
-    static STAIRS: placement::Stairs = placement::Stairs;
-    static WIRE: signal::Wire = signal::Wire;
-    let b = registry.get(id);
-    if b.behavior == BehaviorComponent::Wire {
-        return &WIRE;
-    }
-    match b.placement {
-        Some(Placement::Slab { .. }) => &SLAB,
-        Some(Placement::Stairs { .. }) => &STAIRS,
-        None => &STANDARD,
+    static PASSIVE: passive::Passive = passive::Passive;
+    static WIRE: wire::Wire = wire::Wire;
+    match registry.get(id).behavior {
+        BehaviorComponent::Passive => &PASSIVE,
+        BehaviorComponent::Wire => &WIRE,
     }
 }
 pub fn neighbors(p: Position) -> impl Iterator<Item = Position> {

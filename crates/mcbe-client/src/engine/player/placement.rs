@@ -1,13 +1,12 @@
 //! Player interaction adapter; shared block behaviors resolve placement.
 use crate::engine::blocks::{
-    behavior::{self, PlacementContext},
+    behavior::placement::{self as policies, PlacementContext, neighbor, target_position},
     systems::collision,
 };
 use crate::{
     engine_blocks::{BlockId, Registry},
     scene::{Client, Result},
 };
-use behavior::placement::neighbor;
 #[cfg(test)]
 use mcbe_core::raycast::Face;
 use mcbe_core::raycast::Hit;
@@ -19,7 +18,7 @@ pub fn resolve(
     target: Option<BlockId>,
     adjacent: Option<BlockId>,
 ) -> Result<Option<([i32; 3], BlockId)>> {
-    behavior::get(registry, selected).place(&PlacementContext {
+    policies::get(registry, selected).place(&PlacementContext {
         registry,
         selected,
         hit,
@@ -33,7 +32,7 @@ pub fn place(client: &mut Client, hit: &Hit) -> Result<bool> {
     let Some(selected) = state.player.selected() else {
         return Ok(false);
     };
-    let hit_p = [hit.position.x, hit.position.y, hit.position.z];
+    let hit_p = target_position(hit);
     let Some((p, id)) = resolve(
         &state.registry,
         selected,
@@ -140,25 +139,100 @@ mod tests {
             .is_none()
         );
     }
+    fn registry_with_stone_stairs() -> Registry {
+        let mut r = Registry::built_in();
+        let stone = r.get(r.find("slate").unwrap()).clone();
+        let stairs: Vec<_> = r
+            .blocks
+            .iter()
+            .filter(|b| {
+                b.state
+                    .as_ref()
+                    .is_some_and(|state| state.block == "oak_stairs")
+            })
+            .cloned()
+            .collect();
+        for mut block in stairs {
+            block.id = block.id.replace("oak_stairs", "stone_stairs");
+            block.label = "Stone Stairs".into();
+            block.state.as_mut().unwrap().block = "stone_stairs".into();
+            block.color = stone.color;
+            block.minecraft = stone.minecraft.clone();
+            if let Some(crate::engine_blocks::Placement::Stairs { lower, upper }) =
+                &mut block.placement
+            {
+                for name in lower.iter_mut().chain(upper) {
+                    *name = name.replace("oak_stairs", "stone_stairs");
+                }
+            }
+            r.blocks.push(block);
+        }
+        r.validate().unwrap();
+        r
+    }
     #[test]
-    fn stairs_choose_all_eight_registered_shapes_and_reverse_heading() {
-        let r = Registry::built_in();
-        let selected = r.find("oak_stairs_north").unwrap();
-        for (q, dir) in ["north", "west", "south", "east"].iter().enumerate() {
-            for (h, suffix) in [(hit(Face::Up, 1.), ""), (hit(Face::Down, 0.), "_upper")] {
-                let id = resolve(
+    fn stairs_choose_all_eight_states_for_multiple_material_families() {
+        let r = registry_with_stone_stairs();
+        for material in ["oak", "stone"] {
+            let selected = r.find(&format!("{material}_stairs_north")).unwrap();
+            for (q, dir) in ["north", "west", "south", "east"].iter().enumerate() {
+                for (h, suffix) in [(hit(Face::Up, 1.), ""), (hit(Face::Down, 0.), "_upper")] {
+                    let (_, id) = resolve(
+                        &r,
+                        selected,
+                        &h,
+                        q as f32 * std::f32::consts::FRAC_PI_2,
+                        None,
+                        None,
+                    )
+                    .unwrap()
+                    .unwrap();
+                    assert_eq!(r.get(id).id, format!("{material}_stairs_{dir}{suffix}"));
+                }
+            }
+        }
+    }
+    #[test]
+    fn half_selection_is_shared_and_occupied_neighbors_are_protected() {
+        let r = registry_with_stone_stairs();
+        for (selected, lower, upper) in [
+            ("oak_slab", "oak_slab", "oak_slab_upper"),
+            ("stone_slab", "stone_slab", "stone_slab_upper"),
+            (
+                "oak_stairs_north",
+                "oak_stairs_north",
+                "oak_stairs_north_upper",
+            ),
+            (
+                "stone_stairs_north",
+                "stone_stairs_north",
+                "stone_stairs_north_upper",
+            ),
+        ] {
+            let selected = r.find(selected).unwrap();
+            for (height, expected) in [(0.5, lower), (0.5001, upper)] {
+                let (position, id) =
+                    resolve(&r, selected, &hit(Face::East, height), 0., None, None)
+                        .unwrap()
+                        .unwrap();
+                assert_eq!(position, [3, 4, 2]);
+                assert_eq!(r.get(id).id, expected);
+            }
+        }
+        let occupied = r.find("earth").unwrap();
+        for selected in ["earth", "oak_stairs_north", "stone_stairs_north"] {
+            assert!(
+                resolve(
                     &r,
-                    selected,
-                    &h,
-                    q as f32 * std::f32::consts::FRAC_PI_2,
+                    r.find(selected).unwrap(),
+                    &hit(Face::Up, 1.),
+                    0.,
                     None,
-                    None,
+                    Some(occupied)
                 )
                 .unwrap()
-                .unwrap()
-                .1;
-                assert_eq!(r.get(id).id, format!("oak_stairs_{dir}{suffix}"));
-            }
+                .is_none()
+            );
         }
     }
 }

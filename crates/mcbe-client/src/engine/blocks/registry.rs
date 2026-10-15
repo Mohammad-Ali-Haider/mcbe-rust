@@ -30,14 +30,7 @@ impl Registry {
         }
         for b in &built.blocks {
             if let Some(rule) = &b.placement {
-                let refs: Vec<&String> = match rule {
-                    Placement::Slab {
-                        lower,
-                        upper,
-                        double,
-                    } => vec![lower, upper, double],
-                    Placement::Stairs { lower, upper } => lower.iter().chain(upper).collect(),
-                };
+                let refs = rule.state_names();
                 let canonical = refs.iter().all(|name| {
                     let actual = next.get(next.find(name).unwrap());
                     let expected = built.get(built.find(name).unwrap());
@@ -143,50 +136,10 @@ impl Registry {
                 return Err("Block identifiers must be unique lowercase names; labels must contain 1..32 printable characters".into());
             }
         }
-        for b in &self.blocks {
-            if let Some(rule) = &b.placement {
-                let refs: Vec<&String> = match rule {
-                    Placement::Slab {
-                        lower,
-                        upper,
-                        double,
-                    } => vec![lower, upper, double],
-                    Placement::Stairs { lower, upper } => lower.iter().chain(upper).collect(),
-                };
-                for name in refs {
-                    self.find(name)?;
-                }
-                if let Placement::Slab {
-                    lower,
-                    upper,
-                    double,
-                } = rule
-                {
-                    if lower == upper || lower == double || upper == double {
-                        return Err("Slab variants must be distinct registered blocks".into());
-                    }
-                    let boxes = |name: &str| {
-                        self.get(self.find(name).unwrap())
-                            .geometry
-                            .as_ref()
-                            .map_or_else(|| vec![crate::engine_geometry::UNIT], |g| g.boxes.clone())
-                    };
-                    if boxes(lower) != vec![[0., 0., 0., 1., 0.5, 1.]]
-                        || boxes(upper) != vec![[0., 0.5, 0., 1., 1., 1.]]
-                        || boxes(double) != vec![crate::engine_geometry::UNIT]
-                    {
-                        return Err(
-                            "Slab variants require lower half, upper half and full cube geometry"
-                                .into(),
-                        );
-                    }
-                }
-            }
-        }
-        for (id, b) in self.blocks.iter().enumerate() {
-            if b.behavior == super::components::BehaviorComponent::Wire {
-                super::behavior::signal::validate(self, id as BlockId)?;
-            }
+        for id in 0..self.blocks.len() {
+            let id = id as BlockId;
+            super::behavior::placement::get(self, id).validate(self, id)?;
+            super::behavior::get(self, id).validate(self, id)?;
         }
         crate::engine_geometry::Library::compile(self)?;
         Ok(())

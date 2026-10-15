@@ -242,7 +242,7 @@ mod tests {
         }
         for x in 1..=3 {
             assert_eq!(
-                behavior::signal::strength(r.get(blocks[&[x, 4, 0]])),
+                behavior::wire::strength(r.get(blocks[&[x, 4, 0]])),
                 15 - x as u8
             );
         }
@@ -258,7 +258,7 @@ mod tests {
         assert!(
             blocks
                 .values()
-                .all(|id| behavior::signal::strength(r.get(*id)) == 0)
+                .all(|id| behavior::wire::strength(r.get(*id)) == 0)
         );
         assert!(sim.pending.is_empty() && sim.scheduled.is_empty());
     }
@@ -306,7 +306,7 @@ mod tests {
         }
         let world = client.scene.engine.as_ref().unwrap();
         assert_eq!(
-            behavior::signal::strength(r.get(world.blocks[&[1, 20, 0]])),
+            behavior::wire::strength(r.get(world.blocks[&[1, 20, 0]])),
             14
         );
         assert!(!world.dirty_chunks.is_empty());
@@ -381,7 +381,7 @@ mod tests {
         }
         assert!(!sim.rescan);
         assert_eq!(
-            behavior::signal::strength(r.get(blocks[&[(QUEUE_LIMIT + 6) as i32, 4, 0]])),
+            behavior::wire::strength(r.get(blocks[&[(QUEUE_LIMIT + 6) as i32, 4, 0]])),
             14
         );
         assert!(sim.pending.len() <= QUEUE_LIMIT);

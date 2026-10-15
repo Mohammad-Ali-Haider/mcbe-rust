@@ -21,28 +21,30 @@ pub fn strength(block: &Block) -> u8 {
         .unwrap_or(0);
     source.max(power)
 }
-pub fn validate(registry: &Registry, id: super::BlockId) -> Result<()> {
-    let b = registry.get(id);
-    let identity = b.state.as_ref().ok_or("Wire requires state identity")?;
-    let value = identity
-        .properties
-        .get("power")
-        .ok_or("Wire requires power property")?;
-    let power = value.parse::<u8>()?;
-    if power > 15 || value != &power.to_string() || b.signal.is_none() || b.placement.is_some() {
-        return Err("Wire requires standard placement, signal and power 0..15".into());
-    }
-    for power in 0..=15 {
-        let mut properties = identity.properties.clone();
-        properties.insert("power".into(), power.to_string());
-        let other = registry.get(registry.resolve_state(&identity.block, &properties)?);
-        if other.behavior != b.behavior || other.signal != b.signal {
-            return Err("Wire variants must share behavior and signal settings".into());
-        }
-    }
-    Ok(())
-}
 impl BlockBehavior for Wire {
+    fn validate(&self, registry: &Registry, id: super::BlockId) -> Result<()> {
+        let b = registry.get(id);
+        let identity = b.state.as_ref().ok_or("Wire requires state identity")?;
+        let value = identity
+            .properties
+            .get("power")
+            .ok_or("Wire requires power property")?;
+        let power = value.parse::<u8>()?;
+        if power > 15 || value != &power.to_string() || b.signal.is_none() || b.placement.is_some()
+        {
+            return Err("Wire requires standard placement, signal and power 0..15".into());
+        }
+        for power in 0..=15 {
+            let mut properties = identity.properties.clone();
+            properties.insert("power".into(), power.to_string());
+            let other = registry.get(registry.resolve_state(&identity.block, &properties)?);
+            if other.behavior != b.behavior || other.signal != b.signal {
+                return Err("Wire variants must share behavior and signal settings".into());
+            }
+        }
+        Ok(())
+    }
+
     fn on_event(
         &self,
         c: &EventContext<'_>,

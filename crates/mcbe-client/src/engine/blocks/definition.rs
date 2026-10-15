@@ -25,6 +25,21 @@ pub enum Placement {
         upper: [String; 4],
     },
 }
+impl Placement {
+    /// Shared reference traversal for validation and legacy-save upgrades.
+    pub fn state_names(&self) -> Vec<&str> {
+        match self {
+            Self::Slab {
+                lower,
+                upper,
+                double,
+            } => vec![lower.as_str(), upper.as_str(), double.as_str()],
+            Self::Stairs { lower, upper } => {
+                lower.iter().chain(upper).map(String::as_str).collect()
+            }
+        }
+    }
+}
 #[derive(Clone, Copy, Serialize, Deserialize, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum Pattern {
