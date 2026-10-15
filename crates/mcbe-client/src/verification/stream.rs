@@ -83,7 +83,7 @@ pub fn verify(app: &mut App, out: &Path) -> Result<()> {
         p.assign(oak, p.active)?;
     }
     trace.push(snap(app, "edited"));
-    app.engine_key(KeyCode::F5)?;
+    app.save_shortcut()?;
     app.finish_work()?;
     let first = app
         .client
@@ -118,7 +118,7 @@ pub fn verify(app: &mut App, out: &Path) -> Result<()> {
         "Eviction lost sparse edits",
     )?;
     trace.push(snap(app, "edited-column-evicted"));
-    app.engine_key(KeyCode::F5)?;
+    app.save_shortcut()?;
     app.finish_work()?;
     let second = app
         .client

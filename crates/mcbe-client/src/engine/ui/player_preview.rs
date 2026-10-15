@@ -46,6 +46,142 @@ fn vector<const N: usize>(v: &Value) -> Result<[f32; N]> {
     Ok(result)
 }
 impl Model {
+    pub fn standard(skin: [u32; 2], slim: bool) -> Self {
+        let width = if slim { 3. } else { 4. };
+        let mut cubes = Vec::new();
+        let mut add = |name: &str,
+                       origin: [f32; 3],
+                       size: [f32; 3],
+                       uv: [f32; 2],
+                       pivot: [f32; 3],
+                       inflate: f32,
+                       mirror: bool| {
+            cubes.push(Cube {
+                bone: name.into(),
+                origin,
+                size,
+                uv,
+                pivot,
+                inflate,
+                mirror,
+            })
+        };
+        add(
+            "head",
+            [-4., 24., -4.],
+            [8., 8., 8.],
+            [0., 0.],
+            [0., 24., 0.],
+            0.,
+            false,
+        );
+        add(
+            "body",
+            [-4., 12., -2.],
+            [8., 12., 4.],
+            [16., 16.],
+            [0., 24., 0.],
+            0.,
+            false,
+        );
+        add(
+            "rightArm",
+            [-4. - width, 12., -2.],
+            [width, 12., 4.],
+            [40., 16.],
+            [-5., 22., 0.],
+            0.,
+            false,
+        );
+        add(
+            "leftArm",
+            [4., 12., -2.],
+            [width, 12., 4.],
+            if skin[1] == 32 {
+                [40., 16.]
+            } else {
+                [32., 48.]
+            },
+            [5., 22., 0.],
+            0.,
+            skin[1] == 32,
+        );
+        add(
+            "rightLeg",
+            [-4., 0., -2.],
+            [4., 12., 4.],
+            [0., 16.],
+            [-2., 12., 0.],
+            0.,
+            false,
+        );
+        add(
+            "leftLeg",
+            [0., 0., -2.],
+            [4., 12., 4.],
+            if skin[1] == 32 { [0., 16.] } else { [16., 48.] },
+            [2., 12., 0.],
+            0.,
+            skin[1] == 32,
+        );
+        add(
+            "hat",
+            [-4., 24., -4.],
+            [8., 8., 8.],
+            [32., 0.],
+            [0., 24., 0.],
+            0.5,
+            false,
+        );
+        if skin[1] == 64 {
+            add(
+                "jacket",
+                [-4., 12., -2.],
+                [8., 12., 4.],
+                [16., 32.],
+                [0., 24., 0.],
+                0.25,
+                false,
+            );
+            add(
+                "rightSleeve",
+                [-4. - width, 12., -2.],
+                [width, 12., 4.],
+                [40., 32.],
+                [-5., 22., 0.],
+                0.25,
+                false,
+            );
+            add(
+                "leftSleeve",
+                [4., 12., -2.],
+                [width, 12., 4.],
+                [48., 48.],
+                [5., 22., 0.],
+                0.25,
+                false,
+            );
+            add(
+                "rightPants",
+                [-4., 0., -2.],
+                [4., 12., 4.],
+                [0., 32.],
+                [-2., 12., 0.],
+                0.25,
+                false,
+            );
+            add(
+                "leftPants",
+                [0., 0., -2.],
+                [4., 12., 4.],
+                [0., 48.],
+                [2., 12., 0.],
+                0.25,
+                false,
+            );
+        }
+        Self { cubes }
+    }
     pub fn parse(data: &Value, skin: [u32; 2]) -> Result<Self> {
         if skin != [64, 64] && skin != [64, 32] {
             return Err("Player preview requires a 64x64 or legacy 64x32 skin".into());
@@ -175,80 +311,89 @@ impl Model {
                     * Mat4::from_rotation_x(-angles[1])
                     * Mat4::from_translation(-p);
             }
-            let lo = Vec3::from(cube.origin) - Vec3::splat(cube.inflate);
-            let hi = Vec3::from(cube.origin) + Vec3::from(cube.size) + Vec3::splat(cube.inflate);
-            let [a, b, c] = lo.to_array();
-            let [d, e, f] = hi.to_array();
-            let [width, height, depth] = cube.size;
-            let [u, v] = cube.uv;
-            let quads = [
-                (
-                    [[d, e, c], [a, e, c], [a, b, c], [d, b, c]],
-                    [u + depth, v + depth, width, height],
-                    0.94,
-                ),
-                (
-                    [[a, e, f], [d, e, f], [d, b, f], [a, b, f]],
-                    [u + depth + width + depth, v + depth, width, height],
-                    0.78,
-                ),
-                (
-                    [[d, e, f], [d, e, c], [d, b, c], [d, b, f]],
-                    [u + depth + width, v + depth, depth, height],
-                    0.82,
-                ),
-                (
-                    [[a, e, c], [a, e, f], [a, b, f], [a, b, c]],
-                    [u, v + depth, depth, height],
-                    0.86,
-                ),
-                (
-                    [[d, e, f], [a, e, f], [a, e, c], [d, e, c]],
-                    [u + depth, v, width, depth],
-                    1.,
-                ),
-                (
-                    [[d, b, c], [a, b, c], [a, b, f], [d, b, f]],
-                    [u + depth + width, v, width, depth],
-                    0.7,
-                ),
-            ];
-            for (face, (positions, mut r, shade)) in quads.into_iter().enumerate() {
-                if cube.mirror && face == 2 {
-                    r = quads[3].1;
-                } else if cube.mirror && face == 3 {
-                    r = quads[2].1;
-                }
-                let [uu, vv, uw, vh] = r;
-                let coords = if cube.mirror {
-                    [[uu + uw, vv], [uu, vv], [uu, vv + vh], [uu + uw, vv + vh]]
-                } else {
-                    [[uu, vv], [uu + uw, vv], [uu + uw, vv + vh], [uu, vv + vh]]
-                };
-                for index in [0, 2, 1, 0, 3, 2] {
-                    let point = project
-                        .transform_point3(transform.transform_point3(Vec3::from(positions[index])));
-                    let sx = x + (point.x + 1.) * 0.5 * w;
-                    let sy = y + (1. - point.y) * 0.5 * h;
-                    vertices.push(Vertex {
-                        position: [
-                            sx / viewport[0] * 2. - 1.,
-                            1. - sy / viewport[1] * 2.,
-                            point.z,
-                        ],
-                        uv: [
-                            (skin[0] + coords[index][0]) / 1024.,
-                            (skin[1] + coords[index][1]) / 1024.,
-                        ],
-                        color: [shade, shade, shade, 1.],
-                    });
-                }
+            let first = vertices.len();
+            cube.emit(&mut vertices, transform, skin);
+            for v in &mut vertices[first..] {
+                let point = project.transform_point3(Vec3::from(v.position));
+                let sx = x + (point.x + 1.) * 0.5 * w;
+                let sy = y + (1. - point.y) * 0.5 * h;
+                v.position = [
+                    sx / viewport[0] * 2. - 1.,
+                    1. - sy / viewport[1] * 2.,
+                    point.z,
+                ];
             }
         }
         Mesh {
             vertices,
             rectangle,
             head_angles: angles,
+        }
+    }
+}
+impl Cube {
+    pub fn emit(&self, vertices: &mut Vec<Vertex>, transform: Mat4, skin: [f32; 4]) {
+        let lo = Vec3::from(self.origin) - Vec3::splat(self.inflate);
+        let hi = Vec3::from(self.origin) + Vec3::from(self.size) + Vec3::splat(self.inflate);
+        let [a, b, c] = lo.to_array();
+        let [d, e, f] = hi.to_array();
+        let [width, height, depth] = self.size;
+        let [u, v] = self.uv;
+        let quads = [
+            (
+                [[d, e, c], [a, e, c], [a, b, c], [d, b, c]],
+                [u + depth, v + depth, width, height],
+                0.94,
+            ),
+            (
+                [[a, e, f], [d, e, f], [d, b, f], [a, b, f]],
+                [u + depth + width + depth, v + depth, width, height],
+                0.78,
+            ),
+            (
+                [[d, e, f], [d, e, c], [d, b, c], [d, b, f]],
+                [u + depth + width, v + depth, depth, height],
+                0.82,
+            ),
+            (
+                [[a, e, c], [a, e, f], [a, b, f], [a, b, c]],
+                [u, v + depth, depth, height],
+                0.86,
+            ),
+            (
+                [[d, e, f], [a, e, f], [a, e, c], [d, e, c]],
+                [u + depth, v, width, depth],
+                1.,
+            ),
+            (
+                [[d, b, c], [a, b, c], [a, b, f], [d, b, f]],
+                [u + depth + width, v, width, depth],
+                0.7,
+            ),
+        ];
+        for (face, (positions, mut r, shade)) in quads.into_iter().enumerate() {
+            if self.mirror && face == 2 {
+                r = quads[3].1;
+            } else if self.mirror && face == 3 {
+                r = quads[2].1;
+            }
+            let [uu, vv, uw, vh] = r;
+            let coords = if self.mirror {
+                [[uu + uw, vv], [uu, vv], [uu, vv + vh], [uu + uw, vv + vh]]
+            } else {
+                [[uu, vv], [uu + uw, vv], [uu + uw, vv + vh], [uu, vv + vh]]
+            };
+            for index in [0, 2, 1, 0, 3, 2] {
+                let point = transform.transform_point3(Vec3::from(positions[index]));
+                vertices.push(Vertex {
+                    position: point.to_array(),
+                    uv: [
+                        (skin[0] + coords[index][0]) / 1024.,
+                        (skin[1] + coords[index][1]) / 1024.,
+                    ],
+                    color: [shade, shade, shade, 1.],
+                });
+            }
         }
     }
 }

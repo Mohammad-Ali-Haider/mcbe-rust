@@ -249,7 +249,7 @@ pub fn verify(app: &mut App, out: &Path) -> Result<()> {
     expect_slot(app, 11, "sand", 60)?;
     record(&mut trace, app, "close-returns-inputs", 701)?;
     app.engine_key(KeyCode::KeyE)?;
-    app.engine_key(KeyCode::F5)?;
+    app.save_shortcut()?;
     app.finish_work()?;
     let first = app
         .client
@@ -260,7 +260,7 @@ pub fn verify(app: &mut App, out: &Path) -> Result<()> {
     slot(app, Slot::Player(9), Button::Left, false)?;
     slot(app, Slot::Craft(2), Button::Right, false)?;
     expect_output(app, "oak_planks", 4)?;
-    app.engine_key(KeyCode::F5)?;
+    app.save_shortcut()?;
     app.finish_work()?;
     let second = app
         .client

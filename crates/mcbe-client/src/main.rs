@@ -12,6 +12,7 @@ use crate::engine::content::materials as engine_materials;
 use crate::engine::persistence::loading as engine_loading;
 use crate::engine::persistence::saving as engine_saving;
 use crate::engine::persistence::startup as engine_startup;
+use crate::engine::player::camera as engine_camera;
 use crate::engine::player::inventory as engine_inventory;
 use crate::engine::player::movement as engine_player;
 use crate::engine::player::placement as engine_placement;
@@ -58,6 +59,7 @@ use winit::{
 };
 
 struct App {
+    show_character: bool,
     flight_tap: engine_player::FlightTap,
     lod_motion_test: bool,
     lod_motion_stage: usize,
@@ -151,6 +153,7 @@ impl App {
     fn new(client: Client, root: PathBuf, inventory_start: bool, smoke: bool) -> Result<Self> {
         let palette = engine_ui::Palette::recover(&client);
         Ok(Self {
+            show_character: !smoke,
             preview_test: None,
             preview_trace: Vec::new(),
             startup: None,
@@ -300,6 +303,7 @@ impl App {
             || self.menu.open()
             || self.palette.open
             || self.inventory_open
+            || self.client.view.is_free()
         {
             self.flight_tap.reset();
         } else if self.flight_tap.event(pressed, repeat, now) {
@@ -331,6 +335,19 @@ impl App {
             state.machines.advance_seconds(dt, &state.smelting);
         }
     }
+    fn save_shortcut(&mut self) -> Result<bool> {
+        if self.startup_blocked() {
+            return Ok(true);
+        }
+        if self.load_busy() {
+            self.deferred = Some(KeyCode::KeyS);
+            self.notice = Some("Save will follow destination preparation".into());
+            return Ok(true);
+        }
+        self.request_save()?;
+        self.notice = Some("Saving world snapshot...".into());
+        Ok(true)
+    }
     fn engine_key(&mut self, code: KeyCode) -> Result<bool> {
         if self.startup_blocked()
             && !matches!(code, KeyCode::F3 | KeyCode::F4 | KeyCode::F7 | KeyCode::F11)
@@ -341,7 +358,10 @@ impl App {
         if self.client.scene.engine.is_none() || code == KeyCode::F11 {
             return Ok(false);
         }
-        if self.load_busy() && matches!(code, KeyCode::F5 | KeyCode::F6) {
+        if code == KeyCode::KeyS && self.modifiers.control_key() {
+            return self.save_shortcut();
+        }
+        if self.load_busy() && code == KeyCode::F6 {
             self.deferred = Some(code);
             self.notice = Some("Action will follow destination preparation".into());
             return Ok(true);
@@ -399,6 +419,9 @@ impl App {
             return Ok(true);
         }
         if matches!(code, KeyCode::KeyF | KeyCode::KeyN) && !self.palette.open {
+            if self.client.view.is_free() {
+                return Ok(true);
+            }
             self.flight_tap.reset();
             if code == KeyCode::KeyF {
                 self.toggle_flight()?;
@@ -456,8 +479,12 @@ impl App {
             return Ok(true);
         }
         if code == KeyCode::F5 {
-            self.request_save()?;
-            self.notice = Some("Saving world snapshot...".into());
+            if !self.palette.open {
+                let mode = engine_camera::cycle(&mut self.client)?;
+                self.flight_tap.reset();
+                self.keys.clear();
+                self.notice = Some(format!("Camera: {mode:?} | F5 cycle | Ctrl+S save"));
+            }
             return Ok(true);
         }
         if code == KeyCode::F9 {
@@ -526,7 +553,7 @@ impl App {
                 self.notice = if self.notice.is_some() {
                     None
                 } else {
-                    Some("WASD move | Space jump/up | Double-tap Space / F fly | Shift sneak/down | N noclip | E blocks | F5 save | F9 reload | F4 wireframe | F11 fullscreen".into())
+                    Some("WASD move | Space jump/up | Double-tap Space / F fly | Shift sneak/down | N noclip | E blocks | Ctrl+S save | F9 reload | F4 wireframe | F11 fullscreen".into())
                 };
                 Ok(true)
             }
@@ -626,6 +653,9 @@ impl App {
         self.notice = Some(message.into());
     }
     fn request_travel(&mut self, destination: engine_loading::Destination) -> Result<()> {
+        if self.client.view.is_free() {
+            self.client.view.mode = engine_camera::Mode::FirstPerson;
+        }
         self.ensure_loader()?;
         self.loader
             .as_mut()
@@ -718,7 +748,11 @@ impl App {
             && !self.load_busy()
             && !self.close_after_save
             && let Some(code) = self.deferred.take()
-            && let Err(e) = self.engine_key(code)
+            && let Err(e) = if code == KeyCode::KeyS {
+                self.save_shortcut()
+            } else {
+                self.engine_key(code)
+            }
         {
             self.save_error = Some(e.to_string());
             self.notice = Some(e.to_string());
@@ -813,6 +847,7 @@ impl App {
     }
     fn capture(&mut self, value: bool) {
         if !value {
+            self.client.view.previous_free = self.client.view.free;
             self.flight_tap.reset();
         }
         let Some(window) = &self.window else {
@@ -888,7 +923,7 @@ impl App {
                     self.load_stage = 1;
                 }
                 1 if !self.load_busy() && ready => {
-                    self.engine_key(KeyCode::F5)?;
+                    self.save_shortcut()?;
                     self.load_stage = 2;
                 }
                 2 if !self.save_busy() => {
@@ -932,7 +967,7 @@ impl App {
                 self.frame_limit = self.frames + 180;
             }
             if self.save_start == Some(self.frames) {
-                self.engine_key(KeyCode::F5)?;
+                self.save_shortcut()?;
                 let id = self
                     .client
                     .scene
@@ -1042,7 +1077,7 @@ impl App {
                     self.engine_key(KeyCode::F8)?;
                 }
                 10 | 123 => {
-                    self.engine_key(KeyCode::F5)?;
+                    self.save_shortcut()?;
                     self.async_save = self.client.last_save.clone();
                     self.notice = None;
                 }
@@ -1220,7 +1255,7 @@ impl App {
         if self.inventory_test && self.frames == 1 {
             let instance = self.client.scene.engine.as_ref().unwrap().instance;
             let before = self.gpu.as_ref().unwrap().stats.mesh_rebuilds;
-            self.engine_key(KeyCode::F5)?;
+            self.save_shortcut()?;
             let unchanged = instance == self.client.scene.engine.as_ref().unwrap().instance;
             if !unchanged {
                 return Err("Saving inventory replaced the live world instance".into());
@@ -1319,6 +1354,16 @@ impl App {
             } else {
                 None
             };
+            let actor_position = [eye[0], eye[1] - self.client.movement.eye_height(), eye[2]];
+            let mut pose = engine_camera::pose(&self.client, eye)?;
+            if self.client.view.is_free() && !self.smoke && !self.menu.open() && !self.palette.open
+            {
+                let alpha = (self.accumulator / 0.05).clamp(0., 1.);
+                let rig = &self.client.view;
+                pose.eye = std::array::from_fn(|a| {
+                    rig.previous_free[a] + (rig.free[a] - rig.previous_free[a]) * alpha
+                });
+            }
             let presented = gpu.draw(
                 &self.client,
                 &self.palette,
@@ -1333,7 +1378,10 @@ impl App {
                     wire: self.wireframe,
                     debug: self.debug,
                     notice: self.notice.as_deref(),
-                    eye,
+                    eye: pose.eye,
+                    direction: pose.direction,
+                    actor_position,
+                    show_character: self.show_character,
                     capture: capture.as_deref(),
                 },
             )?;
@@ -1778,6 +1826,12 @@ impl ApplicationHandler for App {
                 if self.inventory_open {
                     return;
                 }
+                if self.client.scene.engine.is_some() && self.client.view.is_free() {
+                    if !self.captured {
+                        self.capture(true);
+                    }
+                    return;
+                }
                 if !self.captured {
                     self.capture(true);
                 } else if button == MouseButton::Middle && self.client.scene.engine.is_some() {
@@ -1963,7 +2017,7 @@ impl ApplicationHandler for App {
                     self.window_event(event_loop, _id, WindowEvent::CloseRequested);
                 }
                 if self.save_close_test && self.frames == 1 && !self.close_after_save {
-                    if let Err(e) = self.engine_key(KeyCode::F5) {
+                    if let Err(e) = self.save_shortcut() {
                         self.error = Some(e.to_string());
                         event_loop.exit();
                     }
@@ -2165,7 +2219,7 @@ fn present(
         vec![
             "MINECRAFT RUST EDITION".to_owned(),
             "WASD move  |  Space jump  |  Mouse / arrows look  |  Click to capture  |  Esc release".into(),
-            "Left remove  |  Right build  |  1-8 / G material  |  F5 save  |  F9 reload  |  R reset  |  T overlook".into(),
+            "Left remove  |  Right build  |  1-8 / G material  |  Ctrl+S save  |  F9 reload  |  R reset  |  T overlook".into(),
             format!("{}  |  {} blocks  |  {} unsaved edits  |  {:.1}, {:.1}, {:.1}", engine::material(client).map_or("Empty hand",|b|b.label.as_str()), client.scene.cells.len(),client.pending_edits(),p.x,p.y,p.z),
             error.unwrap_or("Build something in the court. Saves are .blockworld files in the saves folder.").into(),
         ]
@@ -2589,6 +2643,7 @@ fn main() -> Result<()> {
     }
     let inventory_start = inventory_start || mode.as_deref() == Some("--inventory-smoke");
     let app = App {
+        show_character: false,
         preview_test: None,
         preview_trace: Vec::new(),
         startup: None,
@@ -2754,7 +2809,7 @@ fn run_window(mut app: App, out: Option<PathBuf>) -> Result<()> {
                 std::fs::write(
                     out.join("async.json"),
                     serde_json::to_vec_pretty(
-                        &serde_json::json!({"complete":geometry["complete"]==true&&gpu.stats.meshes_ready&&gpu.stats.mesh_discarded_jobs>0,"checkpoint":engine::CHECKPOINT,"saved_world":app.async_save,"mode_trace":app.async_mode_trace,"geometry":geometry,"streaming":engine_stream::observation(&app.client),"statistics":gpu.stats,"scope":"Live edits, F10 eviction, F6 registry reload, F8 and F2 round trips, last-block removal and F5 while mesh jobs are pending; final mesh fingerprints match fresh synchronous snapshots."}),
+                        &serde_json::json!({"complete":geometry["complete"]==true&&gpu.stats.meshes_ready&&gpu.stats.mesh_discarded_jobs>0,"checkpoint":engine::CHECKPOINT,"saved_world":app.async_save,"mode_trace":app.async_mode_trace,"geometry":geometry,"streaming":engine_stream::observation(&app.client),"statistics":gpu.stats,"scope":"Live edits, F10 eviction, F6 registry reload, F8 and F2 round trips, last-block removal and Ctrl+S while mesh jobs are pending; final mesh fingerprints match fresh synchronous snapshots."}),
                     )?,
                 )?;
             }
@@ -2768,7 +2823,7 @@ fn run_window(mut app: App, out: Option<PathBuf>) -> Result<()> {
             std::fs::write(
                 out.join("gpu.json"),
                 serde_json::to_vec_pretty(
-                    &serde_json::json!({"complete":app.close_completed||app.frames>=app.frame_limit,"statistics":gpu.stats,"menu":format!("{:?}",app.menu.page),"settings":app.settings,"settings_trace":app.settings_trace,"lod_motion_trace":app.lod_motion_trace,"player_position":app.client.actor.position,"player_preview":gpu.preview_observation(),"preview_case":app.preview_test,"preview_trace":app.preview_trace,"saving":app.saving_observation(),"loading":app.loading_observation(),"timing":timing,"wireframe":app.wireframe,"palette_open":app.palette.open,"ui":app.palette.observation(&app.client),"window_transitions":app.window_transitions,"live_edit_test":app.edit_test,"pending_edits":app.client.pending_edits(),"inventory_save_mesh_check":app.inventory_mesh_check,"mesh_toggle_trace":app.mesh_toggle_trace,"streaming":engine_stream::observation(&app.client),"stream_trace":app.stream_trace,"profile_seconds":app.profile_seconds,"profile_elapsed_seconds":app.profile_started.map(|t|t.elapsed().as_secs_f32()),"target":app.client.target()?.map(|h|[h.position.x,h.position.y,h.position.z]),"uncapped_event_loop":true,"back_face_culling":true,"frustum_culling":true,"internal_faces_removed":true,"depth_testing":true,"dirty_chunk_rebuilds":true}),
+                    &serde_json::json!({"complete":app.close_completed||app.frames>=app.frame_limit,"statistics":gpu.stats,"menu":format!("{:?}",app.menu.page),"settings":app.settings,"settings_trace":app.settings_trace,"lod_motion_trace":app.lod_motion_trace,"player_position":app.client.actor.position,"player_preview":gpu.preview_observation(),"character":gpu.character_observation(&app.client),"camera":engine_camera::pose(&app.client,app.client.eye().map(|v|v as f32))?,"preview_case":app.preview_test,"preview_trace":app.preview_trace,"saving":app.saving_observation(),"loading":app.loading_observation(),"timing":timing,"wireframe":app.wireframe,"palette_open":app.palette.open,"ui":app.palette.observation(&app.client),"window_transitions":app.window_transitions,"live_edit_test":app.edit_test,"pending_edits":app.client.pending_edits(),"inventory_save_mesh_check":app.inventory_mesh_check,"mesh_toggle_trace":app.mesh_toggle_trace,"streaming":engine_stream::observation(&app.client),"stream_trace":app.stream_trace,"profile_seconds":app.profile_seconds,"profile_elapsed_seconds":app.profile_started.map(|t|t.elapsed().as_secs_f32()),"target":app.client.target()?.map(|h|[h.position.x,h.position.y,h.position.z]),"uncapped_event_loop":true,"back_face_culling":true,"frustum_culling":true,"internal_faces_removed":true,"depth_testing":true,"dirty_chunk_rebuilds":true}),
                 )?,
             )?;
         }

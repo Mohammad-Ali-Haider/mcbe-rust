@@ -38,6 +38,7 @@ struct Camera {
 }
 #[derive(PartialEq, Eq)]
 struct UiKey {
+    camera_mode: crate::engine::player::camera::Mode,
     startup: bool,
     menu_revision: u64,
     fullscreen: bool,
@@ -139,6 +140,9 @@ pub struct Frame<'a> {
     pub debug: bool,
     pub notice: Option<&'a str>,
     pub eye: [f32; 3],
+    pub direction: [f32; 3],
+    pub actor_position: [f32; 3],
+    pub show_character: bool,
     pub capture: Option<&'a Path>,
 }
 struct Upload {
@@ -149,6 +153,7 @@ struct Upload {
     staged: bool,
 }
 pub struct Renderer {
+    character: super::character::Renderer,
     distant: crate::engine_distance::Distant,
     previous_lod_pipeline: wgpu::RenderPipeline,
     transparent_pipeline: wgpu::RenderPipeline,
@@ -378,6 +383,12 @@ impl Renderer {
             multiview: None,
             cache: None,
         });
+        let character = super::character::Renderer::new(
+            &device,
+            config.format,
+            &ui_layout,
+            &world_pipeline.get_bind_group_layout(0),
+        );
         let preview_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("bounded inventory player mesh"),
             size: (32 * 36 * std::mem::size_of::<crate::engine_preview::Vertex>()) as u64,
@@ -472,6 +483,7 @@ impl Renderer {
             last_frame_ms: 0.,
         };
         Ok(Self {
+            character,
             distant: Default::default(),
             previous_lod_pipeline,
             transparent_pipeline,
@@ -563,6 +575,12 @@ impl Renderer {
     }
     pub fn texture_pending(&self) -> bool {
         self.uploading.is_some()
+    }
+    pub fn character_observation(&self, client: &Client) -> serde_json::Value {
+        let mut observation = self.character.observation(client);
+        observation["skin_sprite"] =
+            serde_json::json!(self.atlas.as_ref().and_then(|a| a.preview_skin()));
+        observation
     }
     pub fn preview_pose(&self) -> Option<[f32; 2]> {
         self.preview_mesh.as_ref().map(|m| m.head_angles)
@@ -986,10 +1004,11 @@ impl Renderer {
             Err(wgpu::SurfaceError::Timeout) => return Ok(false),
             Err(e) => return Err(e.into()),
         };
-        let dir = client.direction().map(|v| v as f32);
+        let dir = frame.direction;
         let eye = Vec3::from(frame.eye);
         let streamed = client.scene.engine.as_ref().unwrap().stream.as_ref();
-        let flying = client.movement.mode != crate::engine_player::Mode::Walking;
+        let flying =
+            client.movement.mode != crate::engine_player::Mode::Walking || client.view.is_free();
         let fog_end = streamed.map_or(95., |s| s.generator.config.radius as f32 * 16. - 2.);
         let fog_start = if streamed.is_some() {
             if fog_end > 128. {
@@ -1006,9 +1025,11 @@ impl Renderer {
             0.05,
             (fog_end + 40.).max(100.),
         ) * Mat4::look_to_rh(eye, Vec3::from(dir), Vec3::Y);
-        let target = client
-            .scene
-            .target(frame.eye.map(f64::from), client.direction())?;
+        let target = if client.view.is_free() {
+            None
+        } else {
+            client.target()?
+        };
         let (lod, lod_old) = self.distant.blend();
         let uniform = Camera {
             lod,
@@ -1075,6 +1096,7 @@ impl Renderer {
         self.stats.blended_bytes = self.transparency.bytes;
         let state = client.scene.engine.as_ref().unwrap();
         let key = UiKey {
+            camera_mode: client.view.mode,
             startup: frame.startup,
             menu_revision: frame.menu.revision,
             fullscreen: frame.fullscreen,
@@ -1189,6 +1211,36 @@ impl Renderer {
             self.ui_key = Some(key);
             self.stats.ui_uploads += 1;
         }
+        let skin = self
+            .atlas
+            .as_ref()
+            .unwrap()
+            .preview_skin()
+            .unwrap_or([0, 0, 64, 64])
+            .map(|v| v as f32);
+        let first = client.view.mode == crate::engine::player::camera::Mode::FirstPerson;
+        let near_body = !first
+            && !client.view.is_free()
+            && (Vec3::from(frame.eye)
+                - Vec3::from(frame.actor_position)
+                - Vec3::Y * client.movement.eye_height())
+            .length()
+                < 0.75;
+        self.character.prepare(
+            &self.queue,
+            client,
+            super::character::Frame {
+                position: frame.actor_position,
+                skin,
+                world: matrix,
+                aspect: self.config.width as f32 / self.config.height as f32,
+                hidden: !frame.show_character
+                    || frame.startup
+                    || palette.open
+                    || frame.menu.open()
+                    || near_body,
+            },
+        );
         let view = surface.texture.create_view(&Default::default());
         let mut encoder = self
             .device
@@ -1241,15 +1293,56 @@ impl Renderer {
                     pass.draw(0..mesh.opaque_vertices, 0..1);
                 }
             }
+            self.character.draw(
+                &mut pass,
+                self.ui_bind.as_ref().unwrap(),
+                self.world_bind.as_ref().unwrap(),
+                false,
+            );
             if let (Some(vertex), Some(index)) =
                 (&self.transparency.vertex, &self.transparency.index)
             {
                 pass.set_pipeline(&self.transparent_pipeline);
+                pass.set_bind_group(0, self.world_bind.as_ref().unwrap(), &[]);
                 pass.set_vertex_buffer(0, vertex.slice(..));
                 pass.set_index_buffer(index.slice(..), wgpu::IndexFormat::Uint32);
                 pass.draw_indexed(0..self.transparency.count, 0, 0..1);
             }
         }
+        if self.character.first
+            && (!self.character.hand.is_empty() || !self.character.item.is_empty())
+        {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("first person hand and item"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.depth,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+            self.character.draw(
+                &mut pass,
+                self.ui_bind.as_ref().unwrap(),
+                self.world_bind.as_ref().unwrap(),
+                true,
+            );
+        }
+        self.character.draws += usize::from(!self.character.body.is_empty())
+            + usize::from(!self.character.hand.is_empty())
+            + usize::from(!self.character.item.is_empty());
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("compact native HUD"),

@@ -6,3 +6,5 @@ pub(crate) mod mesh;
 pub(crate) mod meshing;
 pub(crate) mod texture;
 pub(crate) mod transparency;
+
+pub(crate) mod character;

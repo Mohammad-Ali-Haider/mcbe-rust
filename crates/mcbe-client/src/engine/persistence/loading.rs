@@ -332,6 +332,7 @@ impl Service {
                                             )?);
                                         }
                                         if let Some(home) = owned_root {
+                                            client.appearance=Arc::new(crate::engine::player::appearance::Appearance::read_home(&home)?);
                                             client.scene.engine.as_mut().unwrap().ui = Arc::new(
                                                 crate::engine::ui::framework::Library::read_home(
                                                     &home,

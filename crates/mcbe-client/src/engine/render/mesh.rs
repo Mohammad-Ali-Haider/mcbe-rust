@@ -117,6 +117,19 @@ pub(crate) fn lod_surface(
         v.layer |= flags;
     }
 }
+/// Reuse compiled union surfaces/UVs for held items without temporary terrain.
+pub fn item(state: &WorldState, id: u16) -> Vec<Vertex> {
+    let mut vertices = Vec::new();
+    for face in 0..6 {
+        for surface in &state.geometry.visible(id, None, face).surfaces {
+            emit_surface(&mut vertices, [0, 0, 0], face, id, *surface);
+        }
+    }
+    for v in &mut vertices {
+        v.layer |= state.geometry.flags(id);
+    }
+    vertices
+}
 pub fn build_naive(state: &WorldState, key: [i32; 3]) -> ChunkMesh {
     naive(key, |p| state.blocks.get(&p).copied(), &state.geometry)
 }

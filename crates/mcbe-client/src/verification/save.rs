@@ -32,12 +32,12 @@ pub fn verify(app: &mut App, out: &Path) -> Result<()> {
         .find("oak_planks")?;
     app.client.scene.change_engine([2, 3, -2], Some(oak))?;
     app.client.scene.engine.as_mut().unwrap().player.slots[9] = Some(Stack { id: oak, count: 10 });
-    app.engine_key(KeyCode::F5)?;
+    app.save_shortcut()?;
     app.client.scene.change_engine([3, 3, -2], None)?;
-    app.engine_key(KeyCode::F5)?;
+    app.save_shortcut()?;
     app.client.scene.change_engine([4, 40, -2], Some(oak))?;
     app.client.scene.engine.as_mut().unwrap().player.slots[9] = Some(Stack { id: oak, count: 8 });
-    app.engine_key(KeyCode::F5)?;
+    app.save_shortcut()?;
     app.client.scene.change_engine([5, 4, -2], Some(oak))?;
     app.client.scene.engine.as_mut().unwrap().player.slots[9] = Some(Stack { id: oak, count: 7 });
     let start = app.client.actor.position;
@@ -89,7 +89,7 @@ pub fn verify(app: &mut App, out: &Path) -> Result<()> {
             && app.client.scene.engine.as_ref().unwrap().revision == revision,
         "Save completion replaced the live world or mesh revision",
     )?;
-    app.engine_key(KeyCode::F5)?;
+    app.save_shortcut()?;
     app.client.scene.change_engine([6, 4, -2], Some(oak))?;
     app.engine_key(KeyCode::F9)?;
     require(
@@ -113,7 +113,7 @@ pub fn verify(app: &mut App, out: &Path) -> Result<()> {
     let blocker = out.join("blocked-file");
     fs::write(&blocker, b"preserve")?;
     app.root = blocker.clone();
-    app.engine_key(KeyCode::F5)?;
+    app.save_shortcut()?;
     require(
         app.finish_work().is_err(),
         "Failed output directory was accepted",
@@ -137,7 +137,7 @@ pub fn verify(app: &mut App, out: &Path) -> Result<()> {
         definitions.join("recipes.json"),
         serde_json::to_vec(&app.client.scene.engine.as_ref().unwrap().recipes)?,
     )?;
-    app.engine_key(KeyCode::F5)?;
+    app.save_shortcut()?;
     app.engine_key(KeyCode::F6)?;
     require(
         app.deferred == Some(KeyCode::F6),

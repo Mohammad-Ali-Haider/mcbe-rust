@@ -449,6 +449,8 @@ pub struct Input {
     pub sprint: bool,
 }
 pub struct Client {
+    pub view: crate::engine::player::camera::Rig,
+    pub appearance: std::sync::Arc<crate::engine::player::appearance::Appearance>,
     pub owned_materials: Option<crate::engine_materials::Owned>,
     pub engine_gpu_prepared: std::cell::RefCell<Option<crate::engine_texture::Prepared>>,
     pub movement: crate::engine_player::Movement,
@@ -511,6 +513,10 @@ impl Client {
                 .ok_or("Source world has no supported persistent cube material")?
         };
         Ok(Self {
+            view: Default::default(),
+            appearance: std::sync::Arc::new(
+                crate::engine::player::appearance::Appearance::fallback(),
+            ),
             engine_gpu_prepared: std::cell::RefCell::new(None),
             movement: Default::default(),
             scene,
@@ -596,6 +602,13 @@ impl Client {
         self.spawn = position;
         self.actor = actor;
         Ok(())
+    }
+    pub fn streaming_position(&self) -> Vec3 {
+        if self.view.is_free() {
+            Vec3::new(self.view.free[0], self.view.free[1], self.view.free[2])
+        } else {
+            self.actor.position
+        }
     }
     pub fn sync_region(&mut self) -> Result<bool> {
         let streamed = crate::engine_stream::update(self)?;
@@ -710,6 +723,10 @@ impl Client {
         Ok(changed)
     }
     pub fn look(&mut self, dx: f32, dy: f32) {
+        if self.view.is_free() {
+            self.view.look(dx, dy);
+            return;
+        }
         self.yaw -= dx;
         self.pitch = (self.pitch - dy).clamp(-1.5, 1.5);
     }
@@ -726,13 +743,43 @@ impl Client {
         [(s * q) as f64, p as f64, (c * q) as f64]
     }
     pub fn tick(&mut self, input: Input) -> Result<()> {
-        crate::engine_player::tick(self, input)?;
+        if self
+            .scene
+            .engine
+            .as_ref()
+            .is_some_and(|s| s.stream.is_some())
+            && !self.view.is_free()
+        {
+            let p = self.actor.position;
+            let cell = [p.x.floor() as i32, p.y.floor() as i32, p.z.floor() as i32];
+            if !self.scene.inside(cell) {
+                self.sync_region()?;
+                if !self.scene.inside(cell) {
+                    return Ok(());
+                }
+            }
+        }
+
+        let before = self.actor.position;
+        if self.view.is_free() {
+            self.view.free_tick(input, 0.05);
+            self.sync_region()?;
+        } else {
+            crate::engine_player::tick(self, input)?;
+        }
+        let p = self.actor.position;
+        let distance = ((p.x - before.x).powi(2) + (p.z - before.z).powi(2)).sqrt();
+        self.view.advance_animation(distance, 0.05);
         crate::engine::blocks::systems::simulation::tick(self)
     }
     pub fn target(&self) -> Result<Option<Hit>> {
         self.scene.target(self.eye(), self.direction())
     }
     pub fn edit(&mut self, place: bool) -> Result<bool> {
+        if self.view.is_free() {
+            return Ok(false);
+        }
+        self.view.swing = 1.;
         let Some(hit) = self.target()? else {
             return Ok(false);
         };

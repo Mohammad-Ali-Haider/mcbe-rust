@@ -407,7 +407,7 @@ pub fn set_radius(client: &mut Client, radius: i32) -> Result<()> {
     if !(2..=MAX_RADIUS).contains(&radius) {
         return Err("Render distance must be 2..255 chunks".into());
     }
-    let c = center(client.actor.position);
+    let c = center(client.streaming_position());
     let Some(stream) = client.scene.engine.as_mut().and_then(|s| s.stream.as_mut()) else {
         return Ok(());
     };
@@ -499,7 +499,8 @@ pub fn update(client: &mut Client) -> Result<bool> {
         return Ok(false);
     }
     let before = client.scene.engine.as_ref().unwrap().revision;
-    recenter(&mut client.scene, center(client.actor.position));
+    let position = client.streaming_position();
+    recenter(&mut client.scene, center(position));
     let worker = client
         .engine_worker
         .as_mut()

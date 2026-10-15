@@ -171,6 +171,11 @@ impl Atlas {
         })?;
         if let Some(src) = &client.engine_assets {
             for (key, texture) in &src.inventory {
+                let texture = if *key == "skin" {
+                    &client.appearance.skin
+                } else {
+                    texture
+                };
                 let sprite = a.add(texture)?;
                 a.inventory.insert(*key, sprite);
             }
@@ -198,6 +203,10 @@ impl Atlas {
             a.cross = Some(a.add(&src.icons)?.crop(0, 0, 16, 16));
             a.panel = Some(a.add(&src.panel)?);
             a.cell = Some(a.add(&src.cell)?);
+        }
+        if !a.inventory.contains_key("skin") {
+            let sprite = a.add(&client.appearance.skin)?;
+            a.inventory.insert("skin", sprite);
         }
         if a.font.is_none() {
             a.font = Some(a.add(&crate::engine_font::texture())?);
@@ -319,10 +328,10 @@ impl Atlas {
         if !palette.open {
             return None;
         }
-        let assets = client.engine_assets.as_ref()?;
+        let appearance = &client.appearance;
         let sprite = self.inventory.get("skin")?;
         let rectangle = palette.document(client, viewport).ok()?.preview()?.0;
-        Some(assets.preview.mesh(
+        Some(appearance.model.mesh(
             rectangle,
             palette.pointer,
             viewport,
@@ -471,14 +480,32 @@ impl Atlas {
                 [1.; 4],
             );
         }
-        if let Some(s) = self.cross {
-            c.quad(s, [width / 2. - 8., height / 2. - 8., 16., 16.], [1.; 4]);
+        if matches!(
+            client.view.mode,
+            crate::engine::player::camera::Mode::FirstPerson
+                | crate::engine::player::camera::Mode::ThirdBack
+        ) && let Some(sprite) = self.cross
+        {
+            c.quad(
+                sprite,
+                [width / 2. - 8., height / 2. - 8., 16., 16.],
+                [1.; 4],
+            );
+        }
+        if client.view.is_free() && !palette.open {
+            self.text(
+                &mut c,
+                6.,
+                height - 14.,
+                "Free camera | WASD  Space/Shift  Ctrl fast | F5 return",
+                [1.; 4],
+            );
         }
         if let Some(id) = player.selected() {
             let label = &state.registry.get(id).label;
             self.text(
                 &mut c,
-                (width - self.label_width(label)) / 2.,
+                width / 2. - self.label_width(label) / 2.,
                 height - 36.,
                 label,
                 [1.; 4],
@@ -490,7 +517,7 @@ impl Atlas {
             crate::engine_player::Mode::Walking if client.movement.crouched => "SNEAKING",
             _ => "",
         };
-        if !mode.is_empty() {
+        if !mode.is_empty() && !client.view.is_free() {
             self.text(
                 &mut c,
                 width - self.label_width(mode) - 6.,

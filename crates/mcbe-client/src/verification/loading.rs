@@ -85,7 +85,7 @@ pub fn verify(app: &mut App, out: &Path) -> Result<()> {
         "Travel retry failed",
     )?;
     app.engine_key(KeyCode::KeyR)?;
-    app.engine_key(KeyCode::F5)?;
+    app.save_shortcut()?;
     require(
         app.deferred == Some(KeyCode::F5),
         "F5 did not wait for preparation",

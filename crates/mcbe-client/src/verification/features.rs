@@ -124,7 +124,7 @@ pub fn prepare(app: &mut App, out: &Path, settings: bool) -> Result<()> {
     app.client.set_spawn(Vec3::new(0.5, 4., -10.5))?;
     app.client.pitch = -0.02;
     app.simulation_previous = app.client.actor.position;
-    app.engine_key(KeyCode::F5)?;
+    app.save_shortcut()?;
     app.finish_work()?;
     let saved = app.client.last_save.clone().ok_or("Gallery save missing")?;
     let loaded = engine::load(&saved)?;
