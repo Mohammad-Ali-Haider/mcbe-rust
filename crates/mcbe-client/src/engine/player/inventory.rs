@@ -1,5 +1,8 @@
 //! Engine-owned player slots and cursor transactions. Creative placement is unlimited.
 use crate::{engine_blocks::BlockId, scene::Result};
+mod containers;
+pub(crate) mod profile;
+use profile::Profile;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Stack {
     pub data: Option<crate::engine::items::ItemData>,
@@ -9,6 +12,7 @@ pub struct Stack {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Slot {
     Offhand,
+    Container { bank: usize, index: usize },
     Player(usize),
     Craft(usize),
     Table(usize),
@@ -27,10 +31,13 @@ pub enum Hand {
 }
 #[derive(Clone, Debug)]
 pub struct Inventory {
-    pub slots: [Option<Stack>; 36],
+    pub profile: Profile,
+    pub containers: Vec<Vec<Option<Stack>>>,
+    filters: Vec<Vec<BlockId>>,
+    pub slots: Vec<Option<Stack>>,
     pub offhand: Option<Stack>,
-    pub crafting: [Option<Stack>; 4],
-    pub table: [Option<Stack>; 9],
+    pub crafting: Vec<Option<Stack>>,
+    pub table: Vec<Option<Stack>>,
     pub cursor: Option<Stack>,
     pub active: usize,
     pub revision: u64,
@@ -38,10 +45,13 @@ pub struct Inventory {
 impl Inventory {
     pub fn empty() -> Self {
         Self {
-            slots: [None; 36],
+            profile: Profile::default(),
+            containers: vec![],
+            filters: vec![],
+            slots: vec![None; 36],
             offhand: None,
-            crafting: [None; 4],
-            table: [None; 9],
+            crafting: vec![None; 4],
+            table: vec![None; 9],
             cursor: None,
             active: 0,
             revision: 0,
@@ -87,8 +97,8 @@ impl Inventory {
         }
     }
     pub fn swap_hands(&mut self) -> Result<bool> {
-        if self.active >= 9 {
-            return Err("Hotbar index must be 0..8".into());
+        if self.active >= self.profile.hotbar_slots {
+            return Err("Hotbar index outside the configured range".into());
         }
         if self.slots[self.active] == self.offhand {
             return Ok(false);
@@ -99,11 +109,11 @@ impl Inventory {
     }
     /// All-or-nothing merge into player slots, respecting each item's stack limit.
     pub fn receive(&mut self, stack: Stack, count: u16) -> Result<()> {
-        if !(1..=2304).contains(&count) {
-            return Err("Count must be from 1 to 2304".into());
+        if count == 0 || usize::from(count) > self.slots.len() * 64 {
+            return Err("Count exceeds the configured inventory capacity".into());
         }
         let mut next = self.clone();
-        let order: Vec<_> = (0..36).collect();
+        let order: Vec<_> = (0..self.slots.len()).collect();
         let mut remaining = count;
         while remaining > 0 {
             let n = remaining.min(u16::from(stack.limit())) as u8;
@@ -117,10 +127,30 @@ impl Inventory {
         Ok(())
     }
     pub fn selected(&self) -> Option<BlockId> {
-        self.slots[self.active].map(|s| s.id)
+        self.hand(Hand::Main).map(|s| s.id)
     }
     pub fn validate(&self, definitions: usize) -> Result<()> {
-        if self.active >= 9
+        self.profile.validate()?;
+        if self.filters.len() != self.containers.len()
+            || self.containers.iter().enumerate().any(|(bank, slots)| {
+                slots
+                    .iter()
+                    .flatten()
+                    .any(|s| !self.accepts(Slot::Container { bank, index: 0 }, *s))
+            })
+        {
+            return Err("Stored items violate container filters".into());
+        }
+        if self.slots.len() != self.profile.player_slots
+            || self.crafting.len() != self.profile.craft_side.pow(2)
+            || self.table.len() != self.profile.table_side.pow(2)
+            || self.containers.len() != self.profile.containers.len()
+            || self
+                .containers
+                .iter()
+                .zip(&self.profile.containers)
+                .any(|(slots, c)| slots.len() != c.slots)
+            || self.active >= self.profile.hotbar_slots
             || self
                 .slots
                 .iter()
@@ -128,6 +158,7 @@ impl Inventory {
                 .chain(&self.table)
                 .chain(std::iter::once(&self.cursor))
                 .chain(std::iter::once(&self.offhand))
+                .chain(self.containers.iter().flatten())
                 .flatten()
                 .any(|s| s.count == 0 || s.count > s.limit() || usize::from(s.id) >= definitions)
         {
@@ -155,6 +186,28 @@ impl Inventory {
                 .count()
             + usize::from(self.cursor != base.cursor)
             + usize::from(self.offhand != base.offhand)
+            + self.slots.len().abs_diff(base.slots.len())
+            + self.crafting.len().abs_diff(base.crafting.len())
+            + self.table.len().abs_diff(base.table.len())
+            + usize::from(self.profile != base.profile)
+            + self
+                .containers
+                .iter()
+                .enumerate()
+                .map(|(i, slots)| match base.containers.get(i) {
+                    Some(old) => {
+                        slots.iter().zip(old).filter(|(a, b)| a != b).count()
+                            + slots.len().abs_diff(old.len())
+                    }
+                    None => slots.len(),
+                })
+                .sum::<usize>()
+            + base
+                .containers
+                .iter()
+                .skip(self.containers.len())
+                .map(Vec::len)
+                .sum::<usize>()
     }
     pub fn total(&self) -> usize {
         self.slots
@@ -163,12 +216,14 @@ impl Inventory {
             .chain(&self.table)
             .chain(std::iter::once(&self.cursor))
             .chain(std::iter::once(&self.offhand))
+            .chain(self.containers.iter().flatten())
             .flatten()
             .map(|s| usize::from(s.count))
             .sum()
     }
     pub fn get(&self, slot: Slot) -> Result<Option<Stack>> {
         match slot {
+            Slot::Container { bank, index } => self.containers.get(bank).and_then(|s| s.get(index)),
             Slot::Offhand => Some(&self.offhand),
             Slot::Player(i) => self.slots.get(i),
             Slot::Craft(i) => self.crafting.get(i),
@@ -178,7 +233,15 @@ impl Inventory {
         .ok_or_else(|| "Invalid inventory slot".into())
     }
     pub(crate) fn set(&mut self, slot: Slot, value: Option<Stack>) -> Result<()> {
+        if let Some(stack) = value
+            && !self.accepts(slot, stack)
+        {
+            return Err("Item is not accepted by this container".into());
+        }
         let destination = match slot {
+            Slot::Container { bank, index } => {
+                self.containers.get_mut(bank).and_then(|s| s.get_mut(index))
+            }
             Slot::Offhand => Some(&mut self.offhand),
             Slot::Player(i) => self.slots.get_mut(i),
             Slot::Craft(i) => self.crafting.get_mut(i),
@@ -189,8 +252,8 @@ impl Inventory {
         Ok(())
     }
     pub fn select(&mut self, index: usize) -> Result<()> {
-        if index >= 9 {
-            return Err("Hotbar index must be 0..8".into());
+        if index >= self.profile.hotbar_slots {
+            return Err("Hotbar index outside the configured range".into());
         }
         if self.active != index {
             self.active = index;
@@ -199,12 +262,13 @@ impl Inventory {
         Ok(())
     }
     pub fn cycle(&mut self, delta: i32) {
-        let next = (self.active as i32 + delta).rem_euclid(9) as usize;
+        let next =
+            (self.active as i32 + delta).rem_euclid(self.profile.hotbar_slots as i32) as usize;
         let _ = self.select(next);
     }
     pub fn assign(&mut self, id: BlockId, hotbar: usize) -> Result<()> {
-        if hotbar >= 9 {
-            return Err("Hotbar index must be 0..8".into());
+        if hotbar >= self.profile.hotbar_slots {
+            return Err("Hotbar index outside the configured range".into());
         }
         self.slots[hotbar] = Some(Stack {
             data: None,
@@ -220,10 +284,13 @@ impl Inventory {
         }
     }
     pub fn swap_hotbar(&mut self, slot: Slot, index: usize) -> Result<()> {
-        if index >= 9 {
-            return Err("Hotbar index must be 0..8".into());
+        if index >= self.profile.hotbar_slots {
+            return Err("Hotbar index outside the configured range".into());
         }
         let value = self.get(slot)?;
+        if matches!(slot,Slot::Container{bank,..} if self.profile.containers[bank].output_only) {
+            return Ok(());
+        }
         let other = self.slots[index];
         self.set(slot, other)?;
         self.slots[index] = value;
@@ -255,10 +322,40 @@ impl Inventory {
             return Ok(false);
         };
         let order: Vec<_> = match slot {
-            Slot::Player(i) if i < 9 => (9..36).collect(),
-            Slot::Player(_) => (0..9).collect(),
-            Slot::Offhand | Slot::Craft(_) | Slot::Table(_) => (0..36).collect(),
+            Slot::Player(i) if i < self.profile.hotbar_slots => {
+                (self.profile.hotbar_slots..self.slots.len()).collect()
+            }
+            Slot::Player(_) => (0..self.profile.hotbar_slots).collect(),
+            Slot::Container { .. } | Slot::Offhand | Slot::Craft(_) | Slot::Table(_) => {
+                (0..self.slots.len()).collect()
+            }
         };
+        if let Slot::Container { bank, .. } = slot
+            && let Some(target) = self.profile.containers[bank]
+                .quick_move_to
+                .as_ref()
+                .filter(|id| id.as_str() != "player")
+        {
+            let destination = self
+                .profile
+                .containers
+                .iter()
+                .position(|c| &c.id == target)
+                .ok_or("Transfer destination missing")?;
+            if self.profile.containers[destination].output_only {
+                return Ok(false);
+            }
+            let mut next = self.clone();
+            next.set(slot, None)?;
+            let remainder = next.insert_container(destination, stack)?;
+            next.set(slot, remainder)?;
+            if remainder == Some(stack) {
+                return Ok(false);
+            }
+            next.revision = next.revision.wrapping_add(1);
+            *self = next;
+            return Ok(true);
+        }
         let mut next = self.clone();
         next.set(slot, None)?;
         let remainder = next.add(stack, &order);
@@ -277,7 +374,15 @@ impl Inventory {
         let before = self.get(slot)?;
         let mut value = before;
         let old_cursor = self.cursor;
-        transfer(&mut self.cursor, &mut value, button);
+        if matches!(slot,Slot::Container{bank,..} if self.profile.containers[bank].output_only) {
+            self.click_external(&mut value, button, false, true);
+        } else {
+            transfer(&mut self.cursor, &mut value, button);
+        }
+        if value.is_some_and(|stack| !self.accepts(slot, stack)) {
+            self.cursor = old_cursor;
+            return Ok(false);
+        }
         self.set(slot, value)?;
         let changed = before != value || old_cursor != self.cursor;
         if changed {
@@ -296,7 +401,7 @@ impl Inventory {
         let cursor = self.cursor;
         if shift {
             if let Some(s) = *value {
-                *value = self.add(s, &(0..36).collect::<Vec<_>>());
+                *value = self.add(s, &(0..self.slots.len()).collect::<Vec<_>>());
             }
         } else if output {
             if let Some(mut s) = *value {
@@ -358,7 +463,7 @@ impl Inventory {
         let Some(held) = self.cursor else {
             return true;
         };
-        let order: Vec<_> = (0..36).collect();
+        let order: Vec<_> = (0..self.slots.len()).collect();
         self.cursor = self.add(held, &order);
         self.revision = self.revision.wrapping_add(1);
         self.cursor.is_none()
@@ -368,15 +473,15 @@ impl Inventory {
         if !next.settle_cursor() {
             return false;
         }
-        let order: Vec<_> = (0..36).collect();
-        for i in 0..4 {
+        let order: Vec<_> = (0..self.slots.len()).collect();
+        for i in 0..self.crafting.len() {
             if let Some(stack) = next.crafting[i].take()
                 && next.add(stack, &order).is_some()
             {
                 return false;
             }
         }
-        for i in 0..9 {
+        for i in 0..self.table.len() {
             if let Some(stack) = next.table[i].take()
                 && next.add(stack, &order).is_some()
             {
@@ -400,7 +505,13 @@ impl Inventory {
             return false;
         }
         if consumed.is_empty()
-            || consumed.iter().any(|i| *i >= if table { 9 } else { 4 })
+            || consumed.iter().any(|i| {
+                *i >= if table {
+                    self.table.len()
+                } else {
+                    self.crafting.len()
+                }
+            })
             || consumed
                 .iter()
                 .copied()
@@ -412,7 +523,7 @@ impl Inventory {
         }
         let mut next = self.clone();
         if all {
-            let order: Vec<_> = (0..36).collect();
+            let order: Vec<_> = (0..self.slots.len()).collect();
             if next.add(result, &order).is_some() {
                 return false;
             }
@@ -495,11 +606,14 @@ mod tests {
         assert!(p.close_inventory());
         assert_eq!(p.total(), total);
         assert!(p.table.iter().all(Option::is_none));
-        p.slots = [Some(Stack {
-            data: None,
-            id: 0,
-            count: 64,
-        }); 36];
+        p.slots = vec![
+            Some(Stack {
+                data: None,
+                id: 0,
+                count: 64,
+            });
+            36
+        ];
         p.table[0] = Some(Stack {
             data: None,
             id: 1,
@@ -553,11 +667,14 @@ mod tests {
         assert!(p.cursor.is_none());
         assert_eq!(p.crafting, [None; 4]);
         assert_eq!(p.total(), total);
-        p.slots = [Some(Stack {
-            data: None,
-            id: 0,
-            count: 64,
-        }); 36];
+        p.slots = vec![
+            Some(Stack {
+                data: None,
+                id: 0,
+                count: 64,
+            });
+            36
+        ];
         p.slots[35] = None;
         p.cursor = Some(Stack {
             data: None,
@@ -604,11 +721,14 @@ mod tests {
     #[test]
     fn full_inventory_and_invalid_indices_are_atomic() {
         let mut p = Inventory::empty();
-        p.slots = [Some(Stack {
-            data: None,
-            id: 0,
-            count: 64,
-        }); 36];
+        p.slots = vec![
+            Some(Stack {
+                data: None,
+                id: 0,
+                count: 64,
+            });
+            36
+        ];
         p.cursor = Some(Stack {
             data: None,
             id: 1,

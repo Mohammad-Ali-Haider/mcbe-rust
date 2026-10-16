@@ -30,6 +30,7 @@ impl Model {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Action {
+    Command { name: String, args: Vec<String> },
     Close,
     Open { screen: String },
     Increment { key: String, amount: f64 },
@@ -40,7 +41,15 @@ pub enum Action {
 }
 impl Action {
     pub fn validate(&self) -> Result<()> {
+        if let Self::Command { name, args } = self {
+            return crate::engine::commands::Invocation {
+                name: name.clone(),
+                args: args.clone(),
+            }
+            .validate();
+        }
         let key = match self {
+            Self::Command { .. } => unreachable!(),
             Self::Open { screen } => screen,
             Self::Increment { key, .. }
             | Self::SetNumber { key, .. }
@@ -63,6 +72,7 @@ impl Action {
     }
 }
 pub enum Effect {
+    Command(crate::engine::commands::Invocation),
     None,
     Close,
     Open(String),
@@ -73,6 +83,14 @@ pub trait Screen: Send + Sync {
     fn action(&self, action: &Action, model: &mut Model) -> Result<Effect> {
         action.validate()?;
         match action {
+            Action::Command { name, args } => {
+                let invocation = crate::engine::commands::Invocation {
+                    name: name.clone(),
+                    args: args.iter().map(|s| model.text(s)).collect(),
+                };
+                invocation.validate()?;
+                Ok(Effect::Command(invocation))
+            }
             Action::TravelDimension { dimension } => Ok(Effect::TravelDimension(dimension.clone())),
             Action::SetNumber { key, value } => {
                 if !model.numbers.contains_key(key)
@@ -128,7 +146,7 @@ impl Document {
         let mut names = HashSet::new();
         let mut pending = vec![(&self.root, 0)];
         while let Some((widget, depth)) = pending.pop() {
-            if depth > 16 || names.len() >= 256 || !names.insert(&widget.id) {
+            if depth > 16 || names.len() >= 2048 || !names.insert(&widget.id) {
                 return Err("UI widget depth/count/duplicate ID invalid".into());
             }
             widget.validate()?;

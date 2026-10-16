@@ -7,10 +7,9 @@ pub fn run(client: &mut Client, args: &[String]) -> Result<Outcome> {
             args[0]
         )
     })?;
-    let count = args
-        .get(1)
-        .map_or(Ok(1), |s| s.parse::<u16>())
-        .map_err(|_| "Count must be a whole number from 1 to 2304")?;
+    let count = args.get(1).map_or(Ok(1), |s| s.parse::<u16>()).map_err(
+        |_| "Count must be a positive whole number within the configured inventory capacity",
+    )?;
     let stack = state.registry.catalog_stack(id);
     stack.validate_item(&state.registry)?;
     state.player.receive(stack, count)?;

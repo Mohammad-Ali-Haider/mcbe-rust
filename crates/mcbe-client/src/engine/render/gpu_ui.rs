@@ -174,7 +174,9 @@ impl Atlas {
             height: 1,
             rgba: vec![255; 4],
         })?;
-        if let Some(src) = &client.engine_assets {
+        if let Some(src) = &client.engine_assets
+            && client.scene.engine.as_ref().unwrap().ui.theme.legacy_ui
+        {
             for (key, texture) in &src.inventory {
                 let texture = if *key == "skin" {
                     &client.appearance.skin
@@ -516,16 +518,27 @@ impl Atlas {
         }
         let state = client.scene.engine.as_ref().unwrap();
         let player = &state.player;
-        let x = (width - 182.) / 2.;
+        let bar_width = player.profile.hotbar_slots as f32 * 20. + 2.;
+        let x = (width - bar_width) / 2.;
         let y = height - 22.;
-        c.rect([x, y, 182., 22.], [0.25, 0.25, 0.25, 0.8]);
+        c.rect([x, y, bar_width, 22.], [0.25, 0.25, 0.25, 0.8]);
         if let Some(s) = self.start {
             c.quad(s, [x, y, 1., 22.], [1., 1., 1., 0.65]);
         }
         if let Some(s) = self.end {
-            c.quad(s, [x + 181., y, 1., 22.], [1., 1., 1., 0.65]);
+            c.quad(s, [x + bar_width - 1., y, 1., 22.], [1., 1., 1., 0.65]);
         }
-        for i in 0..9 {
+        for i in 0..player.profile.hotbar_slots {
+            if !state.ui.theme.legacy_ui {
+                let style = state.ui.theme.style(if i == player.active {
+                    "hotbar_selected"
+                } else {
+                    "slot"
+                });
+                let rect = [x + 1. + i as f32 * 20., y + 1., 19., 20.];
+                c.rect(rect, style.border);
+                c.rect([rect[0] + 1., rect[1] + 1., 17., 18.], style.fill);
+            }
             if let Some(s) = self.slots.get(i) {
                 c.quad(*s, [x + 1. + i as f32 * 20., y, 20., 22.], [1.; 4]);
             }
@@ -558,6 +571,20 @@ impl Atlas {
                 [x - 1. + player.active as f32 * 20., y - 1., 24., 24.],
                 [1.; 4],
             );
+        }
+        if !ctx.chat.open
+            && self.cross.is_none()
+            && !palette.open
+            && matches!(
+                client.view.mode,
+                crate::engine::player::camera::Mode::FirstPerson
+                    | crate::engine::player::camera::Mode::ThirdBack
+            )
+        {
+            c.rect([width / 2. - 3., height / 2., 2., 1.], [0.9, 1., 0.96, 0.9]);
+            c.rect([width / 2. + 1., height / 2., 2., 1.], [0.9, 1., 0.96, 0.9]);
+            c.rect([width / 2., height / 2. - 3., 1., 2.], [0.9, 1., 0.96, 0.9]);
+            c.rect([width / 2., height / 2. + 1., 1., 2.], [0.9, 1., 0.96, 0.9]);
         }
         if !ctx.chat.open
             && matches!(
@@ -741,8 +768,19 @@ impl Atlas {
                                     .and_then(|key| self.custom_ui.get(key))
                                 {
                                     c.quad(*sprite, r, style.fill);
-                                } else {
+                                } else if state.ui.theme.legacy_ui {
                                     self.panel(&mut c, r, style.fill);
+                                } else {
+                                    c.rect(r, style.border);
+                                    c.rect(
+                                        [
+                                            r[0] + scale,
+                                            r[1] + scale,
+                                            r[2] - 2. * scale,
+                                            r[3] - 2. * scale,
+                                        ],
+                                        style.fill,
+                                    );
                                 }
                             }
                             Kind::Label { text } => self.text_scaled(
@@ -782,9 +820,9 @@ impl Atlas {
                                 c.rect(
                                     r,
                                     if palette.search {
-                                        [0.18, 0.23, 0.22, 1.]
+                                        style.border
                                     } else {
-                                        [0.15, 0.15, 0.15, 1.]
+                                        style.fill
                                     },
                                 );
                                 let search = if palette.filter.is_empty() {
@@ -805,7 +843,7 @@ impl Atlas {
                                     r[0] + 3. * scale,
                                     r[1] + 3. * scale,
                                     &search,
-                                    [0.9, 0.9, 0.9, 1.],
+                                    style.text,
                                     scale,
                                 );
                             }
@@ -830,7 +868,16 @@ impl Atlas {
                                     {
                                         c.quad(*sprite, cell, [1.; 4]);
                                     } else {
-                                        c.rect(cell, [0.45, 0.45, 0.45, 1.]);
+                                        c.rect(cell, style.border);
+                                        c.rect(
+                                            [
+                                                cell[0] + scale,
+                                                cell[1] + scale,
+                                                cell[2] - 2. * scale,
+                                                cell[3] - 2. * scale,
+                                            ],
+                                            style.fill,
+                                        );
                                     }
                                     if let Some(id) = visible.get(base + i) {
                                         if let Some(icon) = self.icons.get(*id) {
@@ -851,8 +898,22 @@ impl Atlas {
                                     }
                                 }
                             }
+                            Kind::SlotGrid { .. } => {} // Authored grids expand before rendering/hit testing.
                             Kind::Slot { binding } => {
                                 let (stack, target) = match binding {
+                                    Binding::Container { bank, index } => (
+                                        player
+                                            .get(Slot::Container {
+                                                bank: *bank,
+                                                index: *index,
+                                            })
+                                            .ok()
+                                            .flatten(),
+                                        Target::Slot(Slot::Container {
+                                            bank: *bank,
+                                            index: *index,
+                                        }),
+                                    ),
                                     Binding::Offhand => {
                                         (player.offhand, Target::Slot(Slot::Offhand))
                                     }
@@ -891,7 +952,16 @@ impl Atlas {
                                 {
                                     c.quad(*sprite, r, [1.; 4]);
                                 } else {
-                                    c.rect(r, [0.45, 0.45, 0.45, 1.]);
+                                    c.rect(r, style.border);
+                                    c.rect(
+                                        [
+                                            r[0] + scale,
+                                            r[1] + scale,
+                                            r[2] - 2. * scale,
+                                            r[3] - 2. * scale,
+                                        ],
+                                        style.fill,
+                                    );
                                 }
                                 if let Some(stack) = stack {
                                     self.stack(

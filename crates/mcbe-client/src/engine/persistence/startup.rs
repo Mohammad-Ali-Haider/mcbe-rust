@@ -195,17 +195,43 @@ impl Options {
             };
             state.entities.library = Arc::new(definitions.compile(&state.registry)?);
         }
+        {
+            let state = client.scene.engine.as_mut().unwrap();
+            let profile = engine::player::inventory::profile::Profile::read_home(&self.home)?;
+            if new_world {
+                let selected = state.player.selected().unwrap_or(0);
+                let mut p = crate::engine_inventory::Inventory::empty();
+                p.configure(profile, &state.registry)?;
+                for i in 0..state.registry.blocks.len().min(p.profile.hotbar_slots) {
+                    p.assign_item(state.registry.catalog_stack(i as u16), i)?;
+                }
+                if usize::from(selected) < p.profile.hotbar_slots {
+                    p.select(selected as usize)?;
+                } else {
+                    p.assign_item(state.registry.catalog_stack(selected), 0)?;
+                }
+                state.player = p;
+                state.original_player = state.player.clone();
+            } else {
+                state.player.configure(profile, &state.registry)?;
+            }
+        }
         client.scene.engine.as_mut().unwrap().ui = std::sync::Arc::new(
             crate::engine::ui::framework::Library::read_home(&self.home)?,
         );
+        {
+            let state = client.scene.engine.as_ref().unwrap();
+            state.ui.validate_inventory(&state.player.profile)?;
+        }
         client.appearance = Arc::new(crate::engine::player::appearance::Appearance::read_home(
             &self.home,
         )?);
         progress.phase(4)?;
         if !self.original {
-            client.engine_assets = Some(crate::engine_assets::load(
+            client.engine_assets = Some(crate::engine_assets::load_for(
                 &client.scene.engine.as_ref().unwrap().registry,
                 &self.pack_root,
+                client.scene.engine.as_ref().unwrap().ui.theme.legacy_ui,
             )?);
         }
         client.owned_materials = Some(crate::engine_materials::load(
@@ -461,7 +487,7 @@ mod tests {
         );
         let options = Options {
             home,
-            source: None,
+            source: std::env::var_os("MCBE_RESUME_TEST_SOURCE").map(PathBuf::from),
             definitions: None,
             original: false,
             pack_root: crate::engine_assets::DEFAULT_ROOT.into(),
@@ -484,6 +510,27 @@ mod tests {
         );
         assert!(state.registry.find("redstone_dust").is_ok());
         assert!(state.dimensions.is_some());
+        state.ui.validate_inventory(&state.player.profile).unwrap();
+        assert_eq!(
+            state.player.profile,
+            engine::player::inventory::profile::Profile::read_home(&options.home).unwrap()
+        );
+        if !state.ui.theme.legacy_ui {
+            let assets = client.engine_assets.as_ref().unwrap();
+            assert!(assets.inventory.is_empty() && assets.hotbar.is_empty());
+            let unique = assets
+                .materials
+                .values()
+                .map(|a| Arc::as_ptr(a) as usize)
+                .collect::<std::collections::BTreeSet<_>>()
+                .len();
+            assert!(unique < assets.materials.len());
+            eprintln!(
+                "Original UI loaded; {} material bindings share {} decoded textures",
+                assets.materials.len(),
+                unique
+            );
+        }
         let pose = client.actor.position;
         client.scene.engine.as_mut().unwrap().entities.natural = true;
         for _ in 0..100 {

@@ -22,6 +22,8 @@ impl Default for Style {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Theme {
+    #[serde(default)]
+    pub legacy_ui: bool,
     pub version: u32,
     #[serde(default)]
     pub textures: BTreeMap<String, String>,

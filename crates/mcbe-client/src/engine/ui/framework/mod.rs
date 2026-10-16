@@ -1,4 +1,5 @@
 //! Shared UI documents, layout, themes and code-defined screen controllers.
+mod grids;
 pub(crate) mod layout;
 pub(crate) mod screen;
 pub(crate) mod theme;
@@ -122,10 +123,15 @@ impl Library {
         Ok(result)
     }
     pub fn resolve(&self, id: &str, model: &Model, viewport: [f32; 2]) -> Result<ResolvedScreen> {
+        let mut model = model.clone();
+        if !model.numbers.contains_key("hotbar_slots") {
+            crate::engine_inventory::profile::Profile::default().write_model(&mut model);
+        }
         self.screens
             .get(id)
             .ok_or("UI screen not registered")?
-            .build(model)
+            .build(&model)
+            .expanded(&model)?
             .resolve(viewport)
     }
     pub fn action(
@@ -138,6 +144,52 @@ impl Library {
             .get(id)
             .ok_or("UI screen not registered")?
             .action(action, model)
+    }
+    pub fn validate_inventory(
+        &self,
+        p: &crate::engine::player::inventory::profile::Profile,
+    ) -> Result<()> {
+        let mut model = Model::default();
+        p.write_model(&mut model);
+        fn check(
+            w: &widgets::Widget,
+            m: &Model,
+            p: &crate::engine::player::inventory::profile::Profile,
+        ) -> Result<()> {
+            if w.visible
+                .as_ref()
+                .is_some_and(|v| v.read(m).is_ok_and(|n| n == 0))
+            {
+                return Ok(());
+            }
+            match &w.kind {
+                widgets::Kind::Slot { binding } if !binding.valid_for(p) => {
+                    return Err(format!("UI slot {} is outside its inventory profile", w.id).into());
+                }
+                widgets::Kind::SlotGrid {
+                    binding,
+                    count,
+                    offset,
+                    ..
+                } => {
+                    let n = count.read(m)?;
+                    if n > 0 && !binding.advanced(offset.read(m)? + n - 1)?.valid_for(p) {
+                        return Err(format!("UI slot grid {} exceeds its container", w.id).into());
+                    }
+                }
+                _ => {}
+            }
+            for c in &w.children {
+                check(c, m, p)?;
+            }
+            Ok(())
+        }
+        for screen in self.screens.values() {
+            let doc = screen.build(&model);
+            check(&doc.root, &model, p)?;
+            doc.expanded(&model)?;
+        }
+        Ok(())
     }
     pub fn contains(&self, id: &str) -> bool {
         self.screens.contains_key(id)
@@ -200,7 +252,7 @@ mod tests {
                         && r[1] + r[3] <= viewport[1]
                 );
             }
-            assert_eq!(document.catalog().map(|(_, c, r)| (c, r)), Some((7, 6)));
+            assert_eq!(document.catalog().map(|(_, c, r)| (c, r)), Some((6, 7)));
         }
         assert_eq!(
             Rect([0., 0., 10., 10.]).intersect(Rect([8., 8., 10., 10.])),
@@ -281,6 +333,56 @@ mod tests {
         let mut value = serde_json::to_value(&document).unwrap();
         value["root"]["children"][0]["invented_field"] = serde_json::json!(true);
         assert!(serde_json::from_value::<Document>(value).is_err());
+    }
+    #[test]
+    fn inventory_reload_rejects_item_loss_and_publishes_valid_profile_with_ui() {
+        let home = std::env::temp_dir().join(format!(
+            "mc-rust-storage-reload-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(home.join("assets")).unwrap();
+        std::fs::create_dir_all(home.join("content/base")).unwrap();
+        let mut client = crate::engine::generate(37).unwrap();
+        let mut r = client.scene.engine.as_ref().unwrap().registry.clone();
+        for b in &mut r.blocks {
+            b.texture_files = None;
+        }
+        let definitions = home.join("assets/blocks.json");
+        std::fs::write(&definitions, serde_json::to_vec(&r).unwrap()).unwrap();
+        client.scene.engine.as_mut().unwrap().player.slots[35] =
+            Some(crate::engine_inventory::Stack {
+                id: 0,
+                count: 9,
+                data: None,
+            });
+        let before = client.scene.engine.as_ref().unwrap().player.clone();
+        let ui = client.scene.engine.as_ref().unwrap().ui.clone();
+        let revision = client.scene.engine.as_ref().unwrap().registry_revision;
+        let mut p = crate::engine_inventory::profile::Profile {
+            player_slots: 20,
+            ..Default::default()
+        };
+        let path = home.join("content/base/inventory.json");
+        std::fs::write(&path, serde_json::to_vec(&p).unwrap()).unwrap();
+        assert!(crate::engine::reload_definitions(&mut client, &definitions).is_err());
+        let state = client.scene.engine.as_ref().unwrap();
+        assert_eq!(state.registry_revision, revision);
+        assert!(Arc::ptr_eq(&ui, &state.ui));
+        assert_eq!(state.player.changed_slots(&before), 0);
+        p.player_slots = 64;
+        p.hotbar_slots = 12;
+        std::fs::write(&path, serde_json::to_vec(&p).unwrap()).unwrap();
+        crate::engine::reload_definitions(&mut client, &definitions).unwrap();
+        let state = client.scene.engine.as_ref().unwrap();
+        assert_eq!(state.player.slots.len(), 64);
+        assert_eq!(state.player.profile.hotbar_slots, 12);
+        assert_eq!(state.player.slots[35], before.slots[35]);
+        state.ui.validate_inventory(&state.player.profile).unwrap();
+        std::fs::remove_dir_all(home).unwrap();
     }
     #[test]
     fn failed_ui_reload_keeps_world_registry_and_screen_library() {

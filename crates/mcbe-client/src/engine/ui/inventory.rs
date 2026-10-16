@@ -27,6 +27,7 @@ pub struct Pointer {
 }
 #[derive(Default)]
 pub struct Palette {
+    pub pending_commands: std::collections::VecDeque<crate::engine::commands::Invocation>,
     pub pending_dimension: Option<String>,
     pub screen: String,
     pub station: Option<[i32; 3]>,
@@ -85,7 +86,8 @@ impl Palette {
     ) -> Option<crate::engine_crafting::Match> {
         let s = client.scene.engine.as_ref()?;
         if table {
-            s.recipes.find_grid(&s.registry, &s.player.table, 3)
+            s.recipes
+                .find_grid(&s.registry, &s.player.table, s.player.profile.table_side)
         } else {
             s.recipes.find(&s.registry, &s.player)
         }
@@ -107,13 +109,12 @@ impl Palette {
         }
     }
     pub fn catalog_dimensions(&self, client: &Client) -> [usize; 2] {
-        client
-            .scene
-            .engine
-            .as_ref()
-            .unwrap()
+        let state = client.scene.engine.as_ref().unwrap();
+        let mut model = self.model.clone();
+        state.player.profile.write_model(&mut model);
+        state
             .ui
-            .resolve(self.screen_id(), &self.model, self.viewport)
+            .resolve(self.screen_id(), &model, self.viewport)
             .ok()
             .and_then(|d| d.catalog().map(|(_, columns, rows)| [columns, rows]))
             .unwrap_or([COLS, ROWS])
@@ -124,6 +125,14 @@ impl Palette {
     }
     pub fn ui_model(&self, client: &Client) -> super::framework::screen::Model {
         let mut model = self.model.clone();
+        client
+            .scene
+            .engine
+            .as_ref()
+            .unwrap()
+            .player
+            .profile
+            .write_model(&mut model);
         model
             .texts
             .entry("ui_controls".into())
@@ -186,6 +195,13 @@ impl Palette {
             "catalog_count".into(),
             self.visible(&client.scene.engine.as_ref().unwrap().registry)
                 .len() as f64,
+        );
+        model.numbers.insert(
+            "catalog_pages".into(),
+            self.visible(&state.registry)
+                .len()
+                .div_ceil(self.page_size(client))
+                .max(1) as f64,
         );
         model.numbers.insert(
             "page".into(),
@@ -455,6 +471,7 @@ impl Palette {
         let [x, y] = Self::origin(viewport);
         let right = x + 150.;
         match slot {
+            Slot::Container { .. } => [0., 0., 0., 0.], // Historical software-only layout; native UI uses authored bindings.
             Slot::Offhand => [x + 229., y + 61., 18., 18.],
             Slot::Player(i) if i < 9 => [right + 7. + i as f32 * 18., y + 143., 18., 18.],
             Slot::Player(i) => [
@@ -482,6 +499,9 @@ impl Palette {
         let document = self.document(client, viewport).ok()?;
         match document.hit(position)? {
             Hit::Search => Some(Target::Search),
+            Hit::Slot(Binding::Container { bank, index }) => {
+                Some(Target::Slot(Slot::Container { bank, index }))
+            }
             Hit::Slot(Binding::Offhand) => Some(Target::Slot(Slot::Offhand)),
             Hit::Slot(Binding::Player(i)) => Some(Target::Slot(Slot::Player(i))),
             Hit::Slot(Binding::Craft(i)) => Some(Target::Slot(Slot::Craft(i))),
@@ -533,6 +553,12 @@ impl Palette {
                             .get(&id)?;
                         self.close(client)?;
                         self.pending_dimension = Some(id);
+                    }
+                    super::framework::screen::Effect::Command(invocation) => {
+                        if self.pending_commands.len() >= 32 {
+                            return Err("UI command queue is full".into());
+                        }
+                        self.pending_commands.push_back(invocation);
                     }
                     super::framework::screen::Effect::None => {}
                     super::framework::screen::Effect::Close => self.close(client)?,

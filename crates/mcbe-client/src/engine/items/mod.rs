@@ -69,6 +69,7 @@ impl crate::engine_inventory::Inventory {
             .chain(&self.table)
             .chain(std::iter::once(&self.cursor))
             .chain(std::iter::once(&self.offhand))
+            .chain(self.containers.iter().flatten())
             .flatten()
         {
             s.validate_item(r)?;
@@ -76,7 +77,7 @@ impl crate::engine_inventory::Inventory {
         Ok(())
     }
     pub fn assign_item(&mut self, stack: Stack, index: usize) -> Result<()> {
-        if index >= 9 {
+        if index >= self.profile.hotbar_slots {
             return Err("Hotbar index must be 0..8".into());
         }
         self.slots[index] = Some(stack);
@@ -89,7 +90,10 @@ impl crate::engine_inventory::Inventory {
     }
     pub fn add_item(&mut self, stack: Stack) -> bool {
         let mut next = self.clone();
-        if next.add(stack, &(0..36).collect::<Vec<_>>()).is_some() {
+        if next
+            .add(stack, &(0..self.slots.len()).collect::<Vec<_>>())
+            .is_some()
+        {
             return false;
         }
         next.revision = next.revision.wrapping_add(1);

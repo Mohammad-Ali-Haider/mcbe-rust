@@ -114,7 +114,7 @@ fn schema_thirteen_roundtrips_all_visited_worlds_without_resident_chunks() {
         .document()
         .unwrap();
     let value = serde_json::to_value(d).unwrap();
-    assert_eq!(value["version"], 13);
+    assert_eq!(value["version"], crate::engine::SAVE_VERSION);
     assert_eq!(value["dimensions"]["inactive"].as_array().unwrap().len(), 2);
     assert!(
         value["dimensions"]["inactive"]

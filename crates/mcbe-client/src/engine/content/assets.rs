@@ -12,12 +12,13 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, HashMap},
     path::{Path, PathBuf},
+    sync::Arc,
 };
 pub const DEFAULT_ROOT: &str = r"C:\XboxGames\Minecraft for Windows\Content\data\resource_packs";
 pub struct Assets {
     pub inventory: BTreeMap<&'static str, Texture>,
     pub root: PathBuf,
-    pub materials: HashMap<(BlockId, usize), Material>,
+    pub materials: HashMap<(BlockId, usize), Arc<Material>>,
     pub hotbar: Vec<Texture>,
     pub selected: Texture,
     pub start_cap: Texture,
@@ -33,9 +34,20 @@ fn texture(pack: &mut Pack, path: &str) -> Result<Texture> {
     Ok(Texture::decode(&pack.read(path)?.bytes, "png")?)
 }
 pub fn load(registry: &Registry, root: &Path) -> Result<Assets> {
+    load_inner(registry, root, false)
+}
+pub fn load_for(registry: &Registry, root: &Path, legacy_ui: bool) -> Result<Assets> {
+    if legacy_ui {
+        load_inner(registry, root, true)
+    } else {
+        load(registry, root)
+    }
+}
+fn load_inner(registry: &Registry, root: &Path, legacy_ui: bool) -> Result<Assets> {
     let mut packs = HashMap::new();
     let mut materials = HashMap::new();
     let mut bindings = Vec::new();
+    let mut decoded = HashMap::<(String, String, String), Arc<Material>>::new();
     for (index, b) in registry.blocks.iter().enumerate() {
         if b.minecraft.is_some() || b.face_textures.is_some() {
             for (face, name) in ["up", "down", "north", "south", "east", "west"]
@@ -53,12 +65,24 @@ pub fn load(registry: &Registry, root: &Path) -> Result<Assets> {
                 }
                 let pack = packs.get_mut(&binding.pack).unwrap();
 
-                let material = mcbe_core::textures::block_material(
-                    pack,
-                    &binding.block,
-                    binding.face.as_deref().unwrap_or(name),
-                    0,
-                )?;
+                let face_name = binding.face.as_deref().unwrap_or(name);
+                let key = (
+                    binding.pack.clone(),
+                    binding.block.clone(),
+                    face_name.to_owned(),
+                );
+                let material = if let Some(m) = decoded.get(&key) {
+                    m.clone()
+                } else {
+                    let m = Arc::new(mcbe_core::textures::block_material(
+                        pack,
+                        &binding.block,
+                        face_name,
+                        0,
+                    )?);
+                    decoded.insert(key, m.clone());
+                    m
+                };
                 if b.render_layer == crate::engine_blocks::RenderLayer::Opaque
                     && binding.block != "grass"
                     && material.texture.rgba.chunks_exact(4).any(|p| p[3] != 255)
@@ -76,6 +100,50 @@ pub fn load(registry: &Registry, root: &Path) -> Result<Assets> {
         packs.insert("vanilla".into(), Pack::open(&root.join("vanilla"))?);
     }
     let base = packs.get_mut("vanilla").unwrap();
+    if !legacy_ui {
+        let behavior_root = root
+            .parent()
+            .ok_or("Resource root has no parent")?
+            .join("behavior_packs/vanilla");
+        let mut behavior = Pack::open(&behavior_root)?;
+        let tint = mcbe_core::grass::load(base, &mut behavior, "minecraft:plains")?;
+        behavior.verify_unchanged()?;
+        let mut hashes = BTreeMap::new();
+        for pack in packs.values() {
+            pack.verify_unchanged()?;
+            hashes.extend(
+                pack.source_hashes()
+                    .iter()
+                    .map(|(p, h)| (p.to_string_lossy().into_owned(), h.clone())),
+            );
+        }
+        hashes.extend(
+            behavior
+                .source_hashes()
+                .iter()
+                .map(|(p, h)| (p.to_string_lossy().into_owned(), h.clone())),
+        );
+        let white = || Texture {
+            width: 1,
+            height: 1,
+            rgba: vec![255; 4],
+        };
+        return Ok(Assets {
+            inventory: BTreeMap::new(),
+            root: root.to_path_buf(),
+            materials,
+            hotbar: vec![],
+            selected: white(),
+            start_cap: white(),
+            end_cap: white(),
+            icons: white(),
+            font: white(),
+            panel: white(),
+            cell: white(),
+            grass_tint: tint.rgb,
+            provenance: json!({"source_root":root,"source_hashes":hashes,"bindings":bindings,"scope":"Read-only block textures and grass tint; game UI uses authored engine layouts, colors, font and sprites"}),
+        });
+    }
     let hotbar = (0..9)
         .map(|i| texture(base, &format!("textures/ui/hotbar_{i}.png")))
         .collect::<Result<Vec<_>>>()?;

@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "player_slots": 36,
+  "hotbar_slots": 9,
+  "craft_side": 2,
+  "table_side": 3,
+  "containers": [
+    {
+      "id": "equipment",
+      "label": "Equipment",
+      "slots": 4,
+      "accepts": [],
+      "output_only": false,
+      "quick_move_to": "player"
+    },
+    {
+      "id": "satchel",
+      "label": "Satchel",
+      "slots": 12,
+      "accepts": [],
+      "output_only": false,
+      "quick_move_to": "player"
+    }
+  ]
+}

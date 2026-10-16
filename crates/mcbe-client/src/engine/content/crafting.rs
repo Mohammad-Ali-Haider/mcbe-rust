@@ -80,9 +80,9 @@ impl Recipes {
             if r.id.is_empty()
                 || !names.insert(&r.id)
                 || r.pattern.is_empty()
-                || r.pattern.len() > 3
+                || r.pattern.len() > 8
                 || cols == 0
-                || cols > 3
+                || cols > 8
                 || r.pattern.iter().any(|row| row.len() != cols)
                 || r.pattern.iter().flatten().all(String::is_empty)
                 || r.count == 0
@@ -95,7 +95,7 @@ impl Recipes {
         Ok(())
     }
     pub fn find(&self, registry: &Registry, player: &Inventory) -> Option<Match> {
-        self.find_grid(registry, &player.crafting, 2)
+        self.find_grid(registry, &player.crafting, player.profile.craft_side)
     }
     pub fn find_grid(
         &self,
@@ -108,7 +108,7 @@ impl Recipes {
         ) {
             return None;
         }
-        if !(2..=3).contains(&side) || grid.len() != side * side {
+        if !(1..=8).contains(&side) || grid.len() != side * side {
             return None;
         }
         for r in &self.recipes {
@@ -177,7 +177,7 @@ impl Recipes {
         let mut made = 0;
         for _ in 0..256 {
             let found = if table {
-                self.find_grid(registry, &player.table, 3)
+                self.find_grid(registry, &player.table, player.profile.table_side)
             } else {
                 self.find(registry, player)
             };
@@ -236,13 +236,16 @@ mod tests {
             recipes.find_grid(&r, &p.table, 3).unwrap().stack.id,
             r.find("oak_stairs_north").unwrap()
         );
-        p.crafting = [Some(Stack {
-            data: None,
-            id: cobble,
-            count: 1,
-        }); 4];
+        p.crafting = vec![
+            Some(Stack {
+                data: None,
+                id: cobble,
+                count: 1,
+            });
+            4
+        ];
         assert!(recipes.find(&r, &p).is_none());
-        p.table = [None; 9];
+        p.table = vec![None; 9];
         for i in [6, 7, 8] {
             p.table[i] = Some(Stack {
                 data: None,

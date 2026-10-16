@@ -8,1028 +8,528 @@
         "center"
       ],
       "size": [
-        326,
-        166
+        420,
+        300
       ]
     },
     "kind": "panel",
+    "style": "",
     "children": [
       {
-        "id": "catalog_panel",
+        "id": "title",
+        "layout": {
+          "offset": [
+            14,
+            12
+          ],
+          "size": [
+            320,
+            12
+          ]
+        },
+        "kind": "label",
+        "style": "heading",
+        "text": "FIELD KIT"
+      },
+      {
+        "id": "close",
+        "layout": {
+          "offset": [
+            386,
+            8
+          ],
+          "size": [
+            24,
+            20
+          ]
+        },
+        "kind": "button",
+        "style": "button",
+        "text": "X",
+        "action": {
+          "type": "close"
+        }
+      },
+      {
+        "id": "search",
+        "layout": {
+          "offset": [
+            14,
+            34
+          ],
+          "size": [
+            140,
+            16
+          ]
+        },
+        "kind": "search",
+        "style": "slot"
+      },
+      {
+        "id": "catalog",
+        "layout": {
+          "offset": [
+            14,
+            56
+          ],
+          "size": [
+            132,
+            154
+          ]
+        },
+        "kind": "catalog",
+        "style": "slot",
+        "columns": 6,
+        "rows": 7
+      },
+      {
+        "id": "page",
+        "layout": {
+          "offset": [
+            14,
+            218
+          ],
+          "size": [
+            140,
+            10
+          ]
+        },
+        "kind": "label",
+        "style": "heading",
+        "text": "{page}/{catalog_pages}"
+      },
+      {
+        "id": "craft_label",
+        "layout": {
+          "offset": [
+            170,
+            36
+          ],
+          "size": [
+            80,
+            10
+          ]
+        },
+        "kind": "label",
+        "style": "heading",
+        "text": "ASSEMBLE"
+      },
+      {
+        "id": "craft",
+        "layout": {
+          "offset": [
+            170,
+            50
+          ],
+          "size": [
+            60,
+            60
+          ]
+        },
+        "kind": "slot_grid",
+        "style": "grid",
+        "binding": {
+          "source": "craft",
+          "index": 0
+        },
+        "count": "craft_slots",
+        "columns": "craft_side",
+        "rows": "craft_side",
+        "offset": 0
+      },
+      {
+        "id": "craft_result",
+        "layout": {
+          "offset": [
+            242,
+            68
+          ],
+          "size": [
+            26,
+            26
+          ]
+        },
+        "kind": "slot",
+        "style": "slot",
+        "binding": {
+          "source": "result"
+        }
+      },
+      {
+        "id": "preview",
+        "layout": {
+          "offset": [
+            288,
+            34
+          ],
+          "size": [
+            66,
+            78
+          ]
+        },
+        "kind": "preview",
+        "style": ""
+      },
+      {
+        "id": "offhand",
+        "layout": {
+          "offset": [
+            374,
+            80
+          ],
+          "size": [
+            26,
+            26
+          ]
+        },
+        "kind": "slot",
+        "style": "slot",
+        "binding": {
+          "source": "offhand"
+        }
+      },
+      {
+        "id": "storage_label",
+        "layout": {
+          "offset": [
+            170,
+            122
+          ],
+          "size": [
+            100,
+            10
+          ]
+        },
+        "kind": "label",
+        "style": "heading",
+        "text": "STORAGE"
+      },
+      {
+        "id": "storage",
+        "layout": {
+          "offset": [
+            170,
+            136
+          ],
+          "size": [
+            234,
+            66
+          ]
+        },
+        "kind": "slot_grid",
+        "style": "grid",
+        "binding": {
+          "source": "player",
+          "index": 0
+        },
+        "count": "storage_slots",
+        "columns": 9,
+        "rows": 3,
+        "offset": "hotbar_slots",
+        "page": "storage_page"
+      },
+      {
+        "id": "storage_prev",
+        "layout": {
+          "offset": [
+            348,
+            119
+          ],
+          "size": [
+            24,
+            14
+          ]
+        },
+        "kind": "button",
+        "style": "button",
+        "text": "<",
+        "action": {
+          "type": "increment",
+          "key": "storage_page",
+          "amount": -1
+        }
+      },
+      {
+        "id": "storage_next",
+        "layout": {
+          "offset": [
+            378,
+            119
+          ],
+          "size": [
+            24,
+            14
+          ]
+        },
+        "kind": "button",
+        "style": "button",
+        "text": ">",
+        "action": {
+          "type": "increment",
+          "key": "storage_page",
+          "amount": 1
+        }
+      },
+      {
+        "id": "storage_page_label",
+        "layout": {
+          "offset": [
+            260,
+            122
+          ],
+          "size": [
+            86,
+            10
+          ]
+        },
+        "kind": "label",
+        "style": "heading",
+        "text": "{storage_page}/{storage_pages}"
+      },
+      {
+        "id": "hotbar_label",
+        "layout": {
+          "offset": [
+            170,
+            209
+          ],
+          "size": [
+            150,
+            10
+          ]
+        },
+        "kind": "label",
+        "style": "heading",
+        "text": "QUICK ACCESS"
+      },
+      {
+        "id": "hotbar",
+        "layout": {
+          "offset": [
+            170,
+            222
+          ],
+          "size": [
+            234,
+            22
+          ]
+        },
+        "kind": "slot_grid",
+        "style": "grid",
+        "binding": {
+          "source": "player",
+          "index": 0
+        },
+        "count": "hotbar_slots",
+        "columns": "hotbar_slots",
+        "rows": 1,
+        "offset": 0
+      },
+      {
+        "id": "bank_0",
         "layout": {
           "offset": [
             0,
             0
           ],
           "size": [
-            146,
-            166
+            420,
+            300
           ]
         },
-        "kind": "panel"
+        "kind": "panel",
+        "style": "grid",
+        "visible": "container_0_slots",
+        "children": [
+          {
+            "id": "bank_0_label",
+            "layout": {
+              "offset": [
+                14,
+                239
+              ],
+              "size": [
+                130,
+                10
+              ]
+            },
+            "kind": "label",
+            "style": "heading",
+            "text": "{container_0_label}"
+          },
+          {
+            "id": "bank_grid_0",
+            "layout": {
+              "offset": [
+                14,
+                252
+              ],
+              "size": [
+                104,
+                26
+              ]
+            },
+            "kind": "slot_grid",
+            "style": "grid",
+            "binding": {
+              "source": "container",
+              "index": {
+                "bank": 0,
+                "index": 0
+              }
+            },
+            "count": "container_0_slots",
+            "columns": 4,
+            "rows": 1,
+            "offset": 0,
+            "page": "bank_page_0"
+          },
+          {
+            "id": "bank_0_prev",
+            "layout": {
+              "offset": [
+                122,
+                252
+              ],
+              "size": [
+                18,
+                14
+              ]
+            },
+            "kind": "button",
+            "style": "button",
+            "text": "<",
+            "action": {
+              "type": "increment",
+              "key": "bank_page_0",
+              "amount": -1
+            }
+          },
+          {
+            "id": "bank_0_next",
+            "layout": {
+              "offset": [
+                142,
+                252
+              ],
+              "size": [
+                18,
+                14
+              ]
+            },
+            "kind": "button",
+            "style": "button",
+            "text": ">",
+            "action": {
+              "type": "increment",
+              "key": "bank_page_0",
+              "amount": 1
+            }
+          }
+        ]
       },
       {
-        "id": "player_panel",
+        "id": "bank_1",
         "layout": {
           "offset": [
-            150,
+            0,
             0
           ],
           "size": [
-            176,
-            166
+            420,
+            300
           ]
         },
-        "kind": "panel"
-      },
-      {
-        "id": "fold",
-        "layout": {
-          "offset": [
-            142,
-            3
-          ],
-          "size": [
-            12,
-            160
-          ]
-        },
-        "kind": "image",
-        "sprite": "fold"
-      },
-      {
-        "id": "search",
-        "layout": {
-          "offset": [
-            7,
-            8
-          ],
-          "size": [
-            132,
-            14
-          ]
-        },
-        "kind": "search"
-      },
-      {
-        "id": "catalog",
-        "layout": {
-          "offset": [
-            7,
-            28
-          ],
-          "size": [
-            126,
-            108
-          ]
-        },
-        "kind": "catalog",
-        "columns": 7,
-        "rows": 6
-      },
-      {
-        "id": "page",
-        "layout": {
-          "offset": [
-            7,
-            143
-          ],
-          "size": [
-            132,
-            10
-          ]
-        },
-        "kind": "label",
-        "text": "{catalog_count} blocks / page {page}"
-      },
-      {
-        "id": "hint",
-        "layout": {
-          "offset": [
-            7,
-            154
-          ],
-          "size": [
-            132,
-            10
-          ]
-        },
-        "kind": "label",
-        "text": "Shift-click to collect"
-      },
-      {
-        "id": "player_preview",
-        "layout": {
-          "offset": [
-            176,
-            8
-          ],
-          "size": [
-            52,
-            70
-          ]
-        },
-        "kind": "preview"
-      },
-      {
-        "id": "craft_label",
-        "layout": {
-          "offset": [
-            246,
-            7
-          ],
-          "size": [
-            74,
-            10
-          ]
-        },
-        "kind": "label",
-        "text": "Crafting"
-      },
-      {
-        "id": "arrow",
-        "layout": {
-          "offset": [
-            284,
-            29
-          ],
-          "size": [
-            16,
-            13
-          ]
-        },
-        "kind": "image",
-        "sprite": "arrow"
-      },
-      {
-        "id": "result",
-        "layout": {
-          "offset": [
-            302,
-            26
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "result"
-        }
-      },
-      {
-        "id": "armor_slot_0",
-        "layout": {
-          "offset": [
-            157,
-            7
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "panel"
-      },
-      {
-        "id": "armor_0",
-        "layout": {
-          "offset": [
-            158,
-            8
-          ],
-          "size": [
-            16,
-            16
-          ]
-        },
-        "kind": "image",
-        "sprite": "helmet"
-      },
-      {
-        "id": "armor_slot_1",
-        "layout": {
-          "offset": [
-            157,
-            25
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "panel"
-      },
-      {
-        "id": "armor_1",
-        "layout": {
-          "offset": [
-            158,
-            26
-          ],
-          "size": [
-            16,
-            16
-          ]
-        },
-        "kind": "image",
-        "sprite": "chestplate"
-      },
-      {
-        "id": "armor_slot_2",
-        "layout": {
-          "offset": [
-            157,
-            43
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "panel"
-      },
-      {
-        "id": "armor_2",
-        "layout": {
-          "offset": [
-            158,
-            44
-          ],
-          "size": [
-            16,
-            16
-          ]
-        },
-        "kind": "image",
-        "sprite": "leggings"
-      },
-      {
-        "id": "armor_slot_3",
-        "layout": {
-          "offset": [
-            157,
-            61
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "panel"
-      },
-      {
-        "id": "armor_3",
-        "layout": {
-          "offset": [
-            158,
-            62
-          ],
-          "size": [
-            16,
-            16
-          ]
-        },
-        "kind": "image",
-        "sprite": "boots"
-      },
-      {
-        "id": "offhand_slot",
-        "layout": {
-          "offset": [
-            229,
-            61
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "offhand"
-        }
-      },
-      {
-        "id": "craft_0",
-        "layout": {
-          "offset": [
-            246,
-            18
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "craft",
-          "index": 0
-        }
-      },
-      {
-        "id": "craft_1",
-        "layout": {
-          "offset": [
-            264,
-            18
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "craft",
-          "index": 1
-        }
-      },
-      {
-        "id": "craft_2",
-        "layout": {
-          "offset": [
-            246,
-            36
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "craft",
-          "index": 2
-        }
-      },
-      {
-        "id": "craft_3",
-        "layout": {
-          "offset": [
-            264,
-            36
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "craft",
-          "index": 3
-        }
-      },
-      {
-        "id": "player_0",
-        "layout": {
-          "offset": [
-            157,
-            143
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 0
-        }
-      },
-      {
-        "id": "player_1",
-        "layout": {
-          "offset": [
-            175,
-            143
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 1
-        }
-      },
-      {
-        "id": "player_2",
-        "layout": {
-          "offset": [
-            193,
-            143
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 2
-        }
-      },
-      {
-        "id": "player_3",
-        "layout": {
-          "offset": [
-            211,
-            143
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 3
-        }
-      },
-      {
-        "id": "player_4",
-        "layout": {
-          "offset": [
-            229,
-            143
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 4
-        }
-      },
-      {
-        "id": "player_5",
-        "layout": {
-          "offset": [
-            247,
-            143
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 5
-        }
-      },
-      {
-        "id": "player_6",
-        "layout": {
-          "offset": [
-            265,
-            143
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 6
-        }
-      },
-      {
-        "id": "player_7",
-        "layout": {
-          "offset": [
-            283,
-            143
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 7
-        }
-      },
-      {
-        "id": "player_8",
-        "layout": {
-          "offset": [
-            301,
-            143
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 8
-        }
-      },
-      {
-        "id": "player_9",
-        "layout": {
-          "offset": [
-            157,
-            86
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 9
-        }
-      },
-      {
-        "id": "player_10",
-        "layout": {
-          "offset": [
-            175,
-            86
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 10
-        }
-      },
-      {
-        "id": "player_11",
-        "layout": {
-          "offset": [
-            193,
-            86
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 11
-        }
-      },
-      {
-        "id": "player_12",
-        "layout": {
-          "offset": [
-            211,
-            86
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 12
-        }
-      },
-      {
-        "id": "player_13",
-        "layout": {
-          "offset": [
-            229,
-            86
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 13
-        }
-      },
-      {
-        "id": "player_14",
-        "layout": {
-          "offset": [
-            247,
-            86
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 14
-        }
-      },
-      {
-        "id": "player_15",
-        "layout": {
-          "offset": [
-            265,
-            86
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 15
-        }
-      },
-      {
-        "id": "player_16",
-        "layout": {
-          "offset": [
-            283,
-            86
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 16
-        }
-      },
-      {
-        "id": "player_17",
-        "layout": {
-          "offset": [
-            301,
-            86
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 17
-        }
-      },
-      {
-        "id": "player_18",
-        "layout": {
-          "offset": [
-            157,
-            104
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 18
-        }
-      },
-      {
-        "id": "player_19",
-        "layout": {
-          "offset": [
-            175,
-            104
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 19
-        }
-      },
-      {
-        "id": "player_20",
-        "layout": {
-          "offset": [
-            193,
-            104
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 20
-        }
-      },
-      {
-        "id": "player_21",
-        "layout": {
-          "offset": [
-            211,
-            104
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 21
-        }
-      },
-      {
-        "id": "player_22",
-        "layout": {
-          "offset": [
-            229,
-            104
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 22
-        }
-      },
-      {
-        "id": "player_23",
-        "layout": {
-          "offset": [
-            247,
-            104
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 23
-        }
-      },
-      {
-        "id": "player_24",
-        "layout": {
-          "offset": [
-            265,
-            104
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 24
-        }
-      },
-      {
-        "id": "player_25",
-        "layout": {
-          "offset": [
-            283,
-            104
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 25
-        }
-      },
-      {
-        "id": "player_26",
-        "layout": {
-          "offset": [
-            301,
-            104
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 26
-        }
-      },
-      {
-        "id": "player_27",
-        "layout": {
-          "offset": [
-            157,
-            122
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 27
-        }
-      },
-      {
-        "id": "player_28",
-        "layout": {
-          "offset": [
-            175,
-            122
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 28
-        }
-      },
-      {
-        "id": "player_29",
-        "layout": {
-          "offset": [
-            193,
-            122
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 29
-        }
-      },
-      {
-        "id": "player_30",
-        "layout": {
-          "offset": [
-            211,
-            122
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 30
-        }
-      },
-      {
-        "id": "player_31",
-        "layout": {
-          "offset": [
-            229,
-            122
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 31
-        }
-      },
-      {
-        "id": "player_32",
-        "layout": {
-          "offset": [
-            247,
-            122
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 32
-        }
-      },
-      {
-        "id": "player_33",
-        "layout": {
-          "offset": [
-            265,
-            122
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 33
-        }
-      },
-      {
-        "id": "player_34",
-        "layout": {
-          "offset": [
-            283,
-            122
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 34
-        }
-      },
-      {
-        "id": "player_35",
-        "layout": {
-          "offset": [
-            301,
-            122
-          ],
-          "size": [
-            18,
-            18
-          ]
-        },
-        "kind": "slot",
-        "binding": {
-          "source": "player",
-          "index": 35
-        }
+        "kind": "panel",
+        "style": "grid",
+        "visible": "container_1_slots",
+        "children": [
+          {
+            "id": "bank_1_label",
+            "layout": {
+              "offset": [
+                170,
+                252
+              ],
+              "size": [
+                130,
+                10
+              ]
+            },
+            "kind": "label",
+            "style": "heading",
+            "text": "{container_1_label}"
+          },
+          {
+            "id": "bank_grid_1",
+            "layout": {
+              "offset": [
+                170,
+                265
+              ],
+              "size": [
+                156,
+                30
+              ]
+            },
+            "kind": "slot_grid",
+            "style": "grid",
+            "binding": {
+              "source": "container",
+              "index": {
+                "bank": 1,
+                "index": 0
+              }
+            },
+            "count": "container_1_slots",
+            "columns": 6,
+            "rows": 2,
+            "offset": 0,
+            "page": "bank_page_1"
+          },
+          {
+            "id": "bank_1_prev",
+            "layout": {
+              "offset": [
+                330,
+                265
+              ],
+              "size": [
+                18,
+                14
+              ]
+            },
+            "kind": "button",
+            "style": "button",
+            "text": "<",
+            "action": {
+              "type": "increment",
+              "key": "bank_page_1",
+              "amount": -1
+            }
+          },
+          {
+            "id": "bank_1_next",
+            "layout": {
+              "offset": [
+                350,
+                265
+              ],
+              "size": [
+                18,
+                14
+              ]
+            },
+            "kind": "button",
+            "style": "button",
+            "text": ">",
+            "action": {
+              "type": "increment",
+              "key": "bank_page_1",
+              "amount": 1
+            }
+          }
+        ]
       }
     ]
   }

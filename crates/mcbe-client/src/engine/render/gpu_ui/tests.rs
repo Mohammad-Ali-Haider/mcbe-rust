@@ -44,7 +44,20 @@ fn rasterize(atlas: &Atlas, vertices: &[Vertex], width: usize, height: usize) ->
 }
 #[test]
 fn window_free_ui_composition_exports_actual_keycaps_and_inventory_when_requested() {
-    let c = crate::engine::generate(37).unwrap();
+    let mut c = crate::engine::generate(37).unwrap();
+    {
+        let s = c.scene.engine.as_mut().unwrap();
+        s.player
+            .configure(
+                serde_json::from_slice(include_bytes!(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/../../content/base/inventory.json"
+                )))
+                .unwrap(),
+                &s.registry,
+            )
+            .unwrap();
+    }
     let atlas = Atlas::build(&c).unwrap();
     let mut palette = Palette::recover(&c);
     let controls = crate::engine::input::runtime::Runtime::default();

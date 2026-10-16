@@ -4,6 +4,23 @@ mod travel;
 use crate::scene::{Client, Result};
 use std::{collections::BTreeMap, ops::RangeInclusive};
 pub const MAX_INPUT: usize = 512;
+#[derive(Clone, Debug)]
+pub struct Invocation {
+    pub name: String,
+    pub args: Vec<String>,
+}
+impl Invocation {
+    pub fn validate(&self) -> Result<()> {
+        if !crate::engine::blocks::state::identifier(&self.name)
+            || self.args.len() > 32
+            || self.name.len() + self.args.iter().map(|s| s.len() + 1).sum::<usize>() > MAX_INPUT
+            || self.args.iter().any(|s| s.chars().any(char::is_control))
+        {
+            return Err("Invalid game-command invocation".into());
+        }
+        Ok(())
+    }
+}
 pub struct Outcome {
     pub message: String,
     pub travel: Option<String>,
@@ -72,6 +89,17 @@ impl Registry {
         let name = words
             .first()
             .ok_or("Enter /give <item> [count] or /travel <dimension>")?;
+        self.dispatch(
+            client,
+            &Invocation {
+                name: name.clone(),
+                args: words[1..].to_vec(),
+            },
+        )
+    }
+    pub fn dispatch(&self, client: &mut Client, invocation: &Invocation) -> Result<Outcome> {
+        invocation.validate()?;
+        let name = &invocation.name;
         let command = self.entries.get(name).ok_or_else(|| {
             format!(
                 "Unknown command /{name}. Available: {}",
@@ -82,7 +110,7 @@ impl Registry {
                     .join(", ")
             )
         })?;
-        let args = &words[1..];
+        let args = &invocation.args;
         if !command.arguments.contains(&args.len()) {
             return Err(format!("Usage: {}", command.usage).into());
         }

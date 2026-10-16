@@ -788,6 +788,29 @@ impl App {
         self.notice = Some(message.into());
     }
     pub(crate) fn ui_commands(&mut self) -> Result<()> {
+        for _ in 0..8 {
+            let Some(invocation) = self.palette.pending_commands.pop_front() else {
+                break;
+            };
+            let result = (|| -> Result<()> {
+                if self.load_busy() || self.startup_blocked() || self.close_after_save {
+                    return Err("Wait for world preparation before running UI commands".into());
+                }
+                let outcome = self.commands.dispatch(&mut self.client, &invocation)?;
+                if let Some(id) = outcome.travel {
+                    self.request_dimension(&id)?;
+                }
+                self.chat
+                    .push(engine::ui::chat::Kind::System, outcome.message.clone());
+                self.notice = Some(outcome.message);
+                Ok(())
+            })();
+            if let Err(error) = result {
+                self.notice = Some(error.to_string());
+                self.chat
+                    .push(engine::ui::chat::Kind::Error, format!("UI: {error}"));
+            }
+        }
         if let Some(id) = self.palette.pending_dimension.take() {
             self.request_dimension(&id)?;
         }

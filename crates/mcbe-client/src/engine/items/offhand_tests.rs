@@ -72,11 +72,14 @@ fn offhand_transfers_swaps_and_generated_sequences_preserve_owned_contents() {
 fn full_inventory_rejects_offhand_quick_move_without_losing_contents() {
     let c = engine::generate(211).unwrap();
     let mut p = Inventory::empty();
-    p.slots = [Some(Stack {
-        id: 0,
-        count: 64,
-        data: None,
-    }); 36];
+    p.slots = vec![
+        Some(Stack {
+            id: 0,
+            count: 64,
+            data: None,
+        });
+        36
+    ];
     p.offhand = Some(bucket_stack(&c, 901));
     let before = p.clone();
     assert!(!p.quick_move(Slot::Offhand).unwrap());

@@ -411,12 +411,6 @@ impl Service {
                                         {
                                             crate::engine::apply_registry(&mut client, registry)?;
                                         }
-                                        if let Some(root) = root {
-                                            client.engine_assets = Some(engine_assets::load(
-                                                &client.scene.engine.as_ref().unwrap().registry,
-                                                &root,
-                                            )?);
-                                        }
                                         if let Some(home) = owned_root {
                                             client.appearance=Arc::new(crate::engine::player::appearance::Appearance::read_home(&home)?);
                                             client.scene.engine.as_mut().unwrap().ui = Arc::new(
@@ -424,12 +418,14 @@ impl Service {
                                                     &home,
                                                 )?,
                                             );
+                                            {let state=client.scene.engine.as_mut().unwrap();state.player.configure(crate::engine_inventory::profile::Profile::read_home(&home)?,&state.registry)?;state.ui.validate_inventory(&state.player.profile)?;}
                                             client.owned_materials =
                                                 Some(crate::engine_materials::load(
                                                     &client.scene.engine.as_ref().unwrap().registry,
                                                     &home,
                                                 )?);
                                         }
+                                        if let Some(root)=root {let state=client.scene.engine.as_ref().unwrap();client.engine_assets=Some(engine_assets::load_for(&state.registry,&root,state.ui.theme.legacy_ui)?);}
                                         check_file(&path, &expected)?;
                                         Ok(Prepared::Reload(Box::new(client)))
                                     }

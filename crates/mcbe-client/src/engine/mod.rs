@@ -32,7 +32,7 @@ use std::{
 };
 
 pub const CHECKPOINT: u32 = 48;
-pub const SAVE_VERSION: u32 = 13;
+pub const SAVE_VERSION: u32 = 14;
 pub const BOUNDS: Bounds = Bounds {
     min: [-40, 0, -40],
     max: [40, 40, 40],
@@ -203,7 +203,17 @@ struct SavedStack {
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+struct SavedContainer {
+    id: String,
+    slots: Vec<Option<SavedStack>>,
+}
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct SavedInventory {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    profile: Option<player::inventory::profile::Profile>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    containers: Vec<SavedContainer>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     offhand: Option<SavedStack>,
     slots: Vec<Option<SavedStack>>,
@@ -223,6 +233,17 @@ impl SavedInventory {
             })
         };
         Self {
+            profile: (p.profile != Default::default()).then(|| p.profile.clone()),
+            containers: p
+                .profile
+                .containers
+                .iter()
+                .zip(&p.containers)
+                .map(|(c, slots)| SavedContainer {
+                    id: c.id.clone(),
+                    slots: slots.iter().copied().map(convert).collect(),
+                })
+                .collect(),
             offhand: convert(p.offhand),
             slots: p.slots.iter().copied().map(convert).collect(),
             crafting: p.crafting.iter().copied().map(convert).collect(),
@@ -232,11 +253,15 @@ impl SavedInventory {
         }
     }
     fn restore(self, r: &Registry) -> Result<crate::engine_inventory::Inventory> {
-        if self.slots.len() != 36
-            || self.crafting.len() != 4
-            || (!self.table.is_empty() && self.table.len() != 9)
+        let custom = self.profile.is_some();
+        let profile = self.profile.unwrap_or_default();
+        profile.validate()?;
+        if self.slots.len() != profile.player_slots
+            || self.crafting.len() != profile.craft_side.pow(2)
+            || (self.table.len() != profile.table_side.pow(2) && (custom || !self.table.is_empty()))
+            || self.containers.len() != profile.containers.len()
         {
-            return Err("Saved player slot count differs".into());
+            return Err("Saved inventory counts do not match its profile".into());
         }
         let convert = |s: Option<SavedStack>| -> Result<Option<crate::engine_inventory::Stack>> {
             s.map(|s| {
@@ -249,14 +274,28 @@ impl SavedInventory {
             .transpose()
         };
         let mut p = crate::engine_inventory::Inventory::empty();
-        for (i, s) in self.slots.into_iter().enumerate() {
-            p.slots[i] = convert(s)?;
+        p.configure(profile, r)?;
+        p.slots = self.slots.into_iter().map(convert).collect::<Result<_>>()?;
+        p.crafting = self
+            .crafting
+            .into_iter()
+            .map(convert)
+            .collect::<Result<_>>()?;
+        if !self.table.is_empty() {
+            p.table = self.table.into_iter().map(convert).collect::<Result<_>>()?;
         }
-        for (i, s) in self.crafting.into_iter().enumerate() {
-            p.crafting[i] = convert(s)?;
-        }
-        for (i, s) in self.table.into_iter().enumerate() {
-            p.table[i] = convert(s)?;
+        let mut seen = std::collections::BTreeSet::new();
+        for c in self.containers {
+            let i = p
+                .profile
+                .containers
+                .iter()
+                .position(|d| d.id == c.id)
+                .ok_or("Unknown saved container")?;
+            if !seen.insert(c.id) || c.slots.len() != p.profile.containers[i].slots {
+                return Err("Duplicate or incorrectly sized saved container".into());
+            }
+            p.containers[i] = c.slots.into_iter().map(convert).collect::<Result<_>>()?;
         }
         p.offhand = convert(self.offhand)?;
         p.cursor = convert(self.cursor)?;
@@ -695,13 +734,20 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
     }
     let d: Document = serde_json::from_slice(bytes)?;
     if d.format != "blockwork-world"
-        || !(1..=13).contains(&d.version)
+        || !(1..=14).contains(&d.version)
         || d.cells.len() > BOUNDS.volume()?
         || !d.yaw.is_finite()
         || !d.pitch.is_finite()
         || !(-1.5..=1.5).contains(&d.pitch)
     {
         return Err("Unsupported or invalid engine save".into());
+    }
+    if d.version < 14
+        && d.inventory
+            .as_ref()
+            .is_some_and(|p| p.profile.is_some() || !p.containers.is_empty())
+    {
+        return Err("Configurable inventories require save version 14".into());
     }
     if d.version < 13
         && (d.dimensions.is_some()
@@ -740,14 +786,14 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
             r.blocks.truncate(8);
             r
         }
-        (2..=13, Some(r)) => {
+        (2..=14, Some(r)) => {
             r.validate()?;
             r
         }
         _ => return Err("Save registry/version mismatch".into()),
     };
     let entities = match (d.version, d.entities) {
-        (11..=13, Some(saved)) => entities::World::restore(saved, &registry)?,
+        (11..=14, Some(saved)) => entities::World::restore(saved, &registry)?,
         (1..=10, None) => {
             let mut world = entities::World::new(&registry);
             world.random ^= d.seed;
@@ -763,7 +809,7 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
             registry.blocks.len(),
             registry.find(&d.selected)?,
         ),
-        (3..=13, Some(p)) => p.restore(&registry)?,
+        (3..=14, Some(p)) => p.restore(&registry)?,
         _ => return Err("Save inventory/version mismatch".into()),
     };
     if d.version >= 3
@@ -776,14 +822,14 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
     }
     let recipes = match (d.version, d.recipes) {
         (1 | 2, None) => crate::engine_crafting::Recipes::built_in().available(&registry),
-        (3..=13, Some(r)) => {
+        (3..=14, Some(r)) => {
             r.validate_registry(&registry)?;
             r
         }
         _ => return Err("Save recipe/version mismatch".into()),
     };
     let movement = match (d.version, d.movement) {
-        (5..=13, Some(m)) => m,
+        (5..=14, Some(m)) => m,
         (1..=4, None) => Default::default(),
         _ => return Err("Save movement/version mismatch".into()),
     };
@@ -918,9 +964,10 @@ pub fn reload(client: &mut Client) -> Result<()> {
         .ok_or("Press F5 to create your first save")?;
     let mut prepared = load(path)?;
     if let Some(assets) = &client.engine_assets {
-        prepared.engine_assets = Some(crate::engine_assets::load(
+        prepared.engine_assets = Some(crate::engine_assets::load_for(
             &prepared.scene.engine.as_ref().unwrap().registry,
             &assets.root,
+            client.scene.engine.as_ref().unwrap().ui.theme.legacy_ui,
         )?);
     }
     *client = prepared;
@@ -1041,18 +1088,11 @@ fn apply_registry_complete(
     let remap_player =
         |old: &crate::engine_inventory::Inventory| -> Result<crate::engine_inventory::Inventory> {
             let mut next = old.clone();
-            for stack in next
-                .slots
-                .iter_mut()
-                .chain(&mut next.crafting)
-                .chain(&mut next.table)
-                .chain(std::iter::once(&mut next.cursor))
-                .chain(std::iter::once(&mut next.offhand))
-                .flatten()
-            {
+            for stack in next.stacks_mut().flatten() {
                 stack.id = registry.find(&state.registry.get(stack.id).id)?;
             }
             next.revision = next.revision.wrapping_add(1);
+            next.rebind(&registry)?;
             next.validate_items(&registry)?;
             Ok(next)
         };
@@ -1209,10 +1249,6 @@ pub fn reload_definitions(client: &mut Client, path: &Path) -> Result<()> {
             .available(&registry)
     };
     recipes.validate_registry(&registry)?;
-    let assets = match &client.engine_assets {
-        Some(a) => Some(crate::engine_assets::load(&registry, &a.root)?),
-        None => None,
-    };
     let home = client
         .owned_materials
         .as_ref()
@@ -1222,6 +1258,11 @@ pub fn reload_definitions(client: &mut Client, path: &Path) -> Result<()> {
     let appearance = std::sync::Arc::new(player::appearance::Appearance::read_home(home)?);
     let owned = crate::engine_materials::load(&registry, home)?;
     let ui = std::sync::Arc::new(ui::framework::Library::read_home(home)?);
+    let assets = client
+        .engine_assets
+        .as_ref()
+        .map(|a| crate::engine_assets::load_for(&registry, &a.root, ui.theme.legacy_ui))
+        .transpose()?;
     let smelting = machines::recipes::Definitions::read_home(home)?.compile(&registry)?;
     let entities = entities::definition::Definitions::read_home(home)?;
     let dimensions = client
@@ -1233,7 +1274,18 @@ pub fn reload_definitions(client: &mut Client, path: &Path) -> Result<()> {
         .as_ref()
         .map(|_| world::dimensions::Definitions::read_home(home))
         .transpose()?;
+    let mut configured_player = client.scene.engine.as_ref().unwrap().player.clone();
+    let old_registry = &client.scene.engine.as_ref().unwrap().registry;
+    for stack in configured_player.stacks_mut().flatten() {
+        stack.id = registry.find(&old_registry.get(stack.id).id)?;
+    }
+    configured_player.configure(
+        player::inventory::profile::Profile::read_home(home)?,
+        &registry,
+    )?;
+    ui.validate_inventory(&configured_player.profile)?;
     apply_registry_complete(client, registry, Some(entities), dimensions, Some(smelting))?;
+    client.scene.engine.as_mut().unwrap().player = configured_player;
     let state = client.scene.engine.as_mut().unwrap();
     state.ui = ui;
     client.appearance = appearance;
@@ -2221,5 +2273,90 @@ mod tests {
             fs::remove_file(path).unwrap();
         }
         fs::remove_dir(dir).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod custom_storage_save_tests {
+    use super::*;
+    #[test]
+    fn schema_fourteen_world_preserves_storage_and_rejects_older_schema_tags() {
+        let mut client = generate(37).unwrap();
+        let state = client.scene.engine.as_mut().unwrap();
+        let profile = serde_json::from_slice(include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../content/base/inventory.json"
+        )))
+        .unwrap();
+        state.player.configure(profile, &state.registry).unwrap();
+        let stack = crate::engine_inventory::Stack {
+            id: state.registry.find("glass").unwrap(),
+            count: 23,
+            data: None,
+        };
+        state.player.insert_container(1, stack).unwrap();
+        let mut value = serde_json::to_value(document(&client).unwrap()).unwrap();
+        assert_eq!(value["version"], 14);
+        let restored = decode(&serde_json::to_vec(&value).unwrap(), None).unwrap();
+        assert_eq!(
+            restored.scene.engine.as_ref().unwrap().player.containers[1][0],
+            Some(stack)
+        );
+        value["version"] = json!(13);
+        assert!(
+            decode(&serde_json::to_vec(&value).unwrap(), None)
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("version 14")
+        );
+    }
+    #[test]
+    fn custom_inventory_roundtrip_preserves_profile_ids_items_and_rejects_malformed_banks() {
+        let r = Registry::built_in();
+        let mut p = crate::engine_inventory::Inventory::empty();
+        let config = serde_json::from_slice(include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../content/base/inventory.json"
+        )))
+        .unwrap();
+        p.configure(config, &r).unwrap();
+        let stack = crate::engine_inventory::Stack {
+            id: r.find("glass").unwrap(),
+            count: 19,
+            data: None,
+        };
+        p.insert_container(1, stack).unwrap();
+        p.slots[35] = Some(stack);
+        p.crafting[3] = Some(stack);
+        p.offhand = Some(stack);
+        p.cursor = Some(stack);
+        let value = serde_json::to_value(SavedInventory::capture(&p, &r)).unwrap();
+        let restored = serde_json::from_value::<SavedInventory>(value.clone())
+            .unwrap()
+            .restore(&r)
+            .unwrap();
+        assert_eq!(restored.profile, p.profile);
+        assert_eq!(restored.total(), p.total());
+        assert_eq!(restored.containers, p.containers);
+        assert_eq!(restored.crafting, p.crafting);
+        assert_eq!(restored.offhand, p.offhand);
+        assert_eq!(restored.cursor, p.cursor);
+        for mutation in 0..3 {
+            let mut bad = value.clone();
+            match mutation {
+                0 => bad["containers"][1]["id"] = bad["containers"][0]["id"].clone(),
+                1 => {
+                    bad["slots"].as_array_mut().unwrap().pop();
+                }
+                _ => bad["profile"]["containers"][1]["accepts"] = serde_json::json!(["stone"]),
+            };
+            assert!(
+                serde_json::from_value::<SavedInventory>(bad)
+                    .unwrap()
+                    .restore(&r)
+                    .is_err()
+            );
+        }
     }
 }
