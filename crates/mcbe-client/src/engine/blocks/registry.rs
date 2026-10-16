@@ -84,6 +84,7 @@ impl Registry {
         }
         let mut seen = HashSet::new();
         for (index, b) in self.blocks.iter().enumerate() {
+            b.material.validate()?;
             if let Some(c) = b.container
                 && (!self.blocks.iter().any(|b| b.fluid == Some(c.kind))
                     || c.capacity == 0
@@ -232,6 +233,7 @@ mod tests {
         let mut r = Registry::built_in();
         for i in 0..100 {
             r.blocks.push(Block {
+                material: Default::default(),
                 container: None,
                 texture_tint: None,
                 behavior: Default::default(),

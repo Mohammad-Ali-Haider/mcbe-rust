@@ -63,6 +63,10 @@ struct UiKey {
 }
 #[derive(Serialize)]
 pub struct Statistics {
+    pub render_method: super::methods::Method,
+    pub graphics_bytes: u64,
+    pub shadow_draws: usize,
+    pub deferred_passes: usize,
     pub distant_trees: usize,
     pub distant_objects: usize,
     pub distant_stitched_edges: usize,
@@ -157,6 +161,7 @@ struct Upload {
     staged: bool,
 }
 pub struct Renderer {
+    deferred: Option<super::methods::deferred::Renderer>,
     character: super::character::Renderer,
     distant: crate::engine_distance::Distant,
     previous_lod_pipeline: wgpu::RenderPipeline,
@@ -421,6 +426,10 @@ impl Renderer {
         });
         let depth = depth(&device, config.width, config.height);
         let stats = Statistics {
+            render_method: super::methods::Method::Forward,
+            graphics_bytes: 0,
+            shadow_draws: 0,
+            deferred_passes: 0,
             distant_trees: 0,
             distant_objects: 0,
             distant_stitched_edges: 0,
@@ -494,6 +503,7 @@ impl Renderer {
             last_frame_ms: 0.,
         };
         Ok(Self {
+            deferred: None,
             character,
             distant: Default::default(),
             previous_lod_pipeline,
@@ -996,6 +1006,39 @@ impl Renderer {
             serde_json::json!({"complete":equal,"expected_faces":faces,"expected_quads":quads,"uploaded_faces":self.stats.exposed_faces,"uploaded_quads":self.stats.mesh_quads,"all_vertex_bytes_match":equal}),
         )
     }
+    fn draw_opaque<'a>(
+        &'a self,
+        pass: &mut wgpu::RenderPass<'a>,
+        keys: &[[i32; 3]],
+        pipeline: &'a wgpu::RenderPipeline,
+        previous: &'a wgpu::RenderPipeline,
+    ) {
+        pass.set_pipeline(pipeline);
+        pass.set_bind_group(0, self.world_bind.as_ref().unwrap(), &[]);
+        if let Some(buffer) = &self.distant.previous_buffer {
+            pass.set_pipeline(previous);
+            pass.set_vertex_buffer(0, buffer.slice(..));
+            pass.draw(0..self.distant.previous_vertices, 0..1);
+            pass.set_pipeline(pipeline);
+        }
+        if let Some(buffer) = &self.distant.buffer {
+            pass.set_vertex_buffer(0, buffer.slice(..));
+            pass.draw(0..self.distant.vertices, 0..1);
+        }
+        for key in keys {
+            let mesh = &self.meshes[key];
+            if let Some(buffer) = &mesh.buffer {
+                pass.set_vertex_buffer(0, buffer.slice(..));
+                pass.draw(0..mesh.opaque_vertices, 0..1);
+            }
+        }
+    }
+    pub fn rendering_observation(&self) -> serde_json::Value {
+        self.deferred.as_ref().map_or_else(
+            || serde_json::json!({"method":"forward","extra_bytes":0,"genuine_ray_tracing":false}),
+            |m| m.observation(),
+        )
+    }
     pub fn has_mesh(&self, key: [i32; 3]) -> bool {
         self.meshes.contains_key(&key)
     }
@@ -1085,6 +1128,48 @@ impl Renderer {
         };
         self.queue
             .write_buffer(&self.uniform, 0, bytemuck::bytes_of(&uniform));
+        self.stats.render_method = frame.settings.rendering.method;
+        self.stats.shadow_draws = 0;
+        if frame.settings.rendering.method == super::methods::Method::Deferred {
+            if self.deferred.is_none() {
+                self.deferred = Some(super::methods::deferred::Renderer::new(
+                    &self.device,
+                    &self.world_pipeline.get_bind_group_layout(0),
+                    self.config.format,
+                    [self.config.width, self.config.height],
+                    &frame.settings.rendering,
+                )?);
+            }
+            let state = client.scene.engine.as_ref().unwrap();
+            let parameters = super::methods::deferred::Frame::new(
+                matrix,
+                frame.eye,
+                &frame.settings.rendering,
+                frame.settings.fov,
+                frame.wire,
+                [
+                    uniform.settings[1],
+                    uniform.settings[2],
+                    uniform.settings[3],
+                    0.,
+                ],
+                uniform.medium,
+            );
+            let method = self.deferred.as_mut().unwrap();
+            method.update(
+                &self.device,
+                &self.queue,
+                [self.config.width, self.config.height],
+                &frame.settings.rendering,
+                parameters,
+                state,
+            );
+            self.stats.graphics_bytes = method.bytes();
+        } else {
+            self.deferred = None;
+            self.stats.graphics_bytes = 0;
+        }
+
         self.visible_keys.clear();
         self.stats.frustum_culled_chunks = 0;
         self.stats.range_culled_chunks = 0;
@@ -1279,6 +1364,30 @@ impl Renderer {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("native-resolution frame"),
             });
+        if let Some(method) = &self.deferred {
+            if frame.settings.rendering.shadows {
+                let light = Mat4::from_cols_array(&method.frame.light);
+                let mut pass = method.begin_shadow(&mut encoder);
+                pass.set_pipeline(&method.shadow_pipeline);
+                pass.set_bind_group(0, self.world_bind.as_ref().unwrap(), &[]);
+                pass.set_bind_group(1, &method.frame_bind, &[]);
+                for (key, mesh) in &self.meshes {
+                    if engine_mesh::visible(*key, light)
+                        && let Some(buffer) = &mesh.buffer
+                    {
+                        pass.set_vertex_buffer(0, buffer.slice(..));
+                        pass.draw(0..mesh.opaque_vertices, 0..1);
+                        self.stats.shadow_draws += 1;
+                    }
+                }
+            }
+            {
+                let mut pass = method.begin_geometry(&mut encoder);
+                self.draw_opaque(&mut pass, keys, &method.geometry, &method.previous);
+            }
+            method.light(&mut encoder, &view);
+            self.stats.deferred_passes += 2 + usize::from(frame.settings.rendering.shadows);
+        }
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("depth-tested terrain"),
@@ -1286,19 +1395,27 @@ impl Renderer {
                     view: &view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.62,
-                            g: 0.77,
-                            b: 0.89,
-                            a: 1.,
-                        }),
+                        load: if self.deferred.is_some() {
+                            wgpu::LoadOp::Load
+                        } else {
+                            wgpu::LoadOp::Clear(wgpu::Color {
+                                r: 0.62,
+                                g: 0.77,
+                                b: 0.89,
+                                a: 1.,
+                            })
+                        },
                         store: wgpu::StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.depth,
+                    view: self.deferred.as_ref().map_or(&self.depth, |m| m.depth()),
                     depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.),
+                        load: if self.deferred.is_some() {
+                            wgpu::LoadOp::Load
+                        } else {
+                            wgpu::LoadOp::Clear(1.)
+                        },
                         store: wgpu::StoreOp::Store,
                     }),
                     stencil_ops: None,
@@ -1306,24 +1423,13 @@ impl Renderer {
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
-            pass.set_pipeline(&self.world_pipeline);
-            pass.set_bind_group(0, self.world_bind.as_ref().unwrap(), &[]);
-            if let Some(buffer) = &self.distant.previous_buffer {
-                pass.set_pipeline(&self.previous_lod_pipeline);
-                pass.set_vertex_buffer(0, buffer.slice(..));
-                pass.draw(0..self.distant.previous_vertices, 0..1);
-                pass.set_pipeline(&self.world_pipeline);
-            }
-            if let Some(buffer) = &self.distant.buffer {
-                pass.set_vertex_buffer(0, buffer.slice(..));
-                pass.draw(0..self.distant.vertices, 0..1);
-            }
-            for key in keys {
-                let mesh = &self.meshes[key];
-                if let Some(buffer) = &mesh.buffer {
-                    pass.set_vertex_buffer(0, buffer.slice(..));
-                    pass.draw(0..mesh.opaque_vertices, 0..1);
-                }
+            if self.deferred.is_none() {
+                self.draw_opaque(
+                    &mut pass,
+                    keys,
+                    &self.world_pipeline,
+                    &self.previous_lod_pipeline,
+                );
             }
             self.character.draw(
                 &mut pass,
@@ -1538,6 +1644,14 @@ impl Renderer {
             )?;
             drop(bytes);
             buffer.unmap();
+            if let Some(method) = &self.deferred {
+                method.capture(
+                    &self.device,
+                    &self.queue,
+                    path.parent().ok_or("Capture directory missing")?,
+                    &client.scene.engine.as_ref().unwrap().registry,
+                )?;
+            }
         }
         surface.present();
         self.stats.frames += 1;

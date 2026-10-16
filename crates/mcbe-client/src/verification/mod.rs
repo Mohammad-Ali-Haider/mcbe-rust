@@ -17,3 +17,5 @@ pub(crate) mod terrain;
 pub(crate) mod fluids;
 
 pub(crate) mod buckets;
+
+pub(crate) mod lighting;

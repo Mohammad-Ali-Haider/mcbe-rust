@@ -37,7 +37,7 @@ def main():
         (out/(case+'.stdout.txt')).write_text(run.stdout,encoding='utf-8');(out/(case+'.stderr.txt')).write_text(run.stderr,encoding='utf-8')
         if run.returncode:raise ValueError(case+': '+run.stderr)
         report=read(target/'buckets.json');g=read(target/'gpu.json');w=read(target/'window.json');stats=g['statistics'];assert report['complete'] and report['mass']==10240 and report['actual_use_ray'] and report['creative_selection'] and report['save_reload_equal'];assert g['complete'] and stats['meshes_ready'] and stats['native_resolution'] and stats['mesh_peak_jobs']<=2 and stats['texture_uploads']==1 and w['maximized'] and not w['fullscreen']
-        save=read(Path(report['saved_world']));assert save['version']==9;blocks=save['registry']['blocks'];water_id=next(i for i,b in enumerate(blocks) if b['id']=='water');bucket_id=next(i for i,b in enumerate(blocks) if b['id']=='bucket');held=g['character'];geometry[case]=held['item_vertices']
+        save=read(Path(report['saved_world']));assert save['version']==10;blocks=save['registry']['blocks'];water_id=next(i for i,b in enumerate(blocks) if b['id']=='water');bucket_id=next(i for i,b in enumerate(blocks) if b['id']=='bucket');held=g['character'];geometry[case]=held['item_vertices']
         if case=='empty':assert report['carried']==0 and held['item_data']['amount']==0
         if case=='partial':assert 0<report['carried']<1024 and held['item_data']['amount']==report['carried']
         if case=='full':assert report['carried']==1024 and held['item_data']['amount']==1024

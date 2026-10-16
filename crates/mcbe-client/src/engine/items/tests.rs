@@ -251,7 +251,7 @@ fn save_reload_and_registry_reorder_preserve_all_item_data() {
     std::fs::create_dir_all(&dir).unwrap();
     let saved = crate::engine::save(&mut c, &dir).unwrap();
     let d: serde_json::Value = serde_json::from_slice(&std::fs::read(&saved).unwrap()).unwrap();
-    assert_eq!(d["version"], 9);
+    assert_eq!(d["version"], 10);
     let mut loaded = crate::engine::load(&saved).unwrap();
     let p = &loaded.scene.engine.as_ref().unwrap().player;
     assert_eq!(p.changed_slots(&c.scene.engine.as_ref().unwrap().player), 0);

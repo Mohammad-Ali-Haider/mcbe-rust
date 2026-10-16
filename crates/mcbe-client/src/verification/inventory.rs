@@ -295,7 +295,7 @@ pub fn verify(app: &mut App, out: &Path) -> Result<()> {
     )?;
     let saved_document: Value = serde_json::from_slice(&second_bytes)?;
     require(
-        saved_document["version"] == 9
+        saved_document["version"] == 10
             && saved_document["recipes"]["recipes"]
                 .as_array()
                 .is_some_and(|r| r.len() == 7),
@@ -306,7 +306,7 @@ pub fn verify(app: &mut App, out: &Path) -> Result<()> {
     let position = point(app, Target::Slot(Slot::Craft(2)))?;
     app.palette.move_pointer(&app.client, position, VIEW);
     app.notice = None;
-    let report = json!({"complete":true,"checkpoint":engine::CHECKPOINT,"terrain_unchanged":true,"blocks":original.len(),"click_hitboxes_verified":true,"ordinary_moves_conserve_items":true,"close_returns_inputs":true,"blocked_moves_atomic":true,"save_reload_equal":true,"previous_saves_unchanged":true,"save_version":9,"saved_world":second,"saved_sha256":format!("{:x}",Sha256::digest(&second_bytes)),"recipe_count":7,"trace":trace,"final_inventory":observation(app),"scope":"Engine-owned 36 player slots, cursor, four inventory crafting inputs and seven shared recipe definitions; creative building remains unlimited. Station interactions and the native player preview are verified separately."});
+    let report = json!({"complete":true,"checkpoint":engine::CHECKPOINT,"terrain_unchanged":true,"blocks":original.len(),"click_hitboxes_verified":true,"ordinary_moves_conserve_items":true,"close_returns_inputs":true,"blocked_moves_atomic":true,"save_reload_equal":true,"previous_saves_unchanged":true,"save_version":10,"saved_world":second,"saved_sha256":format!("{:x}",Sha256::digest(&second_bytes)),"recipe_count":7,"trace":trace,"final_inventory":observation(app),"scope":"Engine-owned 36 player slots, cursor, four inventory crafting inputs and seven shared recipe definitions; creative building remains unlimited. Station interactions and the native player preview are verified separately."});
     fs::write(
         out.join("inventory.json"),
         serde_json::to_vec_pretty(&report)?,

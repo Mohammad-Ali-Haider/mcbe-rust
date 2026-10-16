@@ -15,6 +15,8 @@ pub use signal::SignalComponent;
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BlockComponents {
+    #[serde(default)]
+    pub material: material::Material,
     pub container: Option<crate::engine::items::FluidContainer>,
     pub fluid: Option<FluidKind>,
     pub interaction: Option<Interaction>,
@@ -54,3 +56,5 @@ impl BehaviorComponent {
 pub enum FluidKind {
     Water,
 }
+
+pub(crate) mod material;

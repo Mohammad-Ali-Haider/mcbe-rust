@@ -162,6 +162,7 @@ fn compile<F: FnMut(&str) -> Result<Vec<u8>>>(read: F) -> Result<ContentPack> {
             let collision = c.collision.compile()?;
             let selection = c.selection.compile()?;
             group.push(Block {
+                material: c.material,
                 container: c.container,
                 texture_tint: c.visual.texture_tint,
                 behavior: c.behavior,
@@ -330,6 +331,25 @@ mod tests {
     }
     fn value(path: &str) -> Value {
         serde_json::from_slice(EMBEDDED.iter().find(|(p, _)| *p == path).unwrap().1).unwrap()
+    }
+    #[test]
+    fn authored_pbr_material_component_compiles_and_rejects_invalid_channels() {
+        let mut block = value("blocks/slate.json");
+        block["components"]["material"] =
+            serde_json::json!({"roughness":0.25,"metallic":0.8,"emission":2.});
+        let pack = modified("blocks/slate.json", block.clone()).unwrap();
+        let material = pack
+            .registry
+            .get(pack.registry.find("slate").unwrap())
+            .material;
+        assert_eq!(material.roughness, 0.25);
+        assert_eq!(material.metallic, 0.8);
+        assert_eq!(material.emission, 2.);
+        block["components"]["material"]["roughness"] = serde_json::json!(0);
+        assert!(modified("blocks/slate.json", block.clone()).is_err());
+        block["components"]["material"]["roughness"] = serde_json::json!(0.5);
+        block["components"]["material"]["unknown"] = serde_json::json!(1);
+        assert!(modified("blocks/slate.json", block).is_err());
     }
     #[test]
     fn migration_preserves_all_legacy_states_materials_and_shapes() {

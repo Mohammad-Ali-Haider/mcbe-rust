@@ -22,7 +22,7 @@ fn sparse_amounts_survive_vertical_eviction_reload_and_registry_reorder() {
     c.set_spawn(initial).unwrap();
     let bytes = serde_json::to_vec(&engine::document(&c).unwrap()).unwrap();
     let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(v["version"], 9);
+    assert_eq!(v["version"], 10);
     assert_eq!(v["fluids"][0]["amount"], 333);
     let mut copy = engine::decode(&bytes, None).unwrap();
     assert_eq!(copy.pending_edits(), 0);

@@ -52,6 +52,11 @@ pub enum Pattern {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Block {
+    #[serde(
+        default,
+        skip_serializing_if = "super::components::material::Material::is_default"
+    )]
+    pub material: super::components::material::Material,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub container: Option<crate::engine::items::FluidContainer>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

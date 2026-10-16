@@ -419,14 +419,22 @@ impl Atlas {
             };
         }
         if ctx.menu.open() {
-            use crate::engine_settings::{Menu, Page};
+            use crate::engine_settings::Page;
             c.rect([0., 0., width, height], [0., 0., 0., 0.65]);
-            let [left, top] = Menu::origin(viewport);
-            c.rect([left - 10., top - 10., 360., 288.], [0.09, 0.10, 0.11, 1.]);
-            let title = if ctx.menu.page == Page::Pause {
-                "Game Menu"
-            } else {
-                "Settings"
+            let [left, top] = ctx.menu.origin_for(viewport);
+            c.rect(
+                [
+                    left - 10.,
+                    top - 10.,
+                    360.,
+                    84. + 23. * ctx.menu.count() as f32,
+                ],
+                [0.09, 0.10, 0.11, 1.],
+            );
+            let title = match ctx.menu.page {
+                Page::Pause => "Game Menu",
+                Page::Graphics => "Rendering",
+                _ => "Settings",
             };
             self.text(&mut c, left + 8., top + 8., title, [1.; 4]);
             let streamed = client.scene.engine.as_ref().unwrap().stream.is_some();
@@ -455,7 +463,9 @@ impl Atlas {
                     c.rect([left + 30., y + 15., 280. * value, 2.], [0.7, 1., 0.65, 1.]);
                     c.rect([left + 28. + 280. * value, y + 14., 4., 4.], [1.; 4]);
                 }
-                if ctx.menu.page == Page::Settings && i < 6 {
+                if ctx.menu.page == Page::Settings && i < 6
+                    || ctx.menu.page == Page::Graphics && i < 5
+                {
                     self.text(&mut c, left + 6., y + 6., "-", [1.; 4]);
                     self.text(&mut c, left + 328., y + 6., "+", [1.; 4]);
                 }
@@ -463,7 +473,7 @@ impl Atlas {
             self.text(
                 &mut c,
                 left + 3.,
-                top + 250.,
+                top + 44. + ctx.menu.count() as f32 * 23.,
                 "Arrows / Slider: change  Home/End: min/max",
                 [0.8, 0.8, 0.8, 1.],
             );

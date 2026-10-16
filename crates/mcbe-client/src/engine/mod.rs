@@ -500,7 +500,7 @@ impl SaveSnapshot {
             smelting: Some(self.smelting.clone()),
             movement: Some(self.movement),
             format: "blockwork-world".into(),
-            version: 9,
+            version: 10,
             seed: self.seed,
             player: self.position,
             yaw: self.yaw,
@@ -656,7 +656,7 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
     }
     let d: Document = serde_json::from_slice(bytes)?;
     if d.format != "blockwork-world"
-        || ![1, 2, 3, 4, 5, 6, 7, 8, 9].contains(&d.version)
+        || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10].contains(&d.version)
         || d.cells.len() > BOUNDS.volume()?
         || !d.yaw.is_finite()
         || !d.pitch.is_finite()
@@ -688,18 +688,21 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
             r.blocks.truncate(8);
             r
         }
-        (2..=9, Some(r)) => {
+        (2..=10, Some(r)) => {
             r.validate()?;
             r
         }
         _ => return Err("Save registry/version mismatch".into()),
     };
+    if d.version < 10 && registry.blocks.iter().any(|b| !b.material.is_default()) {
+        return Err("PBR materials require save version 10".into());
+    }
     let player = match (d.version, d.inventory) {
         (1 | 2, None) => crate::engine_inventory::Inventory::starter(
             registry.blocks.len(),
             registry.find(&d.selected)?,
         ),
-        (3..=9, Some(p)) => p.restore(&registry)?,
+        (3..=10, Some(p)) => p.restore(&registry)?,
         _ => return Err("Save inventory/version mismatch".into()),
     };
     if d.version >= 3
@@ -712,14 +715,14 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
     }
     let recipes = match (d.version, d.recipes) {
         (1 | 2, None) => crate::engine_crafting::Recipes::built_in().available(&registry),
-        (3..=9, Some(r)) => {
+        (3..=10, Some(r)) => {
             r.validate_registry(&registry)?;
             r
         }
         _ => return Err("Save recipe/version mismatch".into()),
     };
     let movement = match (d.version, d.movement) {
-        (5..=9, Some(m)) => m,
+        (5..=10, Some(m)) => m,
         (1..=4, None) => Default::default(),
         _ => return Err("Save movement/version mismatch".into()),
     };
@@ -1121,6 +1124,7 @@ pub fn launch(args: &[String]) -> Result<()> {
     };
     let mut source = None;
     let mut definitions = None;
+    let mut render_method = None;
     let mut render_distance = None;
     let mut original = false;
     let mut pack_root = PathBuf::from(crate::engine_assets::DEFAULT_ROOT);
@@ -1131,6 +1135,7 @@ pub fn launch(args: &[String]) -> Result<()> {
     let mut camera = 0u8;
     let mut preview_case = "neutral".to_owned();
     let mut player_case = "first".to_owned();
+    let mut lighting_case = "lit".to_owned();
     let mut bucket_case = "partial".to_owned();
     let mut fluid_case = "flow".to_owned();
     let mut terrain_case = "plains".to_owned();
@@ -1142,9 +1147,11 @@ pub fn launch(args: &[String]) -> Result<()> {
             "--engine-naive" => {},
             "--engine-stream" | "--engine-finite" | "--engine-sync-mesh" => {},
             "--engine-continue" => resume = true,
-            "--engine-bucket-smoke" | "--engine-bucket-case" | "--engine-fluid-smoke" | "--engine-fluid-case" | "--engine-terrain-smoke" | "--engine-terrain-case" | "--engine-player-smoke" | "--engine-player-case" | "--engine-table-smoke" | "--engine-furnace-smoke" | "--engine-ui-smoke" | "--engine-ui-lab-smoke" | "--engine-render-distance" | "--engine-home" | "--engine-load" | "--engine-study" | "--engine-distance-motion-smoke" | "--engine-distance-smoke" | "--engine-distance-settings-smoke" | "--engine-distance-shrink-smoke" | "--engine-features-smoke" | "--engine-settings-smoke" | "--engine-preview-smoke" | "--engine-preview-case" | "--engine-startup-gpu-close-smoke" | "--engine-startup-retry-smoke" | "--engine-startup-smoke" | "--engine-startup-close-smoke" | "--engine-startup-error-smoke" | "--engine-v1-study" | "--engine-v1-smoke" | "--engine-v1-wire-smoke" | "--engine-v1-fly-smoke" | "--engine-v1-noclip-smoke" | "--engine-v1-sneak-smoke" | "--engine-loading-study" | "--engine-loading-smoke" | "--engine-loading-close-smoke" | "--engine-save-study" | "--engine-save-smoke" | "--engine-save-close-smoke" | "--engine-async-smoke" | "--engine-stream-profile" | "--engine-stream-study" | "--engine-stream-smoke" | "--engine-stream-wire-smoke" | "--engine-smoke" | "--engine-palette-smoke" | "--engine-wire-smoke" | "--engine-window-smoke" | "--engine-edit-smoke" | "--engine-benchmark" | "--engine-profile" | "--engine-render-smoke" | "--engine-mesh-smoke" | "--engine-camera" | "--engine-inventory-study" | "--engine-inventory-smoke" | "--engine-seed" | "--engine-blocks" | "--engine-pack-root" => {
+            "--engine-lighting-smoke" | "--engine-lighting-case" | "--engine-renderer" | "--engine-bucket-smoke" | "--engine-bucket-case" | "--engine-fluid-smoke" | "--engine-fluid-case" | "--engine-terrain-smoke" | "--engine-terrain-case" | "--engine-player-smoke" | "--engine-player-case" | "--engine-table-smoke" | "--engine-furnace-smoke" | "--engine-ui-smoke" | "--engine-ui-lab-smoke" | "--engine-render-distance" | "--engine-home" | "--engine-load" | "--engine-study" | "--engine-distance-motion-smoke" | "--engine-distance-smoke" | "--engine-distance-settings-smoke" | "--engine-distance-shrink-smoke" | "--engine-features-smoke" | "--engine-settings-smoke" | "--engine-preview-smoke" | "--engine-preview-case" | "--engine-startup-gpu-close-smoke" | "--engine-startup-retry-smoke" | "--engine-startup-smoke" | "--engine-startup-close-smoke" | "--engine-startup-error-smoke" | "--engine-v1-study" | "--engine-v1-smoke" | "--engine-v1-wire-smoke" | "--engine-v1-fly-smoke" | "--engine-v1-noclip-smoke" | "--engine-v1-sneak-smoke" | "--engine-loading-study" | "--engine-loading-smoke" | "--engine-loading-close-smoke" | "--engine-save-study" | "--engine-save-smoke" | "--engine-save-close-smoke" | "--engine-async-smoke" | "--engine-stream-profile" | "--engine-stream-study" | "--engine-stream-smoke" | "--engine-stream-wire-smoke" | "--engine-smoke" | "--engine-palette-smoke" | "--engine-wire-smoke" | "--engine-window-smoke" | "--engine-edit-smoke" | "--engine-benchmark" | "--engine-profile" | "--engine-render-smoke" | "--engine-mesh-smoke" | "--engine-camera" | "--engine-inventory-study" | "--engine-inventory-smoke" | "--engine-seed" | "--engine-blocks" | "--engine-pack-root" => {
                 let flag = &args[i]; i+=1; let value = args.get(i).ok_or("Engine option requires a value")?;
                 match flag.as_str() {
+                    "--engine-lighting-case"=>lighting_case=value.clone(),
+                    "--engine-renderer" => render_method=Some(match value.as_str(){"forward"=>render::methods::Method::Forward,"deferred"=>render::methods::Method::Deferred,_=>return Err("Renderer must be forward or deferred".into())}),
                     "--engine-render-distance" => {let distance:i32=value.parse()?;if !(2..=crate::engine_stream::MAX_RADIUS).contains(&distance) {return Err("Render distance must be 2..255 chunks".into());}render_distance=Some(distance);},
                     "--engine-home" => home=PathBuf::from(value),
                     "--engine-blocks" => definitions=Some(PathBuf::from(value)),
@@ -1209,6 +1216,9 @@ pub fn launch(args: &[String]) -> Result<()> {
             Err(e) => app.notice = Some(format!("Settings: {e}")),
         }
     }
+    if let Some(method) = render_method {
+        app.settings.rendering.method = method;
+    }
     if let Some(distance) = render_distance {
         app.settings.render_distance = distance;
         crate::engine_stream::set_radius(&mut app.client, distance)?;
@@ -1250,7 +1260,9 @@ pub fn launch(args: &[String]) -> Result<()> {
         app.frame_limit = 4;
     }
     if let Some(out) = &out {
-        if args.iter().any(|a| a == "--engine-bucket-smoke") {
+        if args.iter().any(|a| a == "--engine-lighting-smoke") {
+            crate::verification::lighting::prepare(&mut app, out, &lighting_case)?;
+        } else if args.iter().any(|a| a == "--engine-bucket-smoke") {
             crate::verification::buckets::prepare(&mut app, out, &bucket_case)?;
         } else if args.iter().any(|a| a == "--engine-fluid-smoke") {
             crate::verification::fluids::prepare(&mut app, out, &fluid_case)?;
@@ -1696,7 +1708,7 @@ mod tests {
         }
         let bytes = serde_json::to_vec(&document(&c).unwrap()).unwrap();
         let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-        assert_eq!(value["version"], 9);
+        assert_eq!(value["version"], 10);
         assert_eq!(value["generator"]["version"], 2);
         assert!(value.get("cells").is_none());
         assert_eq!(value["edits"].as_array().unwrap().len(), 3);
@@ -1817,7 +1829,7 @@ mod tests {
         let bytes = serde_json::to_vec(&document(&c).unwrap()).unwrap();
         assert!(bytes.len() < 16_384);
         let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-        assert_eq!(value["version"], 9);
+        assert_eq!(value["version"], 10);
         assert!(value.get("cells").is_none());
         assert_eq!(value["edits"].as_array().unwrap().len(), 3);
         let mut copy = decode(&bytes, None).unwrap();
@@ -1929,6 +1941,7 @@ mod tests {
         let mut client = generate(38).unwrap();
         let mut registry = client.scene.engine.as_ref().unwrap().registry.clone();
         registry.blocks.push(crate::engine_blocks::Block {
+            material: Default::default(),
             container: None,
             texture_tint: None,
             interaction: None,

@@ -6,6 +6,8 @@ use winit::keyboard::KeyCode;
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Settings {
+    #[serde(default)]
+    pub rendering: crate::engine::render::methods::Rendering,
     pub version: u32,
     pub render_distance: i32,
     pub gui_scale: u32,
@@ -17,6 +19,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            rendering: Default::default(),
             version: 1,
             render_distance: 3,
             gui_scale: 2,
@@ -29,6 +32,7 @@ impl Default for Settings {
 }
 impl Settings {
     pub fn validate(&self) -> Result<()> {
+        self.rendering.validate()?;
         if self.version != 1
             || !(2..=crate::engine_stream::MAX_RADIUS).contains(&self.render_distance)
             || !(1..=3).contains(&self.gui_scale)
@@ -67,6 +71,7 @@ pub enum Page {
     Closed,
     Pause,
     Settings,
+    Graphics,
 }
 #[derive(Default)]
 pub struct Menu {
@@ -94,6 +99,11 @@ impl Menu {
                 self.page = Page::Pause;
                 Action::None
             }
+            Page::Graphics => {
+                self.page = Page::Settings;
+                self.selected = 7;
+                Action::None
+            }
             Page::Settings => {
                 self.page = Page::Pause;
                 Action::None
@@ -105,14 +115,47 @@ impl Menu {
         }
     }
     pub fn count(&self) -> usize {
-        if self.page == Page::Pause { 3 } else { 9 }
+        match self.page {
+            Page::Pause => 3,
+            Page::Graphics => 6,
+            _ => 10,
+        }
     }
     pub fn origin(view: [f32; 2]) -> [f32; 2] {
-        [(view[0] - 340.) / 2., (view[1] - 268.) / 2.]
+        [(view[0] - 340.) / 2., (view[1] - 294.) / 2.]
+    }
+    pub fn origin_for(&self, view: [f32; 2]) -> [f32; 2] {
+        if self.page == Page::Settings {
+            return Self::origin(view);
+        }
+        [
+            (view[0] - 340.) / 2.,
+            (view[1] - (64. + 23. * self.count() as f32)) / 2.,
+        ]
     }
     pub fn labels(&self, s: &Settings, streamed: bool, fullscreen: bool) -> Vec<String> {
         if self.page == Page::Pause {
             return vec!["Resume Game".into(), "Settings".into(), "Save World".into()];
+        }
+        if self.page == Page::Graphics {
+            return vec![
+                format!("Renderer: {}", s.rendering.method.label()),
+                format!(
+                    "Sun Shadows: {}",
+                    if s.rendering.shadows { "On" } else { "Off" }
+                ),
+                format!(
+                    "Ambient Occlusion: {}",
+                    if s.rendering.ambient_occlusion {
+                        "On"
+                    } else {
+                        "Off"
+                    }
+                ),
+                format!("Exposure: {}%", s.rendering.exposure),
+                format!("Lighting Quality: {}", s.rendering.quality.label()),
+                "Back".into(),
+            ];
         }
         vec![
             if streamed {
@@ -133,6 +176,7 @@ impl Menu {
                 }
             ),
             format!("Fullscreen: {}", if fullscreen { "On" } else { "Off" }),
+            "Rendering".into(),
             "Reset Settings".into(),
             "Back".into(),
         ]
@@ -153,6 +197,31 @@ impl Menu {
                 _ => Action::Save,
             };
         }
+        if self.page == Page::Graphics {
+            use crate::engine::render::methods::Method;
+            match self.selected {
+                0 => {
+                    s.rendering.method = if s.rendering.method == Method::Forward {
+                        Method::Deferred
+                    } else {
+                        Method::Forward
+                    }
+                }
+                1 => s.rendering.shadows = !s.rendering.shadows,
+                2 => s.rendering.ambient_occlusion = !s.rendering.ambient_occlusion,
+                3 => {
+                    s.rendering.exposure =
+                        (s.rendering.exposure as i32 + delta * 10).clamp(50, 200) as u32
+                }
+                4 => s.rendering.quality = s.rendering.quality.cycle(delta),
+                _ => {
+                    self.page = Page::Settings;
+                    self.selected = 7;
+                    return Action::None;
+                }
+            }
+            return Action::Changed;
+        }
         match self.selected {
             0 => {
                 s.render_distance =
@@ -168,7 +237,12 @@ impl Menu {
                 s.frame_limit = choices[(i as i32 + delta).rem_euclid(5) as usize]
             }
             6 => return Action::Fullscreen,
-            7 => *s = Settings::default(),
+            7 => {
+                self.page = Page::Graphics;
+                self.selected = 0;
+                return Action::None;
+            }
+            8 => *s = Settings::default(),
             _ => {
                 self.page = Page::Pause;
                 self.selected = 1;
@@ -213,7 +287,7 @@ impl Menu {
         }
     }
     fn hit(&self, p: [f32; 2], view: [f32; 2]) -> Option<usize> {
-        let [x, y] = Self::origin(view);
+        let [x, y] = self.origin_for(view);
         let dy = p[1] - y - 34.;
         if p[0] < x || p[0] >= x + 340. || dy < 0. {
             return None;
@@ -224,7 +298,7 @@ impl Menu {
     pub fn click(&mut self, s: &mut Settings, p: [f32; 2], view: [f32; 2]) -> Action {
         if let Some(row) = self.hit(p, view) {
             self.selected = row;
-            let [x, _] = Self::origin(view);
+            let [x, _] = self.origin_for(view);
             if self.page == Page::Settings && row == 0 && p[0] >= x + 20. && p[0] <= x + 320. {
                 let fraction = ((p[0] - x - 30.) / 280.).clamp(0., 1.);
                 s.render_distance =

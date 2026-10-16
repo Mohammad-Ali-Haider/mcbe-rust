@@ -203,7 +203,7 @@ pub fn prepare(app: &mut App, out: &Path, case: &str) -> Result<()> {
     app.finish_work()?;
     let saved = app.client.last_save.clone().ok_or("Fluid save missing")?;
     let doc: serde_json::Value = serde_json::from_slice(&std::fs::read(&saved)?)?;
-    require(doc["version"] == 9, "Fluid save schema differs")?;
+    require(doc["version"] == 10, "Fluid save schema differs")?;
     let old = app.client.actor.position;
     engine_player::mode(&mut app.client, engine_player::Mode::Noclip)?;
     app.client.set_spawn(Vec3::new(0.5, 100., 0.5))?;
