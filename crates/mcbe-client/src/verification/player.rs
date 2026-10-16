@@ -31,7 +31,11 @@ pub fn prepare(app: &mut App, out: &Path, case: &str) -> Result<()> {
         s.player.slots[s.player.active] = if case == "empty" {
             None
         } else {
-            Some(Stack { id, count: 64 })
+            Some(Stack {
+                data: None,
+                id,
+                count: 64,
+            })
         };
     }
     let count = match case {

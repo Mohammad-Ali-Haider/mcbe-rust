@@ -2,6 +2,7 @@
 use crate::{engine_blocks::BlockId, scene::Result};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Stack {
+    pub data: Option<crate::engine::items::ItemData>,
     pub id: BlockId,
     pub count: u8,
 }
@@ -40,6 +41,7 @@ impl Inventory {
         let mut p = Self::empty();
         for i in 0..count.min(9) {
             p.slots[i] = Some(Stack {
+                data: None,
                 id: i as BlockId,
                 count: 64,
             });
@@ -48,6 +50,7 @@ impl Inventory {
             p.active = usize::from(selected);
         } else {
             p.slots[0] = Some(Stack {
+                data: None,
                 id: selected,
                 count: 64,
             });
@@ -66,7 +69,7 @@ impl Inventory {
                 .chain(&self.table)
                 .chain(std::iter::once(&self.cursor))
                 .flatten()
-                .any(|s| s.count == 0 || s.count > 64 || usize::from(s.id) >= definitions)
+                .any(|s| s.count == 0 || s.count > s.limit() || usize::from(s.id) >= definitions)
         {
             return Err("Invalid player inventory or cursor stack".into());
         }
@@ -139,13 +142,13 @@ impl Inventory {
         if hotbar >= 9 {
             return Err("Hotbar index must be 0..8".into());
         }
-        self.slots[hotbar] = Some(Stack { id, count: 64 });
+        self.slots[hotbar] = Some(Stack {
+            data: None,
+            id,
+            count: 64,
+        });
         self.revision = self.revision.wrapping_add(1);
         Ok(())
-    }
-    pub fn catalog_cursor(&mut self, id: BlockId) {
-        self.cursor = Some(Stack { id, count: 64 });
-        self.revision = self.revision.wrapping_add(1);
     }
     pub fn discard_cursor(&mut self) {
         if self.cursor.take().is_some() {
@@ -163,12 +166,12 @@ impl Inventory {
         self.revision = self.revision.wrapping_add(1);
         Ok(())
     }
-    fn add(&mut self, mut stack: Stack, order: &[usize]) -> Option<Stack> {
+    pub(crate) fn add(&mut self, mut stack: Stack, order: &[usize]) -> Option<Stack> {
         for empty in [false, true] {
             for i in order {
                 if let Some(existing) = &mut self.slots[*i] {
-                    if !empty && existing.id == stack.id {
-                        let n = (64 - existing.count).min(stack.count);
+                    if !empty && existing.compatible(stack) {
+                        let n = (existing.limit() - existing.count).min(stack.count);
                         existing.count += n;
                         stack.count -= n;
                     }
@@ -182,15 +185,6 @@ impl Inventory {
             }
         }
         Some(stack)
-    }
-    pub fn add_creative(&mut self, id: BlockId) -> usize {
-        let before = self.total();
-        let order: Vec<_> = (0..36).collect();
-        let _ = self.add(Stack { id, count: 64 }, &order);
-        if self.total() != before {
-            self.revision = self.revision.wrapping_add(1);
-        }
-        self.total() - before
     }
     pub fn quick_move(&mut self, slot: Slot) -> Result<bool> {
         let Some(stack) = self.get(slot)? else {
@@ -242,9 +236,13 @@ impl Inventory {
             }
         } else if output {
             if let Some(mut s) = *value {
-                let capacity = self
-                    .cursor
-                    .map_or(64, |c| if c.id == s.id { 64 - c.count } else { 0 });
+                let capacity = self.cursor.map_or(s.limit(), |c| {
+                    if c.compatible(s) {
+                        c.limit() - c.count
+                    } else {
+                        0
+                    }
+                });
                 let amount = capacity.min(if button == Button::Right {
                     if self.cursor.is_none() {
                         s.count.div_ceil(2)
@@ -256,6 +254,7 @@ impl Inventory {
                 });
                 if amount > 0 {
                     self.cursor = Some(Stack {
+                        data: s.data,
                         id: s.id,
                         count: self.cursor.map_or(0, |c| c.count) + amount,
                     });
@@ -282,6 +281,7 @@ impl Inventory {
             return Ok(false);
         }
         *value = Some(Stack {
+            data: None,
             id: s.id,
             count: value.map_or(0, |v| v.count) + n,
         });
@@ -332,7 +332,7 @@ impl Inventory {
         all: bool,
         table: bool,
     ) -> bool {
-        if result.count == 0 || result.count > 64 {
+        if result.count == 0 || result.count > result.limit() {
             return false;
         }
         if consumed.is_empty()
@@ -356,7 +356,8 @@ impl Inventory {
             match &mut next.cursor {
                 None => next.cursor = Some(result),
                 Some(s)
-                    if s.id == result.id && u16::from(s.count) + u16::from(result.count) <= 64 =>
+                    if s.compatible(result)
+                        && u16::from(s.count) + u16::from(result.count) <= u16::from(s.limit()) =>
                 {
                     s.count += result.count
                 }
@@ -392,11 +393,11 @@ fn transfer(cursor: &mut Option<Stack>, value: &mut Option<Stack>, button: Butto
             s.count -= n;
             *value = (s.count > 0).then_some(s);
         }
-        (_, Some(mut held), Some(mut s)) if held.id == s.id => {
+        (_, Some(mut held), Some(mut s)) if held.compatible(s) => {
             let n = if button == Button::Right {
-                1.min(64 - s.count)
+                1.min(s.limit() - s.count)
             } else {
-                held.count.min(64 - s.count)
+                held.count.min(s.limit() - s.count)
             };
             s.count += n;
             held.count -= n;
@@ -421,21 +422,45 @@ mod tests {
     #[test]
     fn table_inputs_return_atomically_and_external_outputs_only_withdraw() {
         let mut p = Inventory::empty();
-        p.table[8] = Some(Stack { id: 1, count: 64 });
+        p.table[8] = Some(Stack {
+            data: None,
+            id: 1,
+            count: 64,
+        });
         let total = p.total();
         assert!(p.close_inventory());
         assert_eq!(p.total(), total);
         assert!(p.table.iter().all(Option::is_none));
-        p.slots = [Some(Stack { id: 0, count: 64 }); 36];
-        p.table[0] = Some(Stack { id: 1, count: 3 });
+        p.slots = [Some(Stack {
+            data: None,
+            id: 0,
+            count: 64,
+        }); 36];
+        p.table[0] = Some(Stack {
+            data: None,
+            id: 1,
+            count: 3,
+        });
         let old = p.clone();
         assert!(!p.close_inventory());
         assert_eq!(p.changed_slots(&old), 0);
-        let mut output = Some(Stack { id: 2, count: 10 });
-        p.cursor = Some(Stack { id: 1, count: 4 });
+        let mut output = Some(Stack {
+            data: None,
+            id: 2,
+            count: 10,
+        });
+        p.cursor = Some(Stack {
+            data: None,
+            id: 1,
+            count: 4,
+        });
         assert!(!p.click_external(&mut output, Button::Left, false, true));
         assert_eq!(output.unwrap().count, 10);
-        p.cursor = Some(Stack { id: 2, count: 60 });
+        p.cursor = Some(Stack {
+            data: None,
+            id: 2,
+            count: 60,
+        });
         assert!(p.click_external(&mut output, Button::Left, false, true));
         assert_eq!(p.cursor.unwrap().count, 64);
         assert_eq!(output.unwrap().count, 6);
@@ -449,17 +474,37 @@ mod tests {
     #[test]
     fn closing_returns_inputs_and_is_atomic_when_full() {
         let mut p = Inventory::starter(15, 3);
-        p.cursor = Some(Stack { id: 10, count: 63 });
-        p.crafting[2] = Some(Stack { id: 10, count: 2 });
+        p.cursor = Some(Stack {
+            data: None,
+            id: 10,
+            count: 63,
+        });
+        p.crafting[2] = Some(Stack {
+            data: None,
+            id: 10,
+            count: 2,
+        });
         let total = p.total();
         assert!(p.close_inventory());
         assert!(p.cursor.is_none());
         assert_eq!(p.crafting, [None; 4]);
         assert_eq!(p.total(), total);
-        p.slots = [Some(Stack { id: 0, count: 64 }); 36];
+        p.slots = [Some(Stack {
+            data: None,
+            id: 0,
+            count: 64,
+        }); 36];
         p.slots[35] = None;
-        p.cursor = Some(Stack { id: 1, count: 64 });
-        p.crafting[0] = Some(Stack { id: 2, count: 1 });
+        p.cursor = Some(Stack {
+            data: None,
+            id: 1,
+            count: 64,
+        });
+        p.crafting[0] = Some(Stack {
+            data: None,
+            id: 2,
+            count: 1,
+        });
         let before = p.clone();
         assert!(!p.close_inventory());
         assert_eq!(p.changed_slots(&before), 0);
@@ -468,7 +513,11 @@ mod tests {
     #[test]
     fn split_merge_swap_and_shift_preserve_items() {
         let mut p = Inventory::empty();
-        p.slots[0] = Some(Stack { id: 1, count: 63 });
+        p.slots[0] = Some(Stack {
+            data: None,
+            id: 1,
+            count: 63,
+        });
         let total = p.total();
         p.click(Slot::Player(0), Button::Right, false).unwrap();
         assert_eq!(p.cursor.unwrap().count, 32);
@@ -491,8 +540,16 @@ mod tests {
     #[test]
     fn full_inventory_and_invalid_indices_are_atomic() {
         let mut p = Inventory::empty();
-        p.slots = [Some(Stack { id: 0, count: 64 }); 36];
-        p.cursor = Some(Stack { id: 1, count: 64 });
+        p.slots = [Some(Stack {
+            data: None,
+            id: 0,
+            count: 64,
+        }); 36];
+        p.cursor = Some(Stack {
+            data: None,
+            id: 1,
+            count: 64,
+        });
         let total = p.total();
         assert!(!p.settle_cursor());
         assert_eq!(p.total(), total);
@@ -500,8 +557,16 @@ mod tests {
         assert_eq!(p.total(), total);
         assert!(!p.quick_move(Slot::Player(0)).unwrap());
         assert_eq!(p.total(), total);
-        p.slots[5] = Some(Stack { id: 1, count: 60 });
-        p.cursor = Some(Stack { id: 1, count: 9 });
+        p.slots[5] = Some(Stack {
+            data: None,
+            id: 1,
+            count: 60,
+        });
+        p.cursor = Some(Stack {
+            data: None,
+            id: 1,
+            count: 9,
+        });
         p.click(Slot::Player(5), Button::Left, false).unwrap();
         assert_eq!(p.slots[5].unwrap().count, 64);
         assert_eq!(p.cursor.unwrap().count, 5);

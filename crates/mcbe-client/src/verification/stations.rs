@@ -52,8 +52,16 @@ pub fn prepare(app: &mut App, out: &Path, furnace: bool) -> Result<()> {
     if furnace {
         {
             let s = app.client.scene.engine.as_mut().unwrap();
-            s.player.slots[0] = Some(Stack { id: sand, count: 3 });
-            s.player.slots[1] = Some(Stack { id: oak, count: 2 });
+            s.player.slots[0] = Some(Stack {
+                data: None,
+                id: sand,
+                count: 3,
+            });
+            s.player.slots[1] = Some(Stack {
+                data: None,
+                id: oak,
+                count: 2,
+            });
         }
         click(app, Binding::Player(0), true)?;
         click(app, Binding::Player(1), true)?;
@@ -93,6 +101,7 @@ pub fn prepare(app: &mut App, out: &Path, furnace: bool) -> Result<()> {
     } else {
         // Use cursor deposits through all eight ring slots, then take an actual 3x3 recipe.
         app.client.scene.engine.as_mut().unwrap().player.cursor = Some(Stack {
+            data: None,
             id: cobble,
             count: 8,
         });
@@ -145,8 +154,11 @@ pub fn prepare(app: &mut App, out: &Path, furnace: bool) -> Result<()> {
             }),
             "Table output was not taken",
         )?;
-        app.client.scene.engine.as_mut().unwrap().player.table[8] =
-            Some(Stack { id: oak, count: 3 });
+        app.client.scene.engine.as_mut().unwrap().player.table[8] = Some(Stack {
+            data: None,
+            id: oak,
+            count: 3,
+        });
         app.palette.key(&mut app.client, KeyCode::Escape)?;
         require(
             app.client
@@ -167,7 +179,11 @@ pub fn prepare(app: &mut App, out: &Path, furnace: bool) -> Result<()> {
         // Leave a ready mirrored stair recipe visible for the native image check.
         let s = app.client.scene.engine.as_mut().unwrap();
         for i in [2, 4, 5, 6, 7, 8] {
-            s.player.table[i] = Some(Stack { id: oak, count: 1 });
+            s.player.table[i] = Some(Stack {
+                data: None,
+                id: oak,
+                count: 1,
+            });
         }
         std::fs::write(
             out.join("stations.json"),

@@ -22,7 +22,7 @@ fn sparse_amounts_survive_vertical_eviction_reload_and_registry_reorder() {
     c.set_spawn(initial).unwrap();
     let bytes = serde_json::to_vec(&engine::document(&c).unwrap()).unwrap();
     let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(v["version"], 8);
+    assert_eq!(v["version"], 9);
     assert_eq!(v["fluids"][0]["amount"], 333);
     let mut copy = engine::decode(&bytes, None).unwrap();
     assert_eq!(copy.pending_edits(), 0);
@@ -171,7 +171,11 @@ fn container_guards_are_preflighted_without_losing_water_or_inventory() {
     let sand = s.registry.find("sand").unwrap();
     s.machines.ensure([0, 7, 0]).unwrap();
     s.machines.furnaces.get_mut(&[0, 7, 0]).unwrap().slots[0] =
-        Some(crate::engine_inventory::Stack { id: sand, count: 1 });
+        Some(crate::engine_inventory::Stack {
+            data: None,
+            id: sand,
+            count: 1,
+        });
     c.scene.set_fluid([0, 8, 0], w, FULL).unwrap();
     transport::tick(&mut c).unwrap();
     let s = c.scene.engine.as_ref().unwrap();

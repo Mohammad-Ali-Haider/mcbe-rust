@@ -31,7 +31,8 @@
     "blocks/furnace.json",
     "blocks/water.json",
     "blocks/snow.json",
-    "blocks/oak_leaves.json"
+    "blocks/oak_leaves.json",
+    "blocks/bucket.json"
   ],
   "recipes": "recipes/crafting.json",
   "state_order": [

@@ -998,7 +998,11 @@ impl App {
                     .find("oak_planks")?;
                 self.client.scene.change_engine([8, 4, -4], Some(id))?;
                 self.client.scene.engine.as_mut().unwrap().player.slots[10] =
-                    Some(engine_inventory::Stack { id, count: 5 });
+                    Some(engine_inventory::Stack {
+                        data: None,
+                        id,
+                        count: 5,
+                    });
             }
         }
         if self.stream_test {
@@ -1874,6 +1878,15 @@ impl ApplicationHandler for App {
                                 let _ = state.player.assign(id, state.player.active);
                             }
                         }
+                    }
+                } else if button == MouseButton::Right
+                    && engine::items::bucket::selected(&self.client)
+                {
+                    if let Err(e) = engine::items::bucket::use_selected(
+                        &mut self.client,
+                        self.modifiers.shift_key(),
+                    ) {
+                        self.notice = Some(e.to_string());
                     }
                 } else if button == MouseButton::Right
                     && !self.modifiers.shift_key()

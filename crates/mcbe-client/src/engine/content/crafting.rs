@@ -41,6 +41,11 @@ impl Recipes {
         self
     }
     pub fn validate_registry(&self, registry: &Registry) -> Result<()> {
+        for r in &self.recipes {
+            if registry.get(registry.find(&r.result)?).container.is_some() && r.count != 1 {
+                return Err("Container recipes produce one vessel".into());
+            }
+        }
         self.validate()?;
         for r in &self.recipes {
             registry.find(&r.result)?;
@@ -98,6 +103,11 @@ impl Recipes {
         grid: &[Option<Stack>],
         side: usize,
     ) -> Option<Match> {
+        if grid.iter().flatten().any(
+            |s| matches!(s.data,Some(crate::engine::items::ItemData::Fluid{amount,..}) if amount>0),
+        ) {
+            return None;
+        }
         if !(2..=3).contains(&side) || grid.len() != side * side {
             return None;
         }
@@ -144,7 +154,10 @@ impl Recipes {
                         }
                         if valid && let Some(id) = result {
                             return Some(Match {
-                                stack: Stack { id, count: r.count },
+                                stack: Stack {
+                                    count: r.count,
+                                    ..registry.catalog_stack(id)
+                                },
                                 consumed,
                             });
                         }
@@ -193,6 +206,7 @@ mod tests {
         let cobble = r.find("cobblestone").unwrap();
         for i in [0, 1, 2, 3, 5, 6, 7, 8] {
             p.table[i] = Some(Stack {
+                data: None,
                 id: cobble,
                 count: 2,
             });
@@ -201,6 +215,7 @@ mod tests {
         assert_eq!(found.stack.id, r.find("furnace").unwrap());
         assert_eq!(found.consumed.len(), 8);
         p.cursor = Some(Stack {
+            data: None,
             id: cobble,
             count: 64,
         });
@@ -211,20 +226,29 @@ mod tests {
         assert!(p.table.iter().all(Option::is_none));
         let oak = r.find("oak_planks").unwrap();
         for i in [2, 4, 5, 6, 7, 8] {
-            p.table[i] = Some(Stack { id: oak, count: 1 });
+            p.table[i] = Some(Stack {
+                data: None,
+                id: oak,
+                count: 1,
+            });
         }
         assert_eq!(
             recipes.find_grid(&r, &p.table, 3).unwrap().stack.id,
             r.find("oak_stairs_north").unwrap()
         );
         p.crafting = [Some(Stack {
+            data: None,
             id: cobble,
             count: 1,
         }); 4];
         assert!(recipes.find(&r, &p).is_none());
         p.table = [None; 9];
         for i in [6, 7, 8] {
-            p.table[i] = Some(Stack { id: oak, count: 1 });
+            p.table[i] = Some(Stack {
+                data: None,
+                id: oak,
+                count: 1,
+            });
         }
         assert_eq!(recipes.find_grid(&r, &p.table, 3).unwrap().stack.count, 6);
     }
@@ -235,10 +259,15 @@ mod tests {
         let mut p = Inventory::empty();
         let log = registry.find("oak_log").unwrap();
         let planks = registry.find("oak_planks").unwrap();
-        p.crafting[3] = Some(Stack { id: log, count: 2 });
+        p.crafting[3] = Some(Stack {
+            data: None,
+            id: log,
+            count: 2,
+        });
         assert_eq!(
             r.find(&registry, &p).unwrap().stack,
             Stack {
+                data: None,
                 id: planks,
                 count: 4
             }
@@ -247,6 +276,7 @@ mod tests {
         assert_eq!(p.crafting[3].unwrap().count, 1);
         assert_eq!(p.cursor.unwrap().count, 4);
         p.cursor = Some(Stack {
+            data: None,
             id: planks,
             count: 63,
         });

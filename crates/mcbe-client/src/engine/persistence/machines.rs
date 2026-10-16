@@ -30,15 +30,24 @@ pub struct SavedFurnace {
     cooking: Option<String>,
     updated_ms: u64,
 }
+impl SavedFurnace {
+    pub fn has_item_data(&self) -> bool {
+        self.slots.iter().flatten().any(|s| s.data.is_some())
+    }
+}
 impl SavedMachines {
     pub fn capture(m: &Machines, r: &Registry) -> Result<Self> {
         let mut furnaces = Vec::new();
         for (p, f) in &m.furnaces {
             f.validate(r.blocks.len(), m.clock_ms)?;
+            for s in f.slots.iter().flatten() {
+                s.validate_item(r)?;
+            }
             furnaces.push(SavedFurnace {
                 position: *p,
                 slots: f.slots.map(|s| {
                     s.map(|s| SavedStack {
+                        data: s.data,
                         block: r.get(s.id).id.clone(),
                         count: s.count,
                     })
@@ -67,6 +76,7 @@ impl SavedMachines {
                 .map(|s| {
                     s.map(|s| {
                         Ok(Stack {
+                            data: s.data,
                             id: r.find(&s.block)?,
                             count: s.count,
                         })
@@ -83,6 +93,9 @@ impl SavedMachines {
                 updated_ms: saved.updated_ms,
             };
             f.validate(r.blocks.len(), m.clock_ms)?;
+            for s in f.slots.iter().flatten() {
+                s.validate_item(r)?;
+            }
             if f.cook_ms > 0
                 && (f.slots[0].map(|s| s.id) != f.cooking
                     || f.slots[0]
@@ -107,14 +120,14 @@ pub fn restore(
 ) -> Result<()> {
     let state = client.scene.engine.as_ref().unwrap();
     let recipes = match definitions {
-        Some(d) if matches!(version, 6..=8) => d.compile(&state.registry)?,
+        Some(d) if matches!(version, 6..=9) => d.compile(&state.registry)?,
         None if version < 6 => Definitions::built_in()
             .available(&state.registry)
             .compile(&state.registry)?,
         _ => return Err("Save smelting/version mismatch".into()),
     };
     let machines = match saved {
-        Some(s) if matches!(version, 6..=8) => s.restore(&state.registry, &recipes)?,
+        Some(s) if matches!(version, 6..=9) => s.restore(&state.registry, &recipes)?,
         None if version < 6 => Machines::default(),
         _ => return Err("Save machines/version mismatch".into()),
     };
@@ -161,13 +174,25 @@ mod tests {
         let s = c.scene.engine.as_mut().unwrap();
         s.machines.ensure(p).unwrap();
         s.machines.furnaces.get_mut(&p).unwrap().slots = [
-            Some(Stack { id: sand, count: 4 }),
-            Some(Stack { id: oak, count: 3 }),
+            Some(Stack {
+                data: None,
+                id: sand,
+                count: 4,
+            }),
+            Some(Stack {
+                data: None,
+                id: oak,
+                count: 3,
+            }),
             None,
         ];
         s.machines.wake(p, &s.smelting);
         s.machines.advance(3500, &s.smelting);
-        s.player.table[8] = Some(Stack { id: sand, count: 2 });
+        s.player.table[8] = Some(Stack {
+            data: None,
+            id: sand,
+            count: 2,
+        });
     }
     #[test]
     fn machine_save_snapshot_keeps_newer_progress_pending_and_remaps_stable_ids() {

@@ -304,9 +304,34 @@ impl Atlas {
             c.rect(r, [0.77, 0.77, 0.77, 1.]);
         }
     }
-    fn stack(&self, c: &mut Canvas, stack: crate::engine_inventory::Stack, r: [f32; 4]) {
+    fn stack(
+        &self,
+        c: &mut Canvas,
+        stack: crate::engine_inventory::Stack,
+        r: [f32; 4],
+        registry: &crate::engine_blocks::Registry,
+    ) {
         if let Some(icon) = self.icons.get(usize::from(stack.id)) {
             c.quad(*icon, r, [1.; 4]);
+        }
+        if let Some(crate::engine::items::ItemData::Fluid { amount, .. }) = stack.data {
+            c.rect(
+                [r[0] + 1., r[1] + r[3] - 3., r[2] - 2., 2.],
+                [0.1, 0.1, 0.1, 1.],
+            );
+            c.rect(
+                [
+                    r[0] + 1.,
+                    r[1] + r[3] - 3.,
+                    (r[2] - 2.) * amount as f32
+                        / registry
+                            .get(stack.id)
+                            .container
+                            .map_or(1024, |v| v.capacity) as f32,
+                    2.,
+                ],
+                [0.1, 0.45, 0.9, 1.],
+            );
         }
         if stack.count > 1 {
             let count = stack.count.to_string();
@@ -470,7 +495,12 @@ impl Atlas {
                 c.quad(*s, [x + 1. + i as f32 * 20., y, 20., 22.], [1.; 4]);
             }
             if let Some(stack) = player.slots[i] {
-                self.stack(&mut c, stack, [x + 3. + i as f32 * 20., y + 3., 16., 16.]);
+                self.stack(
+                    &mut c,
+                    stack,
+                    [x + 3. + i as f32 * 20., y + 3., 16., 16.],
+                    &state.registry,
+                );
             }
         }
         if let Some(s) = self.selected {
@@ -502,7 +532,14 @@ impl Atlas {
             );
         }
         if let Some(id) = player.selected() {
-            let label = &state.registry.get(id).label;
+            let mut label = state.registry.get(id).label.clone();
+            if let Some(crate::engine::items::ItemData::Fluid { amount, .. }) =
+                player.slots[player.active].and_then(|s| s.data)
+            {
+                let cap = state.registry.get(id).container.unwrap().capacity;
+                label = format!("{label}  {amount}/{cap}  | Right use | Shift+Right pour");
+            }
+            let label = &label;
             self.text(
                 &mut c,
                 width / 2. - self.label_width(label) / 2.,
@@ -770,6 +807,7 @@ impl Atlas {
                                             r[2] - 2. * scale,
                                             r[3] - 2. * scale,
                                         ],
+                                        &state.registry,
                                     );
                                 }
                                 if palette.hover == Some(target) {
@@ -857,6 +895,7 @@ impl Atlas {
                     &mut c,
                     stack,
                     [palette.pointer[0] - 8., palette.pointer[1] - 8., 16., 16.],
+                    &state.registry,
                 );
             }
         }

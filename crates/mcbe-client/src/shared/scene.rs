@@ -242,6 +242,9 @@ impl Scene {
         if id.is_some_and(|id| usize::from(id) >= state.registry.blocks.len()) {
             return Err("Unknown engine block".into());
         }
+        if id.is_some_and(|id| state.registry.get(id).container.is_some()) {
+            return Err("Items cannot be placed as world blocks".into());
+        }
         let old = state.blocks.get(&p).copied();
         let keeps_furnace = id.is_some_and(|i| {
             state.registry.get(i).interaction
@@ -801,6 +804,9 @@ impl Client {
             return Ok(false);
         }
         self.view.swing = 1.;
+        if place && let Some(result) = crate::engine::items::bucket::use_selected(self, false)? {
+            return Ok(result);
+        }
         let Some(hit) = self.target()? else {
             return Ok(false);
         };

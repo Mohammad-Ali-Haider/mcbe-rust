@@ -70,7 +70,9 @@ impl Definitions {
         for v in &self.smelting {
             let i = r.find(&v.input)? as usize;
             let result = r.find(&v.result)?;
-            if smelting[i].is_some()
+            if r.get(i as BlockId).container.is_some()
+                || r.get(result).container.is_some()
+                || smelting[i].is_some()
                 || v.count == 0
                 || v.count > 64
                 || !(100..=3_600_000).contains(&v.cook_ms)
@@ -85,7 +87,10 @@ impl Definitions {
         }
         for v in &self.fuels {
             let i = r.find(&v.item)? as usize;
-            if fuels[i] != 0 || !(100..=3_600_000).contains(&v.burn_ms) {
+            if r.get(i as BlockId).container.is_some()
+                || fuels[i] != 0
+                || !(100..=3_600_000).contains(&v.burn_ms)
+            {
                 return Err("Duplicate or invalid furnace fuel".into());
             }
             fuels[i] = v.burn_ms;

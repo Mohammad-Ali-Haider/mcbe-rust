@@ -302,15 +302,27 @@ mod tests {
             .find("oak_planks")
             .unwrap();
         c.scene.change_engine([2, 3, -2], Some(oak)).unwrap();
-        c.scene.engine.as_mut().unwrap().player.slots[9] = Some(Stack { id: oak, count: 10 });
+        c.scene.engine.as_mut().unwrap().player.slots[9] = Some(Stack {
+            data: None,
+            id: oak,
+            count: 10,
+        });
         service.request(&c, &dir.0).unwrap();
         c.scene.change_engine([3, 3, -2], None).unwrap();
         service.request(&c, &dir.0).unwrap();
         c.scene.change_engine([4, 40, -2], Some(oak)).unwrap();
-        c.scene.engine.as_mut().unwrap().player.slots[9] = Some(Stack { id: oak, count: 8 });
+        c.scene.engine.as_mut().unwrap().player.slots[9] = Some(Stack {
+            data: None,
+            id: oak,
+            count: 8,
+        });
         service.request(&c, &dir.0).unwrap();
         c.scene.change_engine([5, 4, -2], Some(oak)).unwrap();
-        c.scene.engine.as_mut().unwrap().player.slots[9] = Some(Stack { id: oak, count: 7 });
+        c.scene.engine.as_mut().unwrap().player.slots[9] = Some(Stack {
+            data: None,
+            id: oak,
+            count: 7,
+        });
         let instance = c.scene.engine.as_ref().unwrap().instance;
         let revision = c.scene.engine.as_ref().unwrap().revision;
         let events = drain(&mut service, &mut c);

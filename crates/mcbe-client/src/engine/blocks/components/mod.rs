@@ -15,6 +15,7 @@ pub use signal::SignalComponent;
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BlockComponents {
+    pub container: Option<crate::engine::items::FluidContainer>,
     pub fluid: Option<FluidKind>,
     pub interaction: Option<Interaction>,
     #[serde(default)]

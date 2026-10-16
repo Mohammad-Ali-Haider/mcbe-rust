@@ -1,7 +1,7 @@
 //! Bounded reusable player geometry with shared skin UVs and held union models.
 use crate::engine::player::camera::Mode;
 use crate::{
-    engine_mesh::{self, Vertex as ItemVertex},
+    engine_mesh::Vertex as ItemVertex,
     engine_preview::{Cube, Vertex as SkinVertex},
     scene::Client,
 };
@@ -66,18 +66,19 @@ pub fn hand(client: &Client, skin: [f32; 4]) -> Vec<SkinVertex> {
 }
 pub fn item(client: &Client, position: [f32; 3], first: bool) -> Vec<ItemVertex> {
     let state = client.scene.engine.as_ref().unwrap();
-    let Some(id) = state.player.selected() else {
+    let Some(stack) = state.player.slots[state.player.active] else {
         return Vec::new();
     };
-    let mut out = engine_mesh::item(state, id);
+    let mut out = crate::engine::items::mesh(state, stack);
     let swing = (client.view.swing * std::f32::consts::PI).sin();
     let bob = client.view.gait.sin() * client.view.walk * 0.012;
+    let container = state.registry.get(stack.id).container.is_some();
     let transform = if first {
         Mat4::from_translation(Vec3::new(
-            0.43 - swing * 0.1,
-            -0.25 + bob,
-            -0.75 + swing * 0.15,
-        )) * Mat4::from_rotation_x(0.3 - swing * 0.4)
+            (if container { 0.32 } else { 0.43 }) - swing * 0.1,
+            (if container { -0.28 } else { -0.25 }) + bob,
+            (if container { -0.85 } else { -0.75 }) + swing * 0.15,
+        )) * Mat4::from_rotation_x((if container { 0.7 } else { 0.3 }) - swing * 0.4)
             * Mat4::from_rotation_y(-0.55)
             * Mat4::from_scale(Vec3::splat(0.30))
     } else {
@@ -114,7 +115,7 @@ struct Key {
     crouched: bool,
     instance: u64,
     registry: u64,
-    selected: Option<u16>,
+    selected: Option<crate::engine_inventory::Stack>,
     appearance: usize,
 }
 pub struct Renderer {
@@ -317,7 +318,7 @@ impl Renderer {
             crouched: client.movement.crouched,
             instance: state.instance,
             registry: state.registry_revision,
-            selected: state.player.selected(),
+            selected: state.player.slots[state.player.active],
             appearance: std::sync::Arc::as_ptr(&client.appearance) as usize,
         };
         if self.key.as_ref() == Some(&key) {
@@ -387,7 +388,7 @@ impl Renderer {
         }
     }
     pub fn observation(&self, client: &Client) -> serde_json::Value {
-        serde_json::json!({"mode":client.view.mode,"skin":client.appearance.provenance,"body_vertices":self.body.len(),"hand_vertices":self.hand.len(),"item_vertices":self.item.len(),"selected":client.scene.engine.as_ref().and_then(|s|s.player.selected().map(|id|s.registry.get(id).id.clone())),"mesh_uploads":self.uploads,"draws":self.draws,"hand_geometry":self.hand,"body_geometry":self.body,"shared_skin_uvs":true,"world_depth_test":true,"separate_first_person_depth":true})
+        serde_json::json!({"mode":client.view.mode,"skin":client.appearance.provenance,"body_vertices":self.body.len(),"hand_vertices":self.hand.len(),"item_vertices":self.item.len(),"selected":client.scene.engine.as_ref().and_then(|s|s.player.selected().map(|id|s.registry.get(id).id.clone())),"mesh_uploads":self.uploads,"draws":self.draws,"item_geometry":self.item.iter().map(|v|serde_json::json!({"position":v.position,"uv":v.uv,"layer":v.layer,"shade":v.shade})).collect::<Vec<_>>(),"item_data":client.scene.engine.as_ref().and_then(|s|s.player.slots[s.player.active].and_then(|s|s.data)),"hand_geometry":self.hand,"body_geometry":self.body,"shared_skin_uvs":true,"world_depth_test":true,"separate_first_person_depth":true})
     }
 }
 
@@ -411,7 +412,7 @@ mod tests {
         let slab = state.registry.find("oak_slab").unwrap();
         state.player.assign(slab, 0).unwrap();
         state.player.select(0).unwrap();
-        let vertices = engine_mesh::item(state, slab);
+        let vertices = crate::engine_mesh::item(state, slab);
         assert_eq!(vertices.len(), 36);
         assert!(vertices.iter().all(|v| v.position[1] <= 0.5));
         assert!(

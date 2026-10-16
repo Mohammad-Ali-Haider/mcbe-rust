@@ -305,9 +305,11 @@ impl Palette {
             _ => None,
         };
         if let Some(i) = digit {
-            let p = &mut client.scene.engine.as_mut().unwrap().player;
+            let state = client.scene.engine.as_mut().unwrap();
+            let r = &state.registry;
+            let p = &mut state.player;
             match self.hover {
-                Some(Target::Catalog(id)) => p.assign(id, i)?,
+                Some(Target::Catalog(id)) => p.assign_item(r.catalog_stack(id), i)?,
                 Some(Target::Slot(slot)) => p.swap_hotbar(slot, i)?,
                 _ => p.select(i)?,
             }
@@ -340,8 +342,10 @@ impl Palette {
             KeyCode::Enter => {
                 let id = visible[self.cursor] as BlockId;
                 self.close(client)?;
-                let p = &mut client.scene.engine.as_mut().unwrap().player;
-                p.assign(id, p.active)?;
+                let state = client.scene.engine.as_mut().unwrap();
+                let r = &state.registry;
+                let p = &mut state.player;
+                p.assign_item(r.catalog_stack(id), p.active)?;
                 return Ok(());
             }
             _ => {}
@@ -466,9 +470,9 @@ impl Palette {
         match self.hover {
             Some(Target::Catalog(id)) => {
                 if pointer.shift {
-                    state.player.add_creative(id);
+                    state.player.add_item(state.registry.catalog_stack(id));
                 } else {
-                    state.player.catalog_cursor(id);
+                    state.player.catalog_item(state.registry.catalog_stack(id));
                 }
             }
             Some(Target::Slot(slot)) => {
@@ -781,8 +785,11 @@ mod tests {
     #[test]
     fn saved_table_inputs_recover_into_a_visible_grid_and_close_safely() {
         let mut c = crate::engine::generate(37).unwrap();
-        c.scene.engine.as_mut().unwrap().player.table[8] =
-            Some(crate::engine_inventory::Stack { id: 1, count: 3 });
+        c.scene.engine.as_mut().unwrap().player.table[8] = Some(crate::engine_inventory::Stack {
+            data: None,
+            id: 1,
+            count: 3,
+        });
         let mut palette = Palette::recover(&c);
         assert!(palette.open);
         assert_eq!(palette.screen_id(), "crafting_table");
@@ -816,7 +823,7 @@ mod tests {
                     .as_ref()
                     .unwrap()
                     .registry
-                    .find("oak_leaves")
+                    .find("bucket")
                     .unwrap()
             )
         );

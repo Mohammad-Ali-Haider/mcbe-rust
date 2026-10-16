@@ -31,15 +31,27 @@ pub fn verify(app: &mut App, out: &Path) -> Result<()> {
         .registry
         .find("oak_planks")?;
     app.client.scene.change_engine([2, 3, -2], Some(oak))?;
-    app.client.scene.engine.as_mut().unwrap().player.slots[9] = Some(Stack { id: oak, count: 10 });
+    app.client.scene.engine.as_mut().unwrap().player.slots[9] = Some(Stack {
+        data: None,
+        id: oak,
+        count: 10,
+    });
     app.save_shortcut()?;
     app.client.scene.change_engine([3, 3, -2], None)?;
     app.save_shortcut()?;
     app.client.scene.change_engine([4, 40, -2], Some(oak))?;
-    app.client.scene.engine.as_mut().unwrap().player.slots[9] = Some(Stack { id: oak, count: 8 });
+    app.client.scene.engine.as_mut().unwrap().player.slots[9] = Some(Stack {
+        data: None,
+        id: oak,
+        count: 8,
+    });
     app.save_shortcut()?;
     app.client.scene.change_engine([5, 4, -2], Some(oak))?;
-    app.client.scene.engine.as_mut().unwrap().player.slots[9] = Some(Stack { id: oak, count: 7 });
+    app.client.scene.engine.as_mut().unwrap().player.slots[9] = Some(Stack {
+        data: None,
+        id: oak,
+        count: 7,
+    });
     let start = app.client.actor.position;
     for _ in 0..3 {
         app.client.tick(Input {

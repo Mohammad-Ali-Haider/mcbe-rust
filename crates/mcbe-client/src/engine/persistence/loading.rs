@@ -710,7 +710,11 @@ mod tests {
         live.scene.change_engine([2, 3, -2], Some(oak)).unwrap();
         live.scene.change_engine([3, 3, -2], None).unwrap();
         live.scene.change_engine([4, 40, -2], Some(oak)).unwrap();
-        live.scene.engine.as_mut().unwrap().player.slots[10] = Some(Stack { id: oak, count: 17 });
+        live.scene.engine.as_mut().unwrap().player.slots[10] = Some(Stack {
+            data: None,
+            id: oak,
+            count: 17,
+        });
         let instance = live.scene.engine.as_ref().unwrap().instance;
         let original = live.actor.position;
         let mut loader = Service::new().unwrap();
@@ -821,7 +825,11 @@ mod tests {
         assert_eq!(fs::read(&path).unwrap(), changed);
         fs::write(&path, &bytes).unwrap();
         loader.reload(&live).unwrap();
-        live.scene.engine.as_mut().unwrap().player.slots[10] = Some(Stack { id: 0, count: 11 });
+        live.scene.engine.as_mut().unwrap().player.slots[10] = Some(Stack {
+            data: None,
+            id: 0,
+            count: 11,
+        });
         let e = settle(&mut loader, &mut live);
         assert!(e[0].error.is_some());
         assert_eq!(

@@ -30,7 +30,11 @@ pub fn verify(app: &mut App, out: &Path) -> Result<()> {
     app.client.scene.change_engine([2, 3, -2], Some(oak))?;
     app.client.scene.change_engine([4, 40, -2], Some(oak))?;
     app.client.scene.engine.as_mut().unwrap().player.slots[10] =
-        Some(crate::engine_inventory::Stack { id: oak, count: 17 });
+        Some(crate::engine_inventory::Stack {
+            data: None,
+            id: oak,
+            count: 17,
+        });
     for _ in 0..3 {
         app.engine_key(KeyCode::F10)?;
     }

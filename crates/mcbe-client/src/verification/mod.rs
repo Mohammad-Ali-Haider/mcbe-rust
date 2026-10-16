@@ -15,3 +15,5 @@ pub(crate) mod player;
 pub(crate) mod terrain;
 
 pub(crate) mod fluids;
+
+pub(crate) mod buckets;

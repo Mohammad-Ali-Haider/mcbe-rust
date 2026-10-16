@@ -113,10 +113,12 @@ mod tests {
         let f = Furnace {
             slots: [
                 Some(Stack {
+                    data: None,
                     id: r.find("sand").unwrap(),
                     count: 6,
                 }),
                 Some(Stack {
+                    data: None,
                     id: r.find("oak_planks").unwrap(),
                     count: 4,
                 }),
@@ -139,6 +141,7 @@ mod tests {
         assert_eq!(
             fine.slots[2],
             Some(Stack {
+                data: None,
                 id: r.find("glass").unwrap(),
                 count: 6
             })
@@ -149,6 +152,7 @@ mod tests {
     fn blocked_outputs_and_invalid_inputs_do_not_consume_new_fuel() {
         let (r, recipes, mut f) = fixture();
         f.slots[2] = Some(Stack {
+            data: None,
             id: r.find("glass").unwrap(),
             count: 64,
         });
@@ -157,6 +161,7 @@ mod tests {
         assert_eq!(f.slots, slots);
         assert_eq!(f.cook_ms, 0);
         f.slots[2] = Some(Stack {
+            data: None,
             id: r.find("slate").unwrap(),
             count: 1,
         });
@@ -168,6 +173,7 @@ mod tests {
         assert_eq!(f.cook_ms, 4000);
         let fuel = f.slots[1];
         f.slots[2] = Some(Stack {
+            data: None,
             id: r.find("slate").unwrap(),
             count: 64,
         });
@@ -176,6 +182,7 @@ mod tests {
         assert_eq!(f.burn_ms, 6000);
         assert_eq!(f.slots[1], fuel);
         f.slots[0] = Some(Stack {
+            data: None,
             id: r.find("cobblestone").unwrap(),
             count: 1,
         });

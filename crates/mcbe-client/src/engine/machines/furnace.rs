@@ -30,9 +30,17 @@ impl Furnace {
         Ok(())
     }
     fn recipe(&self, recipes: &Recipes) -> Option<Recipe> {
-        let r = recipes.get(self.slots[0]?.id)?;
+        let input = self.slots[0]?;
+        if input.data.is_some() {
+            return None;
+        }
+        let r = recipes.get(input.id)?;
         self.slots[2]
-            .is_none_or(|s| s.id == r.result && u16::from(s.count) + u16::from(r.count) <= 64)
+            .is_none_or(|s| {
+                s.data.is_none()
+                    && s.id == r.result
+                    && u16::from(s.count) + u16::from(r.count) <= 64
+            })
             .then_some(r)
     }
     pub fn active(&self, r: &Recipes) -> bool {
@@ -87,6 +95,7 @@ impl Furnace {
                         s.count += r.count;
                     } else {
                         self.slots[2] = Some(Stack {
+                            data: None,
                             id: r.result,
                             count: r.count,
                         });

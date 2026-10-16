@@ -53,6 +53,8 @@ pub enum Pattern {
 #[serde(deny_unknown_fields)]
 pub struct Block {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub container: Option<crate::engine::items::FluidContainer>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub texture_tint: Option<[u8; 3]>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fluid: Option<super::components::FluidKind>,

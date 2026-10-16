@@ -20,7 +20,7 @@ def main():
         g=read(d/'gpu.json');w=read(d/'window.json');assert g['complete'] and w['complete'] and w['maximized'] and not w['fullscreen'];assert g['statistics']['native_resolution']
         print(json.dumps({'native':name,'frames':g['statistics']['frames']}),flush=True);return d,g
     gallery,g=launch('gallery','--engine-features-smoke');report=read(gallery/'features.json');saved=Path(report['saved_world'])
-    assert report['registry_blocks']==40 and report['variant_save_roundtrip'];assert g['statistics']['blended_vertices']>0
+    assert report['registry_blocks']==41 and report['variant_save_roundtrip'];assert g['statistics']['blended_vertices']>0
     # An idle native frame must reuse the two chunks containing blue glass.
     assert g['statistics']['blended_uploads']<=4 and g['statistics']['blended_sorts']<=4
     settings,sg=launch('settings','--engine-settings-smoke');trace=sg['settings_trace'];assert len(trace)==3

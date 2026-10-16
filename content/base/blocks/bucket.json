@@ -1,0 +1,26 @@
+{
+  "id": "bucket",
+  "label": "Bucket",
+  "extends": "templates/solid.json",
+  "components": {
+    "container": {
+      "kind": "water",
+      "capacity": 1024
+    },
+    "visual": {
+      "model": "models/bucket.json",
+      "color": [
+        165,
+        175,
+        185
+      ],
+      "pattern": "solid"
+    },
+    "collision": {
+      "shape": "none"
+    },
+    "selection": {
+      "shape": "none"
+    }
+  }
+}

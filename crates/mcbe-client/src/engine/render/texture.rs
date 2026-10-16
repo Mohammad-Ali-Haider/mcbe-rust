@@ -188,8 +188,8 @@ mod tests {
         let mut client = crate::engine::generate(360036).unwrap();
         let plan = Prepared::build(&client).unwrap();
         assert!(plan.matches(&client));
-        assert_eq!(plan.layers, 240);
-        assert_eq!(plan.steps.len(), 240 * 6 + 16);
+        assert_eq!(plan.layers, 41 * 6);
+        assert_eq!(plan.steps.len(), 41 * 6 * 6 + 16);
         let mut cursor = 0;
         let mut bytes = 0;
         let mut frames = 0;
@@ -206,8 +206,8 @@ mod tests {
             cursor = batch.end;
             frames += 1;
         }
-        assert_eq!(bytes, 240 * 5460 + 1024 * 1024 * 4);
-        assert_eq!(frames, 61);
+        assert_eq!(bytes, plan.layers as usize * 5460 + 1024 * 1024 * 4);
+        assert_eq!(frames, 63); // 41 compiled states plus the UI atlas, within byte/write budgets.
         let Step::Terrain { rgba: base, .. } = &plan.steps[0] else {
             panic!()
         };

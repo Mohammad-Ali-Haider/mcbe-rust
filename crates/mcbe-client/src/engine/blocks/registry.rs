@@ -84,6 +84,21 @@ impl Registry {
         }
         let mut seen = HashSet::new();
         for (index, b) in self.blocks.iter().enumerate() {
+            if let Some(c) = b.container
+                && (!self.blocks.iter().any(|b| b.fluid == Some(c.kind))
+                    || c.capacity == 0
+                    || c.capacity > crate::engine::fluids::FULL
+                    || b.fluid.is_some()
+                    || b.interaction.is_some()
+                    || b.placement.is_some()
+                    || b.collision.as_ref().is_none_or(|v| !v.is_empty())
+                    || b.selection.as_ref().is_none_or(|v| !v.is_empty()))
+            {
+                return Err(
+                    "Fluid containers require capacity 1..1024 and non-world collision/selection"
+                        .into(),
+                );
+            }
             if let Some(state) = &b.state
                 && self.resolve_state(&state.block, &state.properties)? as usize != index
             {
@@ -190,7 +205,7 @@ mod tests {
             b.placement = None;
         }
         let mut upgraded = old.with_new_builtins().unwrap().unwrap();
-        assert_eq!(upgraded.blocks.len(), 40);
+        assert_eq!(upgraded.blocks.len(), 41);
         assert!(upgraded.with_new_builtins().unwrap().is_none());
         assert!(
             upgraded
@@ -217,6 +232,7 @@ mod tests {
         let mut r = Registry::built_in();
         for i in 0..100 {
             r.blocks.push(Block {
+                container: None,
                 texture_tint: None,
                 behavior: Default::default(),
                 interaction: None,

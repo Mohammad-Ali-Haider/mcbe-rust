@@ -32,6 +32,9 @@ pub fn place(client: &mut Client, hit: &Hit) -> Result<bool> {
     let Some(selected) = state.player.selected() else {
         return Ok(false);
     };
+    if state.registry.get(selected).container.is_some() {
+        return Ok(false);
+    }
     let hit_p = target_position(hit);
     let Some((p, id)) = resolve(
         &state.registry,
