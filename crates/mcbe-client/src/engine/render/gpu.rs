@@ -42,6 +42,9 @@ struct Camera {
 }
 #[derive(PartialEq, Eq)]
 struct UiKey {
+    controls_revision: u64,
+    keyboard_revision: u64,
+    use_kind: super::super::input::hints::Use,
     parkour: crate::engine::player::locomotion::parkour::Action,
     ray_status: u8,
     camera_mode: crate::engine::player::camera::Mode,
@@ -146,6 +149,7 @@ pub struct Statistics {
     pub last_frame_ms: f64,
 }
 pub struct Frame<'a> {
+    pub controls: &'a crate::engine::input::runtime::Runtime,
     pub fullscreen: bool,
     pub menu: &'a crate::engine_settings::Menu,
     pub settings: &'a crate::engine_settings::Settings,
@@ -1325,7 +1329,22 @@ impl Renderer {
         } else {
             2
         };
+        let use_kind = if crate::engine::items::bucket::selected(client) {
+            super::super::input::hints::Use::Bucket
+        } else if client.target()?.is_some_and(|h| {
+            state
+                .blocks
+                .get(&[h.position.x, h.position.y, h.position.z])
+                .is_some_and(|id| state.registry.get(*id).interaction.is_some())
+        }) {
+            super::super::input::hints::Use::Interact
+        } else {
+            super::super::input::hints::Use::Place
+        };
         let key = UiKey {
+            controls_revision: frame.controls.router.revision,
+            keyboard_revision: frame.controls.keyboard.revision,
+            use_kind,
             parkour: client.parkour.action,
             ray_status,
             camera_mode: client.view.mode,
@@ -1392,6 +1411,8 @@ impl Renderer {
                 client,
                 palette,
                 Context {
+                    controls: frame.controls,
+                    use_kind,
                     ray_status,
                     menu: frame.menu,
                     settings: frame.settings,

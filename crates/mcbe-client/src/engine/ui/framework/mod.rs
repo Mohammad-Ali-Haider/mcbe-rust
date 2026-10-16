@@ -52,6 +52,12 @@ impl Library {
             .register("ui_lab", Arc::new(Laboratory))
             .expect("Code-built UI laboratory");
         result
+            .register(
+                "controller_keyboard",
+                Arc::new(super::controller_keyboard::KeyboardScreen),
+            )
+            .expect("Controller keyboard screen");
+        result
     }
     pub fn register(&mut self, id: &str, screen: Arc<dyn Screen>) -> Result<()> {
         if !crate::engine::blocks::state::identifier(id) || self.screens.len() >= 64 {

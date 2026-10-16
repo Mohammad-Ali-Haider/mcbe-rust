@@ -123,6 +123,10 @@ impl Palette {
     }
     pub fn ui_model(&self, client: &Client) -> super::framework::screen::Model {
         let mut model = self.model.clone();
+        model
+            .texts
+            .entry("ui_controls".into())
+            .or_insert_with(|| "Tab / arrows navigate, Enter selects".into());
         let state = client.scene.engine.as_ref().unwrap();
         if let Some(f) = self.station.and_then(|p| state.machines.furnaces.get(&p)) {
             model

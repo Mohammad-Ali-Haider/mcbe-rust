@@ -29,7 +29,7 @@ pub struct Theme {
 }
 impl Theme {
     pub fn validate(&self) -> crate::scene::Result<()> {
-        if self.version != 1 || self.textures.len() > 8 || self.styles.len() > 64 {
+        if self.version != 1 || self.textures.len() > 32 || self.styles.len() > 64 {
             return Err("UI theme version/count invalid".into());
         }
         for style in self.styles.values() {

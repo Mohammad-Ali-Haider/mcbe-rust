@@ -176,14 +176,28 @@ impl ResolvedScreen {
     pub fn focus_targets(&self) -> Vec<[f32; 2]> {
         let mut points = Vec::new();
         for w in &self.widgets {
-            if matches!(
-                w.widget.kind,
-                Kind::Slot { .. } | Kind::Button { .. } | Kind::Search
-            ) {
-                points.push([
-                    w.rect.0[0] + w.rect.0[2] / 2.,
-                    w.rect.0[1] + w.rect.0[3] / 2.,
-                ]);
+            let mut add = |rect: Rect| {
+                let r = rect.intersect(w.clip).0;
+                if r[2] > 0. && r[3] > 0. {
+                    points.push([r[0] + r[2] * 0.5, r[1] + r[3] * 0.5]);
+                }
+            };
+            match w.widget.kind {
+                Kind::Slot { .. } | Kind::Button { .. } | Kind::Search => add(w.rect),
+                Kind::Catalog { columns, rows } => {
+                    let r = w.rect.0;
+                    for y in 0..rows {
+                        for x in 0..columns {
+                            add(Rect([
+                                r[0] + x as f32 * r[2] / columns as f32,
+                                r[1] + y as f32 * r[3] / rows as f32,
+                                r[2] / columns as f32,
+                                r[3] / rows as f32,
+                            ]));
+                        }
+                    }
+                }
+                _ => {}
             }
         }
         points

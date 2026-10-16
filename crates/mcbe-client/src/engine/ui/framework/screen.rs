@@ -128,7 +128,7 @@ impl Screen for Laboratory {
             "footer",
             [14., 162., 242., 10.],
             Kind::Label {
-                text: "Tab / arrows navigate, Enter selects".into(),
+                text: "{ui_controls}".into(),
             },
         ));
         root.layout = Layout {

@@ -20,4 +20,4 @@ wgpu = {version="=25.0.2",default-features=false,features=["dx12","wgsl"]}
 pollster = "=0.4.0"
 glam = "=0.30.10"
 bytemuck = {version="=1.25.0",features=["derive"]}
-windows-sys = { version = "=0.61.2", features = ["Win32_Graphics_Gdi", "Win32_Foundation", "Win32_Storage_FileSystem"] }
+windows-sys = { version = "=0.61.2", features = ["Win32_Graphics_Gdi", "Win32_Foundation", "Win32_Storage_FileSystem", "Win32_UI_Input_XboxController"] }

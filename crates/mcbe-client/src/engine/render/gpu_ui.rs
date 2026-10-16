@@ -50,6 +50,8 @@ pub struct Atlas {
     icons: Vec<Sprite>,
 }
 pub struct Context<'a> {
+    pub controls: &'a crate::engine::input::runtime::Runtime,
+    pub use_kind: crate::engine::input::hints::Use,
     pub ray_status: u8,
     pub menu: &'a crate::engine_settings::Menu,
     pub settings: &'a crate::engine_settings::Settings,
@@ -475,7 +477,11 @@ impl Atlas {
                 &mut c,
                 left + 3.,
                 top + 44. + ctx.menu.count() as f32 * 23.,
-                "Arrows / Slider: change  Home/End: min/max",
+                if ctx.controls.router.device == crate::engine::input::gamepad::Device::Gamepad {
+                    "D-pad / LS: navigate / change | A: select"
+                } else {
+                    "Arrows / Slider: change  Home/End: min/max"
+                },
                 [0.8, 0.8, 0.8, 1.],
             );
             self.text(
@@ -491,10 +497,16 @@ impl Atlas {
                         _ => "Ray controls apply to Ray-traced lighting",
                     }
                 } else {
-                    "F: fly  Ctrl: sprint  Space / Shift: up / down"
+                    if ctx.controls.router.device == crate::engine::input::gamepad::Device::Gamepad
+                    {
+                        "D-pad up: flight   LS click: sprint   A / B: rise / descend"
+                    } else {
+                        "F: fly  Ctrl: sprint  Space / Shift: up / down"
+                    }
                 },
                 [0.65, 0.8, 0.65, 1.],
             );
+            self.control_overlay(&mut c, client, palette, &ctx, viewport);
             return Composition {
                 vertices: c.vertices,
                 preview_at: None,
@@ -548,7 +560,11 @@ impl Atlas {
                 &mut c,
                 6.,
                 height - 14.,
-                "Free camera | WASD  Space/Shift  Ctrl fast | F5 return",
+                if ctx.controls.router.device == crate::engine::input::gamepad::Device::Gamepad {
+                    "Free camera | LS move  RS look  A/B rise/dive  X return"
+                } else {
+                    "Free camera | WASD  Space/Shift  Ctrl fast | F5 return"
+                },
                 [1.; 4],
             );
         }
@@ -569,7 +585,22 @@ impl Atlas {
                 [1.; 4],
             );
         }
-        let mode = if !client.parkour.label().is_empty() {
+        let mode = if ctx.controls.router.device == crate::engine::input::gamepad::Device::Gamepad {
+            match client.parkour.action {
+                crate::engine::player::locomotion::parkour::Action::Climbing => "CLIMBING",
+                crate::engine::player::locomotion::parkour::Action::WallRunning => "WALL RUNNING",
+                crate::engine::player::locomotion::parkour::Action::Hanging => "HANGING",
+                crate::engine::player::locomotion::parkour::Action::Mantling => "PULLING UP",
+                crate::engine::player::locomotion::parkour::Action::WallJump => "WALL JUMP",
+                _ => match client.movement.mode {
+                    crate::engine_player::Mode::Noclip => "NOCLIP",
+                    crate::engine_player::Mode::Flying => "FLYING",
+                    _ if client.movement.swimming => "SWIMMING",
+                    _ if client.movement.crouched => "SNEAKING",
+                    _ => "",
+                },
+            }
+        } else if !client.parkour.label().is_empty() {
             client.parkour.label()
         } else {
             match client.movement.mode {
@@ -924,9 +955,12 @@ impl Atlas {
                 );
             }
         }
+        self.control_overlay(&mut c, client, palette, &ctx, viewport);
         Composition {
             vertices: c.vertices,
             preview_at: c.preview_at,
         }
     }
 }
+
+mod controls;

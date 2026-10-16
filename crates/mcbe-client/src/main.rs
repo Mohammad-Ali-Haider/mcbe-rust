@@ -59,6 +59,7 @@ use winit::{
 };
 
 struct App {
+    controls: engine::input::runtime::Runtime,
     show_character: bool,
     flight_tap: engine_player::FlightTap,
     lod_motion_test: bool,
@@ -130,6 +131,7 @@ struct App {
     fluid_live: Option<verification::fluids::Live>,
     lighting_live: Option<verification::lighting::Live>,
     parkour_live: Option<verification::parkour::Live>,
+    controller_live: Option<verification::controller::Live>,
     capture_out: Option<PathBuf>,
     simulation_previous: mcbe_core::motion::Vec3,
     palette: engine_ui::Palette,
@@ -157,6 +159,7 @@ impl App {
     fn new(client: Client, root: PathBuf, inventory_start: bool, smoke: bool) -> Result<Self> {
         let palette = engine_ui::Palette::recover(&client);
         Ok(Self {
+            controls: Default::default(),
             show_character: !smoke,
             preview_test: None,
             preview_trace: Vec::new(),
@@ -219,6 +222,7 @@ impl App {
             fluid_live: None,
             lighting_live: None,
             parkour_live: None,
+            controller_live: None,
             capture_out: None,
             simulation_previous: client.actor.position,
             flight_tap: Default::default(),
@@ -304,6 +308,9 @@ impl App {
         self.startup.as_ref().is_some_and(|s| s.running())
     }
     fn movement_input(&self) -> Input {
+        if self.controls.router.device == engine::input::gamepad::Device::Gamepad {
+            return self.controller_motion();
+        }
         let down = |key| f32::from(self.keys.contains(&key));
         Input {
             grab: self.keys.contains(&KeyCode::KeyC),
@@ -327,7 +334,11 @@ impl App {
             || self.client.view.is_free()
             || self.client.parkour.action != engine::player::locomotion::parkour::Action::Idle
             || (self.client.movement.mode == engine_player::Mode::Walking
-                && self.keys.contains(&KeyCode::KeyC))
+                && (self.keys.contains(&KeyCode::KeyC)
+                    || self
+                        .controls
+                        .frame
+                        .down(engine::input::gamepad::Button::RightStick)))
         {
             self.flight_tap.reset();
         } else if self.flight_tap.event(pressed, repeat, now) {
@@ -1209,9 +1220,11 @@ impl App {
         verification::fluids::advance(self)?;
         verification::lighting::advance(self)?;
         verification::parkour::advance(self)?;
+        verification::controller::advance(self)?;
         let now = Instant::now();
         let dt = (now - self.previous).as_secs_f32().min(0.25);
         self.previous = now;
+        self.controller_poll(dt)?;
         if !self.smoke {
             self.advance_machines(dt);
         }
@@ -1330,13 +1343,21 @@ impl App {
                 let (w, h) = gpu.logical_size();
                 let viewport = [w as f32, h as f32];
                 if self.palette.viewport != viewport {
-                    let old = engine_ui::Palette::origin(self.palette.viewport);
-                    let new = engine_ui::Palette::origin(viewport);
-                    let position = [
-                        self.palette.pointer[0] + new[0] - old[0],
-                        self.palette.pointer[1] + new[1] - old[1],
-                    ];
-                    self.palette.move_pointer(&self.client, position, viewport);
+                    if self.controls.router.device == engine::input::gamepad::Device::Gamepad {
+                        let old = self.palette.viewport;
+                        if self.controls.keyboard.open {
+                            self.controls.keyboard.resize(&self.client, old, viewport)?;
+                        }
+                        self.palette.control_resize(&self.client, viewport)?;
+                    } else {
+                        let old = engine_ui::Palette::origin(self.palette.viewport);
+                        let new = engine_ui::Palette::origin(viewport);
+                        let position = [
+                            self.palette.pointer[0] + new[0] - old[0],
+                            self.palette.pointer[1] + new[1] - old[1],
+                        ];
+                        self.palette.move_pointer(&self.client, position, viewport);
+                    }
                 }
             }
             let current = self.client.actor.position;
@@ -1413,6 +1434,7 @@ impl App {
                 &self.client,
                 &self.palette,
                 engine_gpu::Frame {
+                    controls: &self.controls,
                     menu: &self.menu,
                     settings: &self.settings,
                     fullscreen: self
@@ -1570,6 +1592,11 @@ impl ApplicationHandler for App {
                     }
                 }
                 self.window = Some(window);
+                if !self.smoke
+                    && let Err(e) = self.controls.start()
+                {
+                    self.notice = Some(format!("Controller input unavailable: {e}"));
+                }
                 self.previous = Instant::now();
             }
             Err(e) => {
@@ -1675,6 +1702,7 @@ impl ApplicationHandler for App {
                 }
             }
             WindowEvent::Focused(false) => {
+                self.controls.suspend();
                 self.keys.clear();
                 self.capture(false);
             }
@@ -1682,6 +1710,9 @@ impl ApplicationHandler for App {
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 if let PhysicalKey::Code(code) = event.physical_key {
+                    if event.state == ElementState::Pressed && !event.repeat {
+                        self.keyboard_activity();
+                    }
                     if code == KeyCode::Space
                         && let Err(e) = self.jump_event(
                             event.state == ElementState::Pressed,
@@ -1839,6 +1870,7 @@ impl ApplicationHandler for App {
                 button,
                 ..
             } => {
+                self.keyboard_activity();
                 if self.menu.open() {
                     if button == MouseButton::Left {
                         let (p, v) = self.inventory_pointer();
@@ -1894,28 +1926,16 @@ impl ApplicationHandler for App {
                             }
                         }
                     }
-                } else if button == MouseButton::Right
-                    && engine::items::bucket::selected(&self.client)
+                } else if self.client.scene.engine.is_some()
+                    && matches!(button, MouseButton::Left | MouseButton::Right)
                 {
-                    if let Err(e) = engine::items::bucket::use_selected(
-                        &mut self.client,
-                        self.modifiers.shift_key(),
-                    ) {
+                    let result = if button == MouseButton::Right {
+                        self.world_use(self.modifiers.shift_key())
+                    } else {
+                        self.client.edit(false).map(|_| ())
+                    };
+                    if let Err(e) = result {
                         self.notice = Some(e.to_string());
-                    }
-                } else if button == MouseButton::Right
-                    && !self.modifiers.shift_key()
-                    && self.client.scene.engine.is_some()
-                    && match self.palette.open_target(&mut self.client) {
-                        Ok(opened) => opened,
-                        Err(error) => {
-                            self.notice = Some(error.to_string());
-                            true
-                        }
-                    }
-                {
-                    if self.palette.open {
-                        self.capture(false);
                     }
                 } else if button == MouseButton::Right
                     && self.client.target().ok().flatten().is_some_and(|hit| {
@@ -2113,8 +2133,11 @@ impl ApplicationHandler for App {
                 }
             }
             WindowEvent::ModifiersChanged(mods) => self.modifiers = mods.state(),
-            WindowEvent::MouseWheel { .. } if self.menu.open() => {}
+            WindowEvent::MouseWheel { .. } if self.menu.open() => {
+                self.keyboard_activity();
+            }
             WindowEvent::MouseWheel { delta, .. } => {
+                self.keyboard_activity();
                 if let Some(state) = &mut self.client.scene.engine {
                     let y = match delta {
                         winit::event::MouseScrollDelta::LineDelta(_, y) => f64::from(y),
@@ -2135,6 +2158,9 @@ impl ApplicationHandler for App {
                 }
             }
             WindowEvent::CursorMoved { position, .. } => {
+                if (position.x - self.cursor.0).abs() + (position.y - self.cursor.1).abs() > 2. {
+                    self.keyboard_activity();
+                }
                 self.cursor = (position.x, position.y);
                 if self.menu.open() {
                     let (p, v) = self.inventory_pointer();
@@ -2155,6 +2181,9 @@ impl ApplicationHandler for App {
             && !self.menu.open()
             && let DeviceEvent::MouseMotion { delta: (x, y) } = event
         {
+            if x.abs() + y.abs() > 2. {
+                self.keyboard_activity();
+            }
             let sensitivity = self.settings.sensitivity as f32 / 100.;
             self.client.look(
                 x as f32 * 0.0025 * sensitivity,
@@ -2697,6 +2726,7 @@ fn main() -> Result<()> {
     }
     let inventory_start = inventory_start || mode.as_deref() == Some("--inventory-smoke");
     let app = App {
+        controls: Default::default(),
         show_character: false,
         preview_test: None,
         preview_trace: Vec::new(),
@@ -2759,6 +2789,7 @@ fn main() -> Result<()> {
         fluid_live: None,
         lighting_live: None,
         parkour_live: None,
+        controller_live: None,
         capture_out: None,
         simulation_previous: client.actor.position,
         settings: Default::default(),
@@ -2881,7 +2912,7 @@ fn run_window(mut app: App, out: Option<PathBuf>) -> Result<()> {
             std::fs::write(
                 out.join("gpu.json"),
                 serde_json::to_vec_pretty(
-                    &serde_json::json!({"complete":app.close_completed||app.frames>=app.frame_limit,"statistics":gpu.stats,"renderer":gpu.rendering_observation(),"menu":format!("{:?}",app.menu.page),"settings":app.settings,"settings_trace":app.settings_trace,"lod_motion_trace":app.lod_motion_trace,"player_position":app.client.actor.position,"player_preview":gpu.preview_observation(),"character":gpu.character_observation(&app.client),"camera":engine_camera::pose(&app.client,app.client.eye().map(|v|v as f32))?,"preview_case":app.preview_test,"preview_trace":app.preview_trace,"saving":app.saving_observation(),"loading":app.loading_observation(),"timing":timing,"wireframe":app.wireframe,"palette_open":app.palette.open,"ui":app.palette.observation(&app.client),"window_transitions":app.window_transitions,"live_edit_test":app.edit_test,"pending_edits":app.client.pending_edits(),"inventory_save_mesh_check":app.inventory_mesh_check,"mesh_toggle_trace":app.mesh_toggle_trace,"fluids":engine::fluids::observation(&app.client),"streaming":engine_stream::observation(&app.client),"stream_trace":app.stream_trace,"profile_seconds":app.profile_seconds,"profile_elapsed_seconds":app.profile_started.map(|t|t.elapsed().as_secs_f32()),"target":app.client.target()?.map(|h|[h.position.x,h.position.y,h.position.z]),"uncapped_event_loop":true,"back_face_culling":true,"frustum_culling":true,"internal_faces_removed":true,"depth_testing":true,"dirty_chunk_rebuilds":true}),
+                    &serde_json::json!({"complete":app.close_completed||app.frames>=app.frame_limit,"statistics":gpu.stats,"renderer":gpu.rendering_observation(),"menu":format!("{:?}",app.menu.page),"settings":app.settings,"settings_trace":app.settings_trace,"lod_motion_trace":app.lod_motion_trace,"player_position":app.client.actor.position,"player_preview":gpu.preview_observation(),"character":gpu.character_observation(&app.client),"camera":engine_camera::pose(&app.client,app.client.eye().map(|v|v as f32))?,"preview_case":app.preview_test,"preview_trace":app.preview_trace,"saving":app.saving_observation(),"loading":app.loading_observation(),"timing":timing,"input":app.controls.observation(),"wireframe":app.wireframe,"palette_open":app.palette.open,"ui":app.palette.observation(&app.client),"window_transitions":app.window_transitions,"live_edit_test":app.edit_test,"pending_edits":app.client.pending_edits(),"inventory_save_mesh_check":app.inventory_mesh_check,"mesh_toggle_trace":app.mesh_toggle_trace,"fluids":engine::fluids::observation(&app.client),"streaming":engine_stream::observation(&app.client),"stream_trace":app.stream_trace,"profile_seconds":app.profile_seconds,"profile_elapsed_seconds":app.profile_started.map(|t|t.elapsed().as_secs_f32()),"target":app.client.target()?.map(|h|[h.position.x,h.position.y,h.position.z]),"uncapped_event_loop":true,"back_face_culling":true,"frustum_culling":true,"internal_faces_removed":true,"depth_testing":true,"dirty_chunk_rebuilds":true}),
                 )?,
             )?;
         }

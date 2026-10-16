@@ -7,3 +7,7 @@ pub(crate) mod settings;
 pub(crate) mod framework;
 
 pub(crate) mod stations;
+
+pub(crate) mod navigation;
+
+pub(crate) mod controller_keyboard;
