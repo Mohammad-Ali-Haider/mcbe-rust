@@ -436,7 +436,7 @@ impl Scene {
         }
     }
     pub fn motion_scene(&self, actor: &Actor) -> Result<mcbe_core::motion::SolidScene> {
-        Ok(scene_from_shapes(actor, |p| {
+        let mut scene = scene_from_shapes(actor, |p| {
             if !self.inside(p) {
                 return Ok(vec![[0., 0., 0., 1., 1., 1.]]);
             }
@@ -453,7 +453,15 @@ impl Scene {
                 Some(kind) => self.geometry.collision_for(&kind.block(p), actor),
                 None => Ok(Vec::new()),
             }
-        })?)
+        })?;
+        if let Some(state) = &self.engine {
+            crate::engine::entities::simulation::append_colliders(
+                &state.entities,
+                actor,
+                &mut scene,
+            )?;
+        }
+        Ok(scene)
     }
 }
 #[derive(Default, Clone, Copy)]
@@ -769,7 +777,8 @@ impl Client {
     }
     pub fn tick_world(&mut self) -> Result<()> {
         crate::engine::blocks::systems::simulation::tick(self)?;
-        crate::engine::fluids::transport::tick(self)
+        crate::engine::fluids::transport::tick(self)?;
+        crate::engine::entities::simulation::tick(self)
     }
     pub fn tick_motion(&mut self, input: Input) -> Result<()> {
         if self
@@ -809,6 +818,9 @@ impl Client {
             return Ok(false);
         }
         self.view.swing = 1.;
+        if !place && crate::engine::entities::interaction::attack_target(self)? {
+            return Ok(true);
+        }
         if place && let Some(result) = crate::engine::items::bucket::use_selected(self, false)? {
             return Ok(result);
         }

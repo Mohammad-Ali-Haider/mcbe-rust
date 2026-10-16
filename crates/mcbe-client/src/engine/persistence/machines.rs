@@ -120,14 +120,14 @@ pub fn restore(
 ) -> Result<()> {
     let state = client.scene.engine.as_ref().unwrap();
     let recipes = match definitions {
-        Some(d) if matches!(version, 6..=10) => d.compile(&state.registry)?,
+        Some(d) if matches!(version, 6..=11) => d.compile(&state.registry)?,
         None if version < 6 => Definitions::built_in()
             .available(&state.registry)
             .compile(&state.registry)?,
         _ => return Err("Save smelting/version mismatch".into()),
     };
     let machines = match saved {
-        Some(s) if matches!(version, 6..=10) => s.restore(&state.registry, &recipes)?,
+        Some(s) if matches!(version, 6..=11) => s.restore(&state.registry, &recipes)?,
         None if version < 6 => Machines::default(),
         _ => return Err("Save machines/version mismatch".into()),
     };
@@ -303,6 +303,7 @@ mod tests {
             serde_json::to_value(engine::document(&engine::generate(37).unwrap()).unwrap())
                 .unwrap();
         legacy["version"] = serde_json::json!(5);
+        legacy.as_object_mut().unwrap().remove("entities");
         legacy.as_object_mut().unwrap().remove("machines");
         legacy.as_object_mut().unwrap().remove("fluids");
         legacy.as_object_mut().unwrap().remove("smelting");

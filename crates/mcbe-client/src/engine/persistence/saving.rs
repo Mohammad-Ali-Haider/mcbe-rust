@@ -52,6 +52,7 @@ pub struct Event {
     pub timing: SaveTiming,
 }
 struct Stamp {
+    entities: u64,
     movement: crate::engine_player::Movement,
     instance: u64,
     revision: u64,
@@ -65,6 +66,7 @@ impl Stamp {
     fn capture(client: &Client) -> Self {
         let s = client.scene.engine.as_ref().unwrap();
         Self {
+            entities: s.entities.stats.revision,
             movement: client.movement,
             instance: s.instance,
             revision: s.revision,
@@ -77,7 +79,8 @@ impl Stamp {
     }
     fn matches(&self, client: &Client) -> bool {
         client.scene.engine.as_ref().is_some_and(|s| {
-            s.instance == self.instance
+            s.entities.stats.revision == self.entities
+                && s.instance == self.instance
                 && s.revision == self.revision
                 && s.registry_revision == self.registry
                 && s.player.changed_slots(&self.player) == 0

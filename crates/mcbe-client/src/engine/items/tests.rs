@@ -251,7 +251,7 @@ fn save_reload_and_registry_reorder_preserve_all_item_data() {
     std::fs::create_dir_all(&dir).unwrap();
     let saved = crate::engine::save(&mut c, &dir).unwrap();
     let d: serde_json::Value = serde_json::from_slice(&std::fs::read(&saved).unwrap()).unwrap();
-    assert_eq!(d["version"], 10);
+    assert_eq!(d["version"], 11);
     let mut loaded = crate::engine::load(&saved).unwrap();
     let p = &loaded.scene.engine.as_ref().unwrap().player;
     assert_eq!(p.changed_slots(&c.scene.engine.as_ref().unwrap().player), 0);
@@ -301,6 +301,7 @@ fn malformed_item_saves_reject_payload_loss_and_legacy_data() {
     }
     let mut d = doc.clone();
     d["version"] = serde_json::json!(8);
+    d.as_object_mut().unwrap().remove("entities");
     assert!(crate::engine::decode(&serde_json::to_vec(&d).unwrap(), None).is_err());
     let mut d = doc.clone();
     d["inventory"]["slots"][0]
@@ -314,6 +315,7 @@ fn malformed_item_saves_reject_payload_loss_and_legacy_data() {
     let plain = crate::engine::generate(80).unwrap();
     let mut d = serde_json::to_value(crate::engine::document(&plain).unwrap()).unwrap();
     d["version"] = serde_json::json!(8);
+    d.as_object_mut().unwrap().remove("entities");
     assert!(crate::engine::decode(&serde_json::to_vec(&d).unwrap(), None).is_ok());
 }
 #[test]

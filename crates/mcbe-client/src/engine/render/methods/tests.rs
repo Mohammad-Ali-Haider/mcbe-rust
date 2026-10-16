@@ -115,7 +115,7 @@ fn authored_materials_validate_roundtrip_and_reject_old_schema_payloads() {
     };
     crate::engine::apply_registry(&mut c, r).unwrap();
     let doc = serde_json::to_value(crate::engine::document(&c).unwrap()).unwrap();
-    assert_eq!(doc["version"], 10);
+    assert_eq!(doc["version"], 11);
     let restored = crate::engine::decode(&serde_json::to_vec(&doc).unwrap(), None).unwrap();
     assert_eq!(
         restored
@@ -130,6 +130,7 @@ fn authored_materials_validate_roundtrip_and_reject_old_schema_payloads() {
     );
     let mut old = doc.clone();
     old["version"] = serde_json::json!(9);
+    old.as_object_mut().unwrap().remove("entities");
     assert!(crate::engine::decode(&serde_json::to_vec(&old).unwrap(), None).is_err());
     for material in [
         Material {
@@ -154,6 +155,7 @@ fn authored_materials_validate_roundtrip_and_reject_old_schema_payloads() {
     let plain = crate::engine::generate(96).unwrap();
     let mut old = serde_json::to_value(crate::engine::document(&plain).unwrap()).unwrap();
     old["version"] = serde_json::json!(9);
+    old.as_object_mut().unwrap().remove("entities");
     assert!(crate::engine::decode(&serde_json::to_vec(&old).unwrap(), None).is_ok());
 }
 

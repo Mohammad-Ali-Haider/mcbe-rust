@@ -50,6 +50,7 @@ pub struct Atlas {
     icons: Vec<Sprite>,
 }
 pub struct Context<'a> {
+    pub entity_target: Option<&'a crate::engine::entities::interaction::TargetInfo>,
     pub controls: &'a crate::engine::input::runtime::Runtime,
     pub use_kind: crate::engine::input::hints::Use,
     pub ray_status: u8,
@@ -582,6 +583,25 @@ impl Atlas {
                 width / 2. - self.label_width(label) / 2.,
                 height - 36.,
                 label,
+                [1.; 4],
+            );
+        }
+        if let Some(target) = ctx.entity_target {
+            let label = format!(
+                "{}{}{}",
+                target.label,
+                if target.maximum > 0 {
+                    format!("  {} / {}", target.current, target.maximum)
+                } else {
+                    String::new()
+                },
+                if target.following { "  Following" } else { "" }
+            );
+            self.text(
+                &mut c,
+                width / 2. - self.label_width(&label) / 2.,
+                height / 2. + 16.,
+                &label,
                 [1.; 4],
             );
         }

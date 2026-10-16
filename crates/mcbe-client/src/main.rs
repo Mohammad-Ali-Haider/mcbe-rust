@@ -132,6 +132,7 @@ struct App {
     lighting_live: Option<verification::lighting::Live>,
     parkour_live: Option<verification::parkour::Live>,
     controller_live: Option<verification::controller::Live>,
+    entity_live: Option<verification::entities::Live>,
     capture_out: Option<PathBuf>,
     simulation_previous: mcbe_core::motion::Vec3,
     palette: engine_ui::Palette,
@@ -223,6 +224,7 @@ impl App {
             lighting_live: None,
             parkour_live: None,
             controller_live: None,
+            entity_live: None,
             capture_out: None,
             simulation_previous: client.actor.position,
             flight_tap: Default::default(),
@@ -361,12 +363,16 @@ impl App {
     }
     fn advance_world(&mut self, dt: f32) -> Result<()> {
         if self.startup_blocked()
+            || self.close_after_save
             || self.load_busy()
             || self.menu.open()
             || self.client.scene.engine.is_none()
         {
             self.world_accumulator = 0.;
             return Ok(());
+        }
+        if !self.smoke {
+            self.client.scene.engine.as_mut().unwrap().entities.natural = true;
         }
         self.world_accumulator += dt.min(0.25);
         while self.world_accumulator >= 0.05 {
@@ -1221,6 +1227,7 @@ impl App {
         verification::lighting::advance(self)?;
         verification::parkour::advance(self)?;
         verification::controller::advance(self)?;
+        verification::entities::advance(self)?;
         let now = Instant::now();
         let dt = (now - self.previous).as_secs_f32().min(0.25);
         self.previous = now;
@@ -1435,6 +1442,11 @@ impl App {
                 &self.palette,
                 engine_gpu::Frame {
                     controls: &self.controls,
+                    entity_blend: if self.smoke {
+                        1.
+                    } else {
+                        self.world_accumulator / 0.05
+                    },
                     menu: &self.menu,
                     settings: &self.settings,
                     fullscreen: self
@@ -2790,6 +2802,7 @@ fn main() -> Result<()> {
         lighting_live: None,
         parkour_live: None,
         controller_live: None,
+        entity_live: None,
         capture_out: None,
         simulation_previous: client.actor.position,
         settings: Default::default(),
@@ -2912,7 +2925,7 @@ fn run_window(mut app: App, out: Option<PathBuf>) -> Result<()> {
             std::fs::write(
                 out.join("gpu.json"),
                 serde_json::to_vec_pretty(
-                    &serde_json::json!({"complete":app.close_completed||app.frames>=app.frame_limit,"statistics":gpu.stats,"renderer":gpu.rendering_observation(),"menu":format!("{:?}",app.menu.page),"settings":app.settings,"settings_trace":app.settings_trace,"lod_motion_trace":app.lod_motion_trace,"player_position":app.client.actor.position,"player_preview":gpu.preview_observation(),"character":gpu.character_observation(&app.client),"camera":engine_camera::pose(&app.client,app.client.eye().map(|v|v as f32))?,"preview_case":app.preview_test,"preview_trace":app.preview_trace,"saving":app.saving_observation(),"loading":app.loading_observation(),"timing":timing,"input":app.controls.observation(),"wireframe":app.wireframe,"palette_open":app.palette.open,"ui":app.palette.observation(&app.client),"window_transitions":app.window_transitions,"live_edit_test":app.edit_test,"pending_edits":app.client.pending_edits(),"inventory_save_mesh_check":app.inventory_mesh_check,"mesh_toggle_trace":app.mesh_toggle_trace,"fluids":engine::fluids::observation(&app.client),"streaming":engine_stream::observation(&app.client),"stream_trace":app.stream_trace,"profile_seconds":app.profile_seconds,"profile_elapsed_seconds":app.profile_started.map(|t|t.elapsed().as_secs_f32()),"target":app.client.target()?.map(|h|[h.position.x,h.position.y,h.position.z]),"uncapped_event_loop":true,"back_face_culling":true,"frustum_culling":true,"internal_faces_removed":true,"depth_testing":true,"dirty_chunk_rebuilds":true}),
+                    &serde_json::json!({"complete":app.close_completed||app.frames>=app.frame_limit,"statistics":gpu.stats,"renderer":gpu.rendering_observation(),"menu":format!("{:?}",app.menu.page),"settings":app.settings,"settings_trace":app.settings_trace,"lod_motion_trace":app.lod_motion_trace,"player_position":app.client.actor.position,"player_preview":gpu.preview_observation(),"character":gpu.character_observation(&app.client),"camera":engine_camera::pose(&app.client,app.client.eye().map(|v|v as f32))?,"preview_case":app.preview_test,"preview_trace":app.preview_trace,"saving":app.saving_observation(),"loading":app.loading_observation(),"timing":timing,"entities":gpu.entities_observation(&app.client),"input":app.controls.observation(),"wireframe":app.wireframe,"palette_open":app.palette.open,"ui":app.palette.observation(&app.client),"window_transitions":app.window_transitions,"live_edit_test":app.edit_test,"pending_edits":app.client.pending_edits(),"inventory_save_mesh_check":app.inventory_mesh_check,"mesh_toggle_trace":app.mesh_toggle_trace,"fluids":engine::fluids::observation(&app.client),"streaming":engine_stream::observation(&app.client),"stream_trace":app.stream_trace,"profile_seconds":app.profile_seconds,"profile_elapsed_seconds":app.profile_started.map(|t|t.elapsed().as_secs_f32()),"target":app.client.target()?.map(|h|[h.position.x,h.position.y,h.position.z]),"uncapped_event_loop":true,"back_face_culling":true,"frustum_culling":true,"internal_faces_removed":true,"depth_testing":true,"dirty_chunk_rebuilds":true}),
                 )?,
             )?;
         }

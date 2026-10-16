@@ -61,7 +61,9 @@ fn ray_noise(p:vec2<u32>)->f32{var n=p.x*1973u+p.y*9277u+8917u;n=(n^(n>>16u))*22
  let p_world=world(pixel,z);let p=p_world-scene.anchor.xyz;let weight=1.-smoothstep(scene.center.w*0.65,scene.center.w*0.9,distance(p,scene.center.xyz));if weight<=0.{return shade_deferred(position);}
  var fallback=vec4(0.);if weight<1.{fallback=shade_deferred(position);}
  let base=textureLoad(albedo,pixel,0).rgb;let data=textureLoad(normals,pixel,0);let n=normalize(data.xyz);let material=materials.rows[min(u32(round(data.w)),255u)];let view=normalize(frame.eye.xyz-p_world);
- let direct=brdf(base,n,view,frame.sun.xyz,material.x,material.y)*vec3(1.,0.94,0.84)*max(dot(n,frame.sun.xyz),0.)*3.2*sun_visibility(p,n);
+ // Dynamic actor parts cast conservative raster sun shadows beside hardware world queries.
+ var shadow=sun_visibility(p,n);if frame.fog.w>0.5{shadow=min(shadow,visibility(p_world,n));}
+ let direct=brdf(base,n,view,frame.sun.xyz,material.x,material.y)*vec3(1.,0.94,0.84)*max(dot(n,frame.sun.xyz),0.)*3.2*shadow;
  var ao=1.;var indirect=vec3(0.);let samples=u32(scene.options.z);
  if frame.parameters.y>0.5 || scene.options.y>0.5 {
   let tangent=normalize(cross(select(vec3(0.,1.,0.),vec3(1.,0.,0.),abs(n.y)>0.9),n));let bitangent=cross(n,tangent);let rotation=ray_noise(vec2<u32>(pixel))*6.2831853;var occlusion=0.;

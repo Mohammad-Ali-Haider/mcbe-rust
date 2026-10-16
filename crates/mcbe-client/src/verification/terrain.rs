@@ -73,7 +73,7 @@ pub fn prepare(app: &mut App, out: &Path, case: &str) -> Result<()> {
         let bytes = std::fs::read(&path)?;
         let value: serde_json::Value = serde_json::from_slice(&bytes)?;
         require(
-            value["version"] == 10 && value["generator"]["version"] == 2,
+            value["version"] == crate::engine::SAVE_VERSION && value["generator"]["version"] == 2,
             "Vertical save schema differs",
         )?;
         app.client.set_spawn(initial)?;

@@ -143,6 +143,14 @@ impl Options {
                 definitions.available(&state.registry)
             };
             state.smelting = definitions.compile(&state.registry)?;
+            let definitions =
+                crate::engine::entities::definition::Definitions::read_home(&self.home)?;
+            let definitions = if self.home.join("content/base/entities.json").is_file() {
+                definitions
+            } else {
+                definitions.available(&state.registry)
+            };
+            state.entities.library = Arc::new(definitions.compile(&state.registry)?);
         }
         client.scene.engine.as_mut().unwrap().ui = std::sync::Arc::new(
             crate::engine::ui::framework::Library::read_home(&self.home)?,

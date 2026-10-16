@@ -25,7 +25,7 @@ def main():
     table,tg=launch('table','--engine-table-smoke'); assert checks['table']['report']['furnace_recipe_taken'] and checks['table']['report']['close_returns_inputs']
     furnace,fg=launch('furnace','--engine-furnace-smoke'); report=checks['furnace']['report']
     assert report['runtime_ui_open_updates'] and report['timer_preserves_terrain_revision'] and report['output_withdrawal']
-    saved=read(furnace/'processing.blockworld'); assert saved['version']==10
+    saved=read(furnace/'processing.blockworld'); assert saved['version']==11
     machine=saved['machines']['furnaces'][0]; assert machine['cook_ms']==2500 and machine['burn_ms']==2500
     assert machine['slots']==[dict(block='sand',count=2),dict(block='oak_planks',count=1),dict(block='glass',count=1)]
     widgets=lambda g:{w['id']:w for w in g['ui']['widgets']}

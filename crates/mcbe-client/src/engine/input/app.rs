@@ -76,6 +76,9 @@ impl App {
         if self.client.view.is_free() {
             return Ok(());
         }
+        if !shift && engine::entities::interaction::use_target(&mut self.client)? {
+            return Ok(());
+        }
         if engine::items::bucket::selected(&self.client) {
             engine::items::bucket::use_selected(&mut self.client, shift)?;
         } else if !shift && self.palette.open_target(&mut self.client)? {

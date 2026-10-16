@@ -13,6 +13,7 @@ pub enum Use {
     Place,
     Interact,
     Bucket,
+    Entity,
 }
 fn h(keyboard: &'static str, pad: &'static str, role: &'static str, label: &'static str) -> Hint {
     Hint {
@@ -117,7 +118,16 @@ pub fn rows(
         ]
     } else {
         vec![
-            h("LMB", "RT", "pad_rt", "Remove"),
+            h(
+                "LMB",
+                "RT",
+                "pad_rt",
+                if use_kind == Use::Entity {
+                    "Hit"
+                } else {
+                    "Remove"
+                },
+            ),
             h(
                 "RMB",
                 "LT",
@@ -126,6 +136,7 @@ pub fn rows(
                     Use::Place => "Place",
                     Use::Interact => "Open",
                     Use::Bucket => "Collect / pour",
+                    Use::Entity => "Follow / stay",
                 },
             ),
             h("E", "Y", "pad_y", "Inventory"),

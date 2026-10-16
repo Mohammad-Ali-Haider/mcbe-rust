@@ -53,6 +53,14 @@ pub fn place(client: &mut Client, hit: &Hit) -> Result<bool> {
     if collision::intersects_actor(&state.geometry, id, p, &client.actor) {
         return Ok(false);
     }
+    for entity in state.entities.records.values() {
+        if let Some(physics) = &entity.physics {
+            let actor = physics.actor(entity.transform.position)?;
+            if collision::intersects_actor(&state.geometry, id, p, &actor) {
+                return Ok(false);
+            }
+        }
+    }
     client.scene.change_engine(p, Some(id))?;
     client.changed += 1;
     Ok(true)

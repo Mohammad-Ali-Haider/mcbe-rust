@@ -42,6 +42,7 @@ struct Camera {
 }
 #[derive(PartialEq, Eq)]
 struct UiKey {
+    entity: Option<(crate::engine::entities::components::Id, u16, u16, bool)>,
     controls_revision: u64,
     keyboard_revision: u64,
     use_kind: super::super::input::hints::Use,
@@ -150,6 +151,7 @@ pub struct Statistics {
 }
 pub struct Frame<'a> {
     pub controls: &'a crate::engine::input::runtime::Runtime,
+    pub entity_blend: f32,
     pub fullscreen: bool,
     pub menu: &'a crate::engine_settings::Menu,
     pub settings: &'a crate::engine_settings::Settings,
@@ -175,6 +177,7 @@ pub struct Renderer {
     ray_requested: bool,
     deferred: Option<super::methods::deferred::Renderer>,
     character: super::character::Renderer,
+    entities: crate::engine::entities::mesh::Renderer,
     distant: crate::engine_distance::Distant,
     previous_lod_pipeline: wgpu::RenderPipeline,
     previous_water_pipeline: wgpu::RenderPipeline,
@@ -537,6 +540,11 @@ impl Renderer {
             ray: None,
             ray_requested: false,
             deferred: None,
+            entities: crate::engine::entities::mesh::Renderer::new(
+                &device,
+                config.format,
+                &world_pipeline.get_bind_group_layout(0),
+            ),
             character,
             distant: Default::default(),
             previous_lod_pipeline,
@@ -630,6 +638,10 @@ impl Renderer {
     }
     pub fn texture_pending(&self) -> bool {
         self.uploading.is_some()
+    }
+    pub fn entities_observation(&self, client: &Client) -> serde_json::Value {
+        self.entities
+            .observation(&client.scene.engine.as_ref().unwrap().entities)
     }
     pub fn character_observation(&self, client: &Client) -> serde_json::Value {
         let mut observation = self.character.observation(client);
@@ -1247,7 +1259,7 @@ impl Renderer {
                     uniform.settings[1],
                     uniform.settings[2],
                     uniform.settings[3],
-                    0.,
+                    f32::from(!state.entities.records.is_empty()),
                 ],
                 uniform.medium,
             );
@@ -1329,7 +1341,10 @@ impl Renderer {
         } else {
             2
         };
-        let use_kind = if crate::engine::items::bucket::selected(client) {
+        let entity_target = crate::engine::entities::interaction::label(client)?;
+        let use_kind = if entity_target.is_some() {
+            super::super::input::hints::Use::Entity
+        } else if crate::engine::items::bucket::selected(client) {
             super::super::input::hints::Use::Bucket
         } else if client.target()?.is_some_and(|h| {
             state
@@ -1342,6 +1357,9 @@ impl Renderer {
             super::super::input::hints::Use::Place
         };
         let key = UiKey {
+            entity: entity_target
+                .as_ref()
+                .map(|t| (t.id, t.current, t.maximum, t.following)),
             controls_revision: frame.controls.router.revision,
             keyboard_revision: frame.controls.keyboard.revision,
             use_kind,
@@ -1382,7 +1400,7 @@ impl Renderer {
         };
         if self.ui_key.as_ref() != Some(&key) {
             let label = format!(
-                "{:0.0} FPS | {}x{} | chunks {}/{} | {} quads | {} merged | F8 {} | F2 {} | jobs {} pending {}",
+                "{:0.0} FPS | {}x{} | chunks {}/{} | {} quads | {} merged | F8 {} | F2 {} | jobs {} pending {} | mobs {} active {}",
                 if self.stats.last_frame_ms > 0. {
                     1000. / self.stats.last_frame_ms
                 } else {
@@ -1405,13 +1423,16 @@ impl Renderer {
                     "SYNC"
                 },
                 self.stats.mesh_jobs_in_flight,
-                self.stats.mesh_pending_chunks
+                self.stats.mesh_pending_chunks,
+                state.entities.records.len(),
+                state.entities.stats.active
             );
             let composition = self.atlas.as_ref().unwrap().compose(
                 client,
                 palette,
                 Context {
                     controls: frame.controls,
+                    entity_target: entity_target.as_ref(),
                     use_kind,
                     ray_status,
                     menu: frame.menu,
@@ -1495,6 +1516,23 @@ impl Renderer {
                     || near_body,
             },
         );
+        self.entities.prepare(
+            &self.queue,
+            client,
+            crate::engine::entities::mesh::Frame {
+                matrix,
+                eye: frame.eye,
+                blend: frame.entity_blend,
+                selected: entity_target.as_ref().map(|t| t.id),
+                hidden: frame.startup,
+            },
+        );
+        if let Some(method) = &self.deferred {
+            self.entities.ensure_shadow(
+                &self.device,
+                &method.shadow_pipeline.get_bind_group_layout(1),
+            );
+        }
         let view = surface.texture.create_view(&Default::default());
         let mut encoder = self
             .device
@@ -1517,10 +1555,17 @@ impl Renderer {
                         self.stats.shadow_draws += 1;
                     }
                 }
+                self.entities.draw_shadow(
+                    &mut pass,
+                    self.world_bind.as_ref().unwrap(),
+                    &method.frame_bind,
+                );
             }
             {
                 let mut pass = method.begin_geometry(&mut encoder);
                 self.draw_opaque(&mut pass, keys, &method.geometry, &method.previous);
+                self.entities
+                    .draw(&mut pass, self.world_bind.as_ref().unwrap(), true);
             }
             method.light(
                 &mut encoder,
@@ -1573,6 +1618,10 @@ impl Renderer {
                     &self.previous_lod_pipeline,
                 );
             }
+            if self.deferred.is_none() {
+                self.entities
+                    .draw(&mut pass, self.world_bind.as_ref().unwrap(), false);
+            }
             self.character.draw(
                 &mut pass,
                 self.ui_bind.as_ref().unwrap(),
@@ -1601,6 +1650,12 @@ impl Renderer {
                 pass.draw_indexed(0..self.transparency.count, 0, 0..1);
             }
         }
+        self.entities.stats.draws += usize::from(self.entities.stats.visible_parts > 0);
+        self.entities.stats.shadow_draws += usize::from(
+            self.deferred.is_some()
+                && frame.settings.rendering.shadows
+                && !self.entities.instances.is_empty(),
+        );
         if self.character.first
             && (!self.character.hand.is_empty() || !self.character.item.is_empty())
         {

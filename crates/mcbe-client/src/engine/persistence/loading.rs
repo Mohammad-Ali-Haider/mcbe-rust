@@ -28,6 +28,7 @@ pub enum Destination {
     Overlook,
 }
 struct Guard {
+    entities: u64,
     movement: crate::engine_player::Movement,
     instance: u64,
     registry: u64,
@@ -39,6 +40,7 @@ impl Guard {
     fn capture(client: &Client) -> Result<Self> {
         let s = client.scene.engine.as_ref().ok_or("Engine world missing")?;
         Ok(Self {
+            entities: s.entities.stats.revision,
             movement: client.movement,
             instance: s.instance,
             registry: s.registry_revision,
@@ -54,7 +56,8 @@ impl Guard {
                 && s.registry_revision == self.registry
                 && s.edit_revision == self.edits
                 && (!reload
-                    || (s.machines.revision == self.machines
+                    || (s.entities.stats.revision == self.entities
+                        && s.machines.revision == self.machines
                         && s.player.changed_slots(&self.player) == 0
                         && s.player.active == self.player.active))
         })
