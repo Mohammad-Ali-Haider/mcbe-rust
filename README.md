@@ -61,13 +61,13 @@ cargo build --release --locked
 
 Start with [Architecture and source map](docs/ARCHITECTURE.md), then read
 [Edit, run and commit](docs/DEVELOPMENT.md), [Blocks](docs/BLOCKS.md),
-[Controls](docs/CONTROLS.md), [UI authoring](docs/UI.md), [Stations](docs/STATIONS.md), [Cameras and skins](docs/CAMERA.md), [Terrain](docs/TERRAIN.md), [Water and swimming](docs/FLUIDS.md), [Items and buckets](docs/ITEMS.md) and [Milestone history](docs/HISTORY.md).
+[Controls](docs/CONTROLS.md), [UI authoring](docs/UI.md), [Stations](docs/STATIONS.md), [Cameras and skins](docs/CAMERA.md), [Terrain](docs/TERRAIN.md), [Water and swimming](docs/FLUIDS.md), [Items and buckets](docs/ITEMS.md), [Rendering](docs/RENDERING.md) and [Milestone history](docs/HISTORY.md).
 
 Walking, sprinting, sneaking, flight/noclip, inventory/crafting, JSON models,
 slab/stair states, glass, unified component packs, optional signal behaviors,
 crafting tables, persistent furnaces, F5 perspectives/free camera, personal skins,
 first-person hands/held geometry, climate biomes/caves/ravines/oceans/rivers,
-dynamic vertical chunks, conservative water flow/currents/swimming and measured buckets, settings, own PNG materials, background saves/loading
+dynamic vertical chunks, conservative water flow/currents/swimming and measured buckets, settings, own PNG materials, background saves/loading, optional deferred sun/material lighting
 and 2–255 chunk views are implemented. Nearby blocks retain full collision and
 detail within 8 chunks. Distant hills/trees use stitched, progressively blended
 geometry. Caves, transparent buildings and edits to distant generated trees are
