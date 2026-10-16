@@ -82,3 +82,8 @@ by Git. No launcher scripts or copied checkpoint packages belong in this project
 
 The former `Blockwork` project was renamed in place. Retained MCBE research is
 under ignored `.local/legacy-research/`; there is no separate working project.
+
+Ray-traced lighting is available through Escape -> Settings -> Rendering on
+supported DX12 hardware. Forward remains the default for maximum speed.
+Reflection/indirect switches and quality budgets are documented in
+[Rendering](docs/RENDERING.md); unsupported hardware uses Deferred lighting.
