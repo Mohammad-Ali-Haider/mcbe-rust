@@ -5,8 +5,8 @@ active project; development versions now live in Git history.
 
 ## Open and run manually
 
-Open `D:\Recontruction Projects\Minecraft Rust Edition` with VS Code → File → Open Folder.
-Open Terminal → New Terminal, then run:
+Open `D:\Recontruction Projects\Minecraft Rust Edition` with VS Code Ã¢â€ â€™ File Ã¢â€ â€™ Open Folder.
+Open Terminal Ã¢â€ â€™ New Terminal, then run:
 
 ```powershell
 cargo run --release
@@ -18,7 +18,7 @@ save, it creates a generated world. The window opens maximized; F11 toggles
 borderless fullscreen. Close the game before compiling another build.
 
 Plain `cargo run` also starts the game, using a slower debug build. Both commands
-use this folder’s assets and continue the latest save. No launcher script is needed.
+use this folderÃ¢â‚¬â„¢s assets and continue the latest save. No launcher script is needed.
 
 The complete explicit command is:
 
@@ -61,21 +61,21 @@ cargo build --release --locked
 
 Start with [Architecture and source map](docs/ARCHITECTURE.md), then read
 [Edit, run and commit](docs/DEVELOPMENT.md), [Blocks](docs/BLOCKS.md),
-[Controls](docs/CONTROLS.md), [UI authoring](docs/UI.md), [Stations](docs/STATIONS.md), [Cameras and skins](docs/CAMERA.md), [Terrain](docs/TERRAIN.md), [Water and swimming](docs/FLUIDS.md) and [Milestone history](docs/HISTORY.md).
+[Controls](docs/CONTROLS.md), [UI authoring](docs/UI.md), [Stations](docs/STATIONS.md), [Cameras and skins](docs/CAMERA.md), [Terrain](docs/TERRAIN.md), [Water and swimming](docs/FLUIDS.md), [Items and buckets](docs/ITEMS.md) and [Milestone history](docs/HISTORY.md).
 
 Walking, sprinting, sneaking, flight/noclip, inventory/crafting, JSON models,
 slab/stair states, glass, unified component packs, optional signal behaviors,
 crafting tables, persistent furnaces, F5 perspectives/free camera, personal skins,
 first-person hands/held geometry, climate biomes/caves/ravines/oceans/rivers,
-dynamic vertical chunks, conservative water flow/currents/swimming, settings, own PNG materials, background saves/loading
-and 2–255 chunk views are implemented. Nearby blocks retain full collision and
+dynamic vertical chunks, conservative water flow/currents/swimming and measured buckets, settings, own PNG materials, background saves/loading
+and 2Ã¢â‚¬â€œ255 chunk views are implemented. Nearby blocks retain full collision and
 detail within 8 chunks. Distant hills/trees use stitched, progressively blended
 geometry. Caves, transparent buildings and edits to distant generated trees are
 not fully represented by that surface approximation. Maximum-range LOD uses
 more memory than the earlier flat approximation.
 
 Run `cargo new-world` to try the new terrain. Continuing an older save keeps its
-original generator. Water flow and swimming are implemented; bucket items remain in development.
+original generator. Water flow, swimming and persistent measured buckets are implemented.
 
 Runtime worlds, preferences, build output and verification captures are ignored
 by Git. No launcher scripts or copied checkpoint packages belong in this project.
