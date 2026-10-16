@@ -2,6 +2,7 @@
 members = ["crates/mcbe-core", "crates/mcbe-cli", "crates/mcbe-client"]
 default-members = ["crates/mcbe-client"]
 resolver = "3"
+exclude = ["vendor/wgpu-hal"]
 
 [workspace.package]
 version = "0.1.0"
@@ -13,3 +14,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["preserve_order"] }
 sha2 = "0.10"
 flate2 = "1.1"
+
+[patch.crates-io]
+# wgpu 25 incorrectly excludes DXR 1.2 GPUs; see vendor/wgpu-hal/PATCH.md.
+wgpu-hal = { path = "vendor/wgpu-hal" }
