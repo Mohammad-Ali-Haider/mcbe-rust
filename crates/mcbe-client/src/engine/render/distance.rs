@@ -36,6 +36,14 @@ struct Key {
     center: [i32; 2],
     radius: i32,
 }
+impl Key {
+    fn same_view(self, other: Self) -> bool {
+        self.instance == other.instance
+            && self.registry == other.registry
+            && self.center == other.center
+            && self.radius == other.radius
+    }
+}
 #[derive(Clone)]
 struct Request {
     solid_surface: bool,
@@ -639,6 +647,7 @@ impl Drop for Worker {
 }
 #[derive(Default)]
 pub struct Distant {
+    last_started: Option<Instant>,
     worker: Option<Worker>,
     wanted: Option<Key>,
     adopted: Option<Key>,
@@ -730,30 +739,35 @@ impl Distant {
                 radius: s.generator.config.radius,
             });
         if self.wanted != key {
+            let edit_only = matches!((self.wanted,key),(Some(a),Some(b)) if a.same_view(b));
             self.wanted = key;
-            self.epoch += 1;
-            if let Some(w) = &self.worker {
-                w.token.store(self.epoch, Ordering::Release);
-            }
-            let retain = match (self.adopted, key) {
-                (Some(old), Some(new)) => {
-                    old.instance == new.instance
-                        && old.registry == new.registry
-                        && (0..2).all(|a| (old.center[a] - new.center[a]).abs() <= 1)
+            if !edit_only {
+                self.epoch += 1;
+                if let Some(w) = &self.worker {
+                    w.token.store(self.epoch, Ordering::Release);
                 }
-                _ => false,
-            };
-            if retain {
-                self.retained_updates += 1;
-            } else {
-                self.clear();
+                let retain = match (self.adopted, key) {
+                    (Some(old), Some(new)) => {
+                        old.instance == new.instance
+                            && old.registry == new.registry
+                            && (0..2).all(|a| (old.center[a] - new.center[a]).abs() <= 1)
+                    }
+                    _ => false,
+                };
+                if retain {
+                    self.retained_updates += 1;
+                } else {
+                    self.clear();
+                }
             }
         }
         if let Some(worker) = &self.worker {
             match worker.receiver.try_recv() {
                 Ok(done) => {
                     self.busy = false;
-                    if done.epoch == self.epoch && Some(done.key) == self.wanted {
+                    if done.epoch == self.epoch
+                        && self.wanted.is_some_and(|key| done.key.same_view(key))
+                    {
                         if let Some(mesh) =
                             done.mesh.map_err(|e| format!("Distant terrain: {e}"))?
                         {
@@ -801,6 +815,10 @@ impl Distant {
         if let Some(key) = key
             && !self.busy
             && self.adopted != self.wanted
+            && (self.adopted.is_none_or(|old| !old.same_view(key))
+                || self
+                    .last_started
+                    .is_none_or(|t| t.elapsed() >= Duration::from_millis(500)))
         {
             if self.worker.is_none() {
                 self.worker = Some(Worker::new()?);
@@ -852,6 +870,7 @@ impl Distant {
                     .map_or_else(|| state.registry.find("moss"), |t| Ok(t.leaves))?,
             }))?;
             self.busy = true;
+            self.last_started = Some(Instant::now());
             self.jobs += 1;
         }
         Ok(key.is_none() || self.adopted == key && self.fraction() >= 1.)

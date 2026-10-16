@@ -8,3 +8,5 @@ pub(crate) mod texture;
 pub(crate) mod transparency;
 
 pub(crate) mod character;
+
+pub(crate) mod fluid_mesh;

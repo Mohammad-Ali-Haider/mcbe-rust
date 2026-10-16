@@ -514,6 +514,9 @@ impl Atlas {
         let mode = match client.movement.mode {
             crate::engine_player::Mode::Noclip => "NOCLIP | N COLLISION",
             crate::engine_player::Mode::Flying => "FLYING | SPACE UP | SHIFT DOWN",
+            crate::engine_player::Mode::Walking if client.movement.swimming => {
+                "SWIMMING | SPACE UP | SHIFT DIVE | CTRL FAST"
+            }
             crate::engine_player::Mode::Walking if client.movement.crouched => "SNEAKING",
             _ => "",
         };

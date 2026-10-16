@@ -130,6 +130,7 @@ pub fn insert(scene: &mut Scene, key: Key, mut chunk: Arc<Chunk>, ms: f64) {
     s.residents.entry([key[0], key[2]]).or_default();
     s.generated += 1;
     s.generation_ms += ms;
+    crate::engine::fluids::hydrate_chunk(scene.engine.as_mut().unwrap(), key);
     dirty(scene, key);
 }
 pub fn recenter(scene: &mut Scene, position: Vec3, force: bool) {
@@ -153,6 +154,7 @@ pub fn recenter(scene: &mut Scene, position: Vec3, force: bool) {
         .collect::<Vec<_>>();
     for k in &removed {
         state.blocks.remove_chunk(*k);
+        state.fluids.evict(*k);
         state.simulation.evict_chunk(&state.registry, *k);
         s.evicted += 1;
     }

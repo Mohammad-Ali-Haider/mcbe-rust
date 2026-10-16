@@ -1,4 +1,4 @@
-struct Camera{matrix:mat4x4<f32>,eye:vec4<f32>,settings:vec4<f32>,focus:vec4<f32>,lod:vec4<f32>,lod_old:vec4<f32>};
+struct Camera{matrix:mat4x4<f32>,eye:vec4<f32>,settings:vec4<f32>,focus:vec4<f32>,lod:vec4<f32>,lod_old:vec4<f32>,medium:vec4<f32>};
 @group(0) @binding(0) var terrain:texture_2d_array<f32>;
 @group(0) @binding(1) var terrain_sampler:sampler;
 @group(0) @binding(2) var<uniform> camera:Camera;
@@ -60,7 +60,7 @@ fn noise(p:vec2<u32>,salt:u32)->f32 {
             else if min(tile.x,tile.y)<0.018 || max(tile.x,tile.y)>0.982 {rgb=vec3(0.12);}
         }
     }
-    let fog_distance=select(distance(i.world,camera.eye.xyz),distance(i.world.xz,camera.eye.xz),camera.settings.w>0.5);
-    let fog=clamp((fog_distance-camera.settings.y)/(camera.settings.z-camera.settings.y),0.,1.);rgb=mix(rgb,vec3(0.62,0.77,0.89),fog);
+    let fog_distance=select(distance(i.world,camera.eye.xyz),distance(i.world.xz,camera.eye.xz),camera.settings.w>0.5 && camera.medium.w<0.5);
+    let fog=clamp((fog_distance-camera.settings.y)/(camera.settings.z-camera.settings.y),0.,1.);rgb=mix(rgb,select(vec3(0.62,0.77,0.89),camera.medium.xyz,camera.medium.w>0.5),fog);
     return vec4(rgb,select(1.,texel.a,blended));
 }

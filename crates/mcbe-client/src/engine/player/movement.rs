@@ -48,6 +48,8 @@ pub enum Mode {
 pub struct Movement {
     pub mode: Mode,
     pub crouched: bool,
+    #[serde(default)]
+    pub swimming: bool,
 }
 impl Movement {
     pub fn body(self) -> Body {
@@ -79,6 +81,7 @@ pub fn mode(client: &mut Client, next: Mode) -> Result<()> {
         return Err("Move into clear space before disabling noclip".into());
     }
     client.movement.mode = next;
+    client.movement.swimming = false;
     client.actor.velocity = Vec3::default();
     client.actor.on_ground = false;
     Ok(())
@@ -96,6 +99,14 @@ fn supported(scene: &SolidScene, p: Vec3, body: Body) -> bool {
 }
 pub fn tick(client: &mut Client, input: Input) -> Result<()> {
     client.sync_region()?;
+    client.movement.swimming = false;
+    if client.movement.mode == Mode::Walking {
+        let environment = super::locomotion::Environment::sample(client);
+        if super::locomotion::apply(client, input, &environment)? {
+            client.sync_region()?;
+            return Ok(());
+        }
+    }
     if client.movement.mode == Mode::Walking {
         if input.sneak {
             client.movement.crouched = true;

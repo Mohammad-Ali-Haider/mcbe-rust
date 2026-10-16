@@ -128,11 +128,11 @@ pub fn verify(app: &mut App, out: &Path) -> Result<()> {
     let second_bytes = fs::read(&second)?;
     let document: Value = serde_json::from_slice(&second_bytes)?;
     require(
-        document["version"] == 7
+        document["version"] == 8
             && document.get("cells").is_none()
             && document["edits"].as_array().is_some_and(|e| e.len() == 3)
             && second_bytes.len() < 16_384,
-        "Save is not a sparse version 7 document",
+        "Save is not a sparse version 8 document",
     )?;
     for _ in 0..3 {
         app.engine_key(KeyCode::F10)?;
@@ -208,7 +208,7 @@ pub fn verify(app: &mut App, out: &Path) -> Result<()> {
         fs::read(&first)? == first_bytes && fs::read(&second)? == second_bytes,
         "Earlier saves changed",
     )?;
-    let report = json!({"complete":true,"checkpoint":engine::CHECKPOINT,"generator_version":1,"save_version":7,"saved_world":second,"saved_sha256":format!("{:x}",Sha256::digest(&second_bytes)),"saved_bytes":second_bytes.len(),"sparse_edits":3,"evicted_edits_saved":true,"added_removed_replaced_returned":true,"inventory_preserved":true,"previous_saves_unchanged":true,"foundation_protected":true,"background_crossing_verified":true,"player_input_crossing_verified":true,"streaming_not_pending_edits":true,"resident_column_budget":49,"dirty_key_budget":196,"trace":trace,"final_stream":stream::observation(&app.client),"scope":"Generator version/seed plus sparse edits; bounded resident columns, F10 travel, unloaded-edit save, F9 restore, protected foundation and worker-driven crossing. Native scripted camera tour and GPU cache bounds checked separately; live collision/input tests retained."});
+    let report = json!({"complete":true,"checkpoint":engine::CHECKPOINT,"generator_version":1,"save_version":8,"saved_world":second,"saved_sha256":format!("{:x}",Sha256::digest(&second_bytes)),"saved_bytes":second_bytes.len(),"sparse_edits":3,"evicted_edits_saved":true,"added_removed_replaced_returned":true,"inventory_preserved":true,"previous_saves_unchanged":true,"foundation_protected":true,"background_crossing_verified":true,"player_input_crossing_verified":true,"streaming_not_pending_edits":true,"resident_column_budget":49,"dirty_key_budget":196,"trace":trace,"final_stream":stream::observation(&app.client),"scope":"Generator version/seed plus sparse edits; bounded resident columns, F10 travel, unloaded-edit save, F9 restore, protected foundation and worker-driven crossing. Native scripted camera tour and GPU cache bounds checked separately; live collision/input tests retained."});
     fs::write(out.join("stream.json"), serde_json::to_vec_pretty(&report)?)?;
     app.frames = 0;
     println!("Streamed engine checks passed");

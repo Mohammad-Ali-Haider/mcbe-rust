@@ -598,6 +598,7 @@ impl Service {
                                 &state.registry,
                                 state.blocks.iter().map(|(p, id)| (p, *id)),
                             );
+                            state.fluids.rescan(state.blocks.chunk_keys());
                             client.actor = Actor::new(region.position, client.movement.body())?;
                             client.spawn = region.position;
                             client.yaw = region.yaw;

@@ -242,6 +242,7 @@ impl Scene {
         if id.is_some_and(|id| usize::from(id) >= state.registry.blocks.len()) {
             return Err("Unknown engine block".into());
         }
+        let old = state.blocks.get(&p).copied();
         let keeps_furnace = id.is_some_and(|i| {
             state.registry.get(i).interaction
                 == Some(crate::engine::blocks::components::Interaction::Furnace)
@@ -289,6 +290,7 @@ impl Scene {
                 }
             }
         }
+        crate::engine::fluids::changed(state, p, old, id);
         state.simulation.changed(&state.registry, p, id);
         state.edit_revision = state.edit_revision.wrapping_add(1);
         state.revision = state.revision.wrapping_add(1);
@@ -754,6 +756,14 @@ impl Client {
         [(s * q) as f64, p as f64, (c * q) as f64]
     }
     pub fn tick(&mut self, input: Input) -> Result<()> {
+        self.tick_motion(input)?;
+        self.tick_world()
+    }
+    pub fn tick_world(&mut self) -> Result<()> {
+        crate::engine::blocks::systems::simulation::tick(self)?;
+        crate::engine::fluids::transport::tick(self)
+    }
+    pub fn tick_motion(&mut self, input: Input) -> Result<()> {
         if self
             .scene
             .engine
@@ -781,7 +791,7 @@ impl Client {
         let p = self.actor.position;
         let distance = ((p.x - before.x).powi(2) + (p.z - before.z).powi(2)).sqrt();
         self.view.advance_animation(distance, 0.05);
-        crate::engine::blocks::systems::simulation::tick(self)
+        Ok(())
     }
     pub fn target(&self) -> Result<Option<Hit>> {
         self.scene.target(self.eye(), self.direction())

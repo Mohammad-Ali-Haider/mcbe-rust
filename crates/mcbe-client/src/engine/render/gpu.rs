@@ -17,6 +17,7 @@ use std::{
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 struct Mesh {
+    back_faces: usize,
     opaque_vertices: u32,
     transparent: Vec<Vertex>,
     buffer: Option<wgpu::Buffer>,
@@ -35,6 +36,7 @@ struct Camera {
     focus: [f32; 4],
     lod: [f32; 4],
     lod_old: [f32; 4],
+    medium: [f32; 4],
 }
 #[derive(PartialEq, Eq)]
 struct UiKey {
@@ -111,6 +113,7 @@ pub struct Statistics {
     pub submitted_vertices: usize,
     pub greedy_meshing: bool,
     pub mesh_quads: usize,
+    pub two_sided_quads: usize,
     pub merged_faces: usize,
     pub mesh_bytes: usize,
     pub async_meshing: bool,
@@ -468,6 +471,7 @@ impl Renderer {
             submitted_vertices: 0,
             greedy_meshing: true,
             mesh_quads: 0,
+            two_sided_quads: 0,
             merged_faces: 0,
             mesh_bytes: 0,
             async_meshing: false,
@@ -838,6 +842,12 @@ impl Renderer {
         self.meshes.insert(
             key,
             Mesh {
+                back_faces: mesh
+                    .vertices
+                    .iter()
+                    .filter(|v| v.layer & 0x00400000 != 0)
+                    .count()
+                    / 12,
                 opaque_vertices: opaque.len() as u32,
                 transparent,
                 buffer,
@@ -955,7 +965,9 @@ impl Renderer {
         self.stats.exposed_faces = self.meshes.values().map(|m| m.exposed_faces).sum();
         self.stats.mesh_covered_blocks = self.meshes.values().map(|m| m.block_count).sum();
         self.stats.mesh_quads = self.meshes.values().map(|m| m.vertices as usize / 6).sum();
-        self.stats.merged_faces = self.stats.exposed_faces - self.stats.mesh_quads;
+        self.stats.two_sided_quads = self.meshes.values().map(|m| m.back_faces).sum();
+        self.stats.merged_faces = (self.stats.exposed_faces + self.stats.two_sided_quads)
+            .saturating_sub(self.stats.mesh_quads);
         self.stats.mesh_bytes = self.stats.mesh_quads * 6 * std::mem::size_of::<Vertex>();
         self.stats.peak_mesh_bytes = self.stats.peak_mesh_bytes.max(self.stats.mesh_bytes);
         self.stats.omitted_internal_faces = self.meshes.values().map(|m| m.occluded_faces).sum();
@@ -1011,6 +1023,7 @@ impl Renderer {
         let streamed = client.scene.engine.as_ref().unwrap().stream.as_ref();
         let flying =
             client.movement.mode != crate::engine_player::Mode::Walking || client.view.is_free();
+        let underwater = crate::engine::player::locomotion::submerged(client, frame.eye);
         let fog_end = streamed.map_or(95., |s| s.generator.config.radius as f32 * 16. - 2.);
         let fog_start = if streamed.is_some() {
             if fog_end > 128. {
@@ -1046,14 +1059,19 @@ impl Renderer {
         };
         let (lod, lod_old) = self.distant.blend();
         let uniform = Camera {
+            medium: if underwater {
+                [0.04, 0.21, 0.34, 1.]
+            } else {
+                [0.; 4]
+            },
             lod,
             lod_old,
             matrix: matrix.to_cols_array(),
             eye: [eye.x, eye.y, eye.z, 1.],
             settings: [
                 if frame.wire { 1. } else { 0. },
-                fog_start,
-                fog_end,
+                if underwater { 0. } else { fog_start },
+                if underwater { 18. } else { fog_end },
                 if flying { 1. } else { 0. },
             ],
             focus: target.map_or([0.; 4], |h| {

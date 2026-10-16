@@ -73,7 +73,7 @@ pub fn prepare(app: &mut App, out: &Path, case: &str) -> Result<()> {
         let bytes = std::fs::read(&path)?;
         let value: serde_json::Value = serde_json::from_slice(&bytes)?;
         require(
-            value["version"] == 7 && value["generator"]["version"] == 2,
+            value["version"] == 8 && value["generator"]["version"] == 2,
             "Vertical save schema differs",
         )?;
         app.client.set_spawn(initial)?;
@@ -166,7 +166,7 @@ pub fn prepare(app: &mut App, out: &Path, case: &str) -> Result<()> {
     std::fs::write(
         out.join("terrain.json"),
         serde_json::to_vec_pretty(
-            &serde_json::json!({"complete":true,"case":case,"sample":sample,"biome":terrain.settings.biomes[sample.biome].id,"marker":marker,"saved_world":app.client.last_save,"storage_bytes":state.blocks.allocated_bytes(),"voxel_count":state.blocks.len(),"resident_chunks":stream.volume.as_ref().unwrap().residents.len(),"wanted_chunks":stream.volume.as_ref().unwrap().wanted.len(),"dynamic_height":true,"legacy_cell_copies":app.client.scene.cells.len(),"flow_physics":false,"scope":"Modern terrain, density/biome sampling, actual 3D residency, high/deep construction and F9 sparse save restoration. Flow simulation and swimming are remaining goal work."}),
+            &serde_json::json!({"complete":true,"case":case,"sample":sample,"biome":terrain.settings.biomes[sample.biome].id,"marker":marker,"saved_world":app.client.last_save,"storage_bytes":state.blocks.allocated_bytes(),"voxel_count":state.blocks.len(),"resident_chunks":stream.volume.as_ref().unwrap().residents.len(),"wanted_chunks":stream.volume.as_ref().unwrap().wanted.len(),"dynamic_height":true,"legacy_cell_copies":app.client.scene.cells.len(),"simulation_advanced":false,"scope":"Modern terrain, density/biome sampling, actual 3D residency, high/deep construction and F9 sparse save restoration. These terrain captures keep simulation paused; fluid transport and swimming are verified by the fluid suite."}),
         )?,
     )?;
     app.notice = None;

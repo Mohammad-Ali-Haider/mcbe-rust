@@ -63,7 +63,7 @@ fn emit(out: &mut Vec<Vertex>, p: [i32; 3], face: usize, id: u16, size: [usize; 
         });
     }
 }
-fn emit_surface(
+pub(super) fn emit_surface(
     out: &mut Vec<Vertex>,
     p: [i32; 3],
     face: usize,
@@ -131,7 +131,7 @@ pub fn item(state: &WorldState, id: u16) -> Vec<Vertex> {
     vertices
 }
 pub fn build_naive(state: &WorldState, key: [i32; 3]) -> ChunkMesh {
-    naive(key, |p| state.blocks.get(&p).copied(), &state.geometry)
+    Snapshot::capture(state, key).build(false)
 }
 fn naive(
     key: [i32; 3],
@@ -175,7 +175,7 @@ fn naive(
     }
 }
 pub fn build(state: &WorldState, key: [i32; 3]) -> ChunkMesh {
-    greedy(key, |p| state.blocks.get(&p).copied(), &state.geometry)
+    Snapshot::capture(state, key).build(true)
 }
 fn greedy(
     key: [i32; 3],
@@ -272,12 +272,14 @@ pub struct Snapshot {
     geometry: std::sync::Arc<crate::engine_geometry::Library>,
     key: [i32; 3],
     cells: Box<[u16; 5832]>,
+    volumes: Option<Box<[u16; 5832]>>,
     solid: usize,
 }
 impl Snapshot {
     pub fn capture(state: &WorldState, key: [i32; 3]) -> Self {
         let mut cells = Box::new([u16::MAX; 5832]);
         let mut solid = 0;
+        let mut volumes = None;
         for x in 0..18 {
             for y in 0..18 {
                 for z in 0..18 {
@@ -288,6 +290,11 @@ impl Snapshot {
                     ];
                     if let Some(id) = crate::engine::world::volume::remesh_block(state, p) {
                         cells[(x * 18 + y) * 18 + z] = id;
+                        if let Some(amount) = state.fluids.amounts.get(&p) {
+                            volumes.get_or_insert_with(|| {
+                                Box::new([crate::engine::fluids::FULL; 5832])
+                            })[(x * 18 + y) * 18 + z] = *amount;
+                        }
                         if (1..17).contains(&x) && (1..17).contains(&y) && (1..17).contains(&z) {
                             solid += 1;
                         }
@@ -298,6 +305,7 @@ impl Snapshot {
         Self {
             key,
             cells,
+            volumes,
             solid,
             geometry: state.geometry.clone(),
         }
@@ -310,6 +318,20 @@ impl Snapshot {
         let id = self.cells[((local[0] * 18 + local[1]) * 18 + local[2]) as usize];
         (id != u16::MAX).then_some(id)
     }
+    fn amount(&self, p: [i32; 3]) -> u16 {
+        let Some(id) = self.block(p) else {
+            return 0;
+        };
+        if self.geometry.flags(id) & 0x00400000 == 0 {
+            return 0;
+        }
+        let a: [i32; 3] = std::array::from_fn(|i| p[i] - self.key[i] * 16 + 1);
+        self.volumes
+            .as_ref()
+            .map_or(crate::engine::fluids::FULL, |v| {
+                v[((a[0] * 18 + a[1]) * 18 + a[2]) as usize]
+            })
+    }
     pub fn build(&self, merge: bool) -> ChunkMesh {
         if self.solid == 0 {
             return ChunkMesh {
@@ -319,11 +341,26 @@ impl Snapshot {
                 occluded_faces: 0,
             };
         }
-        if merge {
-            greedy(self.key, |p| self.block(p), &self.geometry)
+        let lookup = |p| {
+            self.block(p)
+                .filter(|id| self.volumes.is_none() || self.geometry.flags(*id) & 0x00400000 == 0)
+        };
+        let mut mesh = if merge {
+            greedy(self.key, lookup, &self.geometry)
         } else {
-            naive(self.key, |p| self.block(p), &self.geometry)
+            naive(self.key, lookup, &self.geometry)
+        };
+        if self.volumes.is_some() {
+            super::fluid_mesh::append(
+                &mut mesh,
+                self.key,
+                &self.geometry,
+                |p| self.block(p),
+                |p| self.amount(p),
+            );
         }
+        super::fluid_mesh::back_faces(&mut mesh);
+        mesh
     }
 }
 pub fn visible(key: [i32; 3], matrix: Mat4) -> bool {
