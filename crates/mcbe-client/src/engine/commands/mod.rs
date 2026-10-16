@@ -1,5 +1,6 @@
 //! Registered local commands: parse arguments once and reuse engine transactions.
 mod give;
+mod spawn;
 mod travel;
 use crate::scene::{Client, Result};
 use std::{collections::BTreeMap, ops::RangeInclusive};
@@ -67,6 +68,16 @@ impl Registry {
             },
         )
         .expect("Travel command");
+        r.register(
+            "spawn",
+            Command {
+                usage: "/spawn <entity>",
+                arguments: 1..=1,
+                run: spawn::run,
+                complete: spawn::complete,
+            },
+        )
+        .expect("Spawn command");
         r
     }
     pub fn register(&mut self, name: &str, command: Command) -> Result<()> {
@@ -88,7 +99,7 @@ impl Registry {
         let words = arguments(line)?;
         let name = words
             .first()
-            .ok_or("Enter /give <item> [count] or /travel <dimension>")?;
+            .ok_or("Enter a command; use Tab to see registered names")?;
         self.dispatch(
             client,
             &Invocation {

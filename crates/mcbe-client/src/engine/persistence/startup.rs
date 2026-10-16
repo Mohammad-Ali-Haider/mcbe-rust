@@ -238,6 +238,11 @@ impl Options {
             &client.scene.engine.as_ref().unwrap().registry,
             &self.home,
         )?);
+        crate::engine::entities::assets::prepare(
+            &mut client,
+            &self.home,
+            (!self.original).then_some(self.pack_root.as_path()),
+        )?;
         progress.phase(5)?;
         // Loading a save is a snapshot operation, including the slower texture decode.
         if let Some((path, expected)) = &client.scene.engine.as_ref().unwrap().loaded {
@@ -529,6 +534,29 @@ mod tests {
                 "Original UI loaded; {} material bindings share {} decoded textures",
                 assets.materials.len(),
                 unique
+            );
+        }
+        if state
+            .entities
+            .library
+            .definitions
+            .kinds
+            .iter()
+            .any(|d| d.id == "cow" && d.skin.is_some())
+        {
+            assert_eq!(client.entity_assets.textures.len(), 4);
+            assert!(
+                state
+                    .entities
+                    .library
+                    .get("cow")
+                    .unwrap()
+                    .model
+                    .iter()
+                    .all(|p| p.uv.is_some())
+            );
+            eprintln!(
+                "Current authored entity profile loaded four vanilla skins and resolved models"
             );
         }
         let pose = client.actor.position;

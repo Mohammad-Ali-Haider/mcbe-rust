@@ -38,7 +38,7 @@ def main():
   target=out/case;method='ray_traced' if case.endswith('-ray') else ('deferred' if case.endswith('-deferred') else 'forward');result=subprocess.run([str(binary),'--engine-entity-smoke',str(target),'--engine-entity-case',base,'--engine-home',str(home),'--engine-original','--engine-renderer',method],cwd=root,capture_output=True,text=True,timeout=240)
   (out/(case+'.stdout.txt')).write_text(result.stdout,encoding='utf-8');(out/(case+'.stderr.txt')).write_text(result.stderr,encoding='utf-8');assert result.returncode==0,(case,result.stderr)
   p=read(target/'entities.json');g=read(target/'gpu.json');w=read(target/'window.json');assert p['complete'] and g['complete'] and p['collision_clear'] and p['saved_entities_equal'] and p['paused_clock_preserved'];assert w['maximized'] and not w['fullscreen'] and g['statistics']['native_resolution'];assert read(Path(p['saved_world']))['version']==13
-  render=g['entities']['render'];assert 0<render['visible']<=128 and render['instances']<=128*32 and render['draws']>0 and g['entities']['unit_cube_vertices']==36;assert render['bytes']<400000
+  render=g['entities']['render'];assert 0<render['visible']<=128 and render['instances']<=128*32 and render['draws']>0 and g['entities']['unit_cube_vertices']==36;assert render['bytes']==g['entities']['instance_capacity']*g['entities']['instance_stride']+36*g['entities']['cube_stride'] and render['bytes']<1024*1024
   for t in p['trace']:assert t['stats']['physics_steps']<=128 and t['stats']['decisions']<=24 and t['stats']['paths']<=4 and t['stats']['path_nodes']<=512
   image=np.array(Image.open(target/'gpu.png').convert('RGB')).astype(np.int16);proof={};reference=None
   if base in ['showcase','shadow_off','wire','custom','occluded','occluded_clear']:

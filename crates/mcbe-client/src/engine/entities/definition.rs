@@ -6,6 +6,10 @@ use std::{collections::BTreeMap, path::Path};
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Part {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub uv: Option<[[f32; 4]; 6]>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transform: Option<[[f32; 4]; 4]>,
     pub bounds: [f32; 6],
     pub material: String,
     #[serde(default)]
@@ -23,6 +27,10 @@ pub struct Body {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Definition {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skin: Option<super::assets::Skin>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_resource: Option<super::assets::ModelResource>,
     pub id: String,
     pub label: String,
     pub body: Option<Body>,
@@ -46,6 +54,15 @@ pub struct Library {
     pub radii: Vec<f32>,
 }
 impl Definitions {
+    pub fn has_skin_data(&self) -> bool {
+        self.kinds.iter().any(|k| {
+            k.skin.is_some()
+                || k.model_resource.is_some()
+                || k.model
+                    .iter()
+                    .any(|p| p.uv.is_some() || p.transform.is_some())
+        })
+    }
     pub fn built_in() -> Self {
         serde_json::from_slice(include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -64,8 +81,12 @@ impl Definitions {
         Ok(serde_json::from_slice(&std::fs::read(p)?)?)
     }
     pub fn available(mut self, r: &Registry) -> Self {
-        self.kinds
-            .retain(|d| d.model.iter().all(|p| r.find(&p.material).is_ok()));
+        self.kinds.retain(|d| {
+            d.model.iter().all(|p| r.find(&p.material).is_ok())
+                && d.model_resource
+                    .as_ref()
+                    .is_none_or(|m| r.find(&m.material).is_ok())
+        });
         self
     }
     pub fn compile(self, r: &Registry) -> Result<Library> {
@@ -104,8 +125,16 @@ impl Definitions {
             if d.behavior.is_some() && d.body.is_none() {
                 return Err("Moving AI requires a physics body".into());
             }
+            if let Some(s) = &d.skin {
+                s.validate()?;
+            }
+            if let Some(m) = &d.model_resource {
+                m.validate()?;
+                r.find(&m.material)?;
+            }
             let mut ids = Vec::new();
             for p in &d.model {
+                super::assets::validate_part(p)?;
                 if !p
                     .bounds
                     .into_iter()

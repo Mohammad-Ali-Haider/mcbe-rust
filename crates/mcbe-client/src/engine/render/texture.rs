@@ -7,6 +7,12 @@ use std::ops::Range;
 pub const BATCH_BYTES: usize = 256 * 1024;
 pub const BATCH_WRITES: usize = 32;
 pub enum Step {
+    Skin {
+        layer: u32,
+        mip: u32,
+        width: u32,
+        rgba: Vec<u8>,
+    },
     Terrain {
         layer: u32,
         mip: u32,
@@ -21,7 +27,7 @@ pub enum Step {
 impl Step {
     pub fn bytes<'a>(&'a self, atlas: &'a Atlas) -> &'a [u8] {
         match self {
-            Self::Terrain { rgba, .. } => rgba,
+            Self::Terrain { rgba, .. } | Self::Skin { rgba, .. } => rgba,
             Self::Ui { row, rows } => {
                 &atlas.rgba
                     [(row * atlas.size * 4) as usize..((row + rows) * atlas.size * 4) as usize]
@@ -33,16 +39,19 @@ pub struct Prepared {
     pub instance: u64,
     pub registry: u64,
     pub layers: u32,
+    pub skin_layers: u32,
+    pub skin_width: u32,
+    pub entity_assets: u64,
     pub atlas: Atlas,
     pub steps: Vec<Step>,
 }
 impl Prepared {
     pub fn matches(&self, client: &Client) -> bool {
-        client
-            .scene
-            .engine
-            .as_ref()
-            .is_some_and(|s| self.instance == s.instance && self.registry == s.registry_revision)
+        client.scene.engine.as_ref().is_some_and(|s| {
+            self.instance == s.instance
+                && self.registry == s.registry_revision
+                && self.entity_assets == client.entity_assets.id
+        })
     }
     pub fn build(client: &Client) -> Result<Self> {
         let state = client
@@ -127,6 +136,50 @@ impl Prepared {
                 }
             }
         }
+        let skin_layers = client.entity_assets.textures.len().max(1) as u32;
+        let skin_width = client
+            .entity_assets
+            .textures
+            .iter()
+            .map(|t| t.width.max(t.height))
+            .max()
+            .unwrap_or(1)
+            .next_power_of_two();
+        for layer in 0..skin_layers {
+            let mut rgba = Vec::with_capacity((skin_width * skin_width * 4) as usize);
+            for y in 0..skin_width {
+                for x in 0..skin_width {
+                    let pixel =
+                        client
+                            .entity_assets
+                            .textures
+                            .get(layer as usize)
+                            .map_or([255; 4], |t| {
+                                t.sample_repeat(
+                                    (x as f64 + 0.5) / skin_width as f64,
+                                    (y as f64 + 0.5) / skin_width as f64,
+                                )
+                            });
+                    rgba.extend(pixel);
+                }
+            }
+            let mut width = skin_width;
+            for mip in 0..=skin_width.ilog2() {
+                let next = (width > 1).then(|| reduce(&rgba, width));
+                steps.push(Step::Skin {
+                    layer,
+                    mip,
+                    width,
+                    rgba,
+                });
+                if let Some(next) = next {
+                    rgba = next;
+                    width /= 2;
+                } else {
+                    break;
+                }
+            }
+        }
         let atlas = Atlas::build(client)?;
         let rows = (BATCH_BYTES / (atlas.size as usize * 4)) as u32;
         if rows == 0 {
@@ -142,6 +195,9 @@ impl Prepared {
             instance: state.instance,
             registry: state.registry_revision,
             layers,
+            skin_layers,
+            skin_width,
+            entity_assets: client.entity_assets.id,
             atlas,
             steps,
         })
@@ -190,7 +246,7 @@ mod tests {
         assert!(plan.matches(&client));
         let states = client.scene.engine.as_ref().unwrap().registry.blocks.len();
         assert_eq!(plan.layers, states as u32 * 6);
-        assert_eq!(plan.steps.len(), states * 6 * 6 + 16);
+        assert_eq!(plan.steps.len(), states * 6 * 6 + 17);
         let mut cursor = 0;
         let mut bytes = 0;
         let mut frames = 0;
@@ -207,12 +263,12 @@ mod tests {
             cursor = batch.end;
             frames += 1;
         }
-        assert_eq!(bytes, plan.layers as usize * 5460 + 1024 * 1024 * 4);
+        assert_eq!(bytes, plan.layers as usize * 5460 + 4 + 1024 * 1024 * 4);
         // Terrain mip writes hit the write-count budget; each atlas stripe
         // independently fills the byte budget, for any authored catalog size.
         assert_eq!(
             frames,
-            (plan.layers as usize * 6).div_ceil(BATCH_WRITES)
+            (plan.layers as usize * 6 + 1).div_ceil(BATCH_WRITES)
                 + plan.atlas.rgba.len().div_ceil(BATCH_BYTES)
         );
         let Step::Terrain { rgba: base, .. } = &plan.steps[0] else {
@@ -229,6 +285,9 @@ mod tests {
             assert_eq!(mip[channel], (sum / 4) as u8);
         }
         let before = base.clone();
+        client.entity_assets = std::sync::Arc::new(Default::default());
+        assert!(!plan.matches(&client));
+
         client.scene.engine.as_mut().unwrap().registry_revision += 1;
         assert!(!plan.matches(&client));
         assert_eq!(plan.steps[0].bytes(&plan.atlas), before);

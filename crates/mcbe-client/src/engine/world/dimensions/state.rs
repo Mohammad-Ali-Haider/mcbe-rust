@@ -63,6 +63,13 @@ pub struct SavedWorld {
     yaw: f32,
     pitch: f32,
 }
+impl Saved {
+    pub fn has_skin_data(&self) -> bool {
+        self.inactive
+            .iter()
+            .any(|w| w.entities.definitions.has_skin_data())
+    }
+}
 impl World {
     pub fn capture(client: &Client) -> Result<Self> {
         let s = client
@@ -402,6 +409,7 @@ pub struct Travel {
     pub smelting: machines::recipes::Recipes,
     pub ui: Arc<crate::engine::ui::framework::Library>,
     pub appearance: Arc<crate::engine::player::appearance::Appearance>,
+    pub entity_assets: Arc<crate::engine::entities::assets::Assets>,
     pub camera_mode: crate::engine::player::camera::Mode,
     pub loaded: Option<(std::path::PathBuf, String)>,
     pub last_save: Option<std::path::PathBuf>,
@@ -445,6 +453,7 @@ impl Travel {
             smelting: s.smelting.clone(),
             ui: s.ui.clone(),
             appearance: client.appearance.clone(),
+            entity_assets: client.entity_assets.clone(),
             camera_mode: client.view.mode,
             loaded: s.loaded.clone(),
             last_save: client.last_save.clone(),
@@ -495,6 +504,17 @@ impl Travel {
         s.ui = self.ui;
         s.loaded = self.loaded;
         client.appearance = self.appearance;
+        {
+            let state = client.scene.engine.as_ref().unwrap();
+            let (definitions, assets) = self
+                .entity_assets
+                .for_definitions(&state.entities.library.definitions, &state.registry)?;
+            let entities = state
+                .entities
+                .reconfigured(definitions.compile(&state.registry)?)?;
+            client.scene.engine.as_mut().unwrap().entities = entities;
+            client.entity_assets = assets;
+        }
         client.view.mode = self.camera_mode;
         client.last_save = self.last_save;
         *client.engine_distant_prepared.borrow_mut() =

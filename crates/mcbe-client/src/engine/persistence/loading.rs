@@ -411,6 +411,7 @@ impl Service {
                                         {
                                             crate::engine::apply_registry(&mut client, registry)?;
                                         }
+                                        let skin_home=owned_root.clone().unwrap_or_default();let skin_root=root.clone();
                                         if let Some(home) = owned_root {
                                             client.appearance=Arc::new(crate::engine::player::appearance::Appearance::read_home(&home)?);
                                             client.scene.engine.as_mut().unwrap().ui = Arc::new(
@@ -426,6 +427,7 @@ impl Service {
                                                 )?);
                                         }
                                         if let Some(root)=root {let state=client.scene.engine.as_ref().unwrap();client.engine_assets=Some(engine_assets::load_for(&state.registry,&root,state.ui.theme.legacy_ui)?);}
+                                        crate::engine::entities::assets::prepare(&mut client,&skin_home,skin_root.as_deref())?;
                                         check_file(&path, &expected)?;
                                         Ok(Prepared::Reload(Box::new(client)))
                                     }

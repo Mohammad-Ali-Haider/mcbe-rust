@@ -74,6 +74,11 @@ geometry. Caves, transparent buildings and edits to distant generated trees are
 not fully represented by that surface approximation. Maximum-range LOD uses
 more memory than the earlier flat approximation.
 
+Local vanilla cow, pig, creeper and zombie models/skins are optional resource
+examples alongside the original creatures. Use `/spawn cow` (or another registered
+kind) to try one on clear ground. Own PNG skins use the same cached instanced
+renderer; see [Entities](docs/ENTITIES.md).
+
 Run `cargo new-world` to try the three editable dimension examples. Press U or
 Escape -> Dimensions to visit the surface, caverns and floating islands. Worlds
 retain separate edits, fluids, furnaces, entities and return positions; inventory

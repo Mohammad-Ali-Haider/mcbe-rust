@@ -32,7 +32,7 @@ use std::{
 };
 
 pub const CHECKPOINT: u32 = 48;
-pub const SAVE_VERSION: u32 = 14;
+pub const SAVE_VERSION: u32 = 15;
 pub const BOUNDS: Bounds = Bounds {
     min: [-40, 0, -40],
     max: [40, 40, 40],
@@ -734,7 +734,7 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
     }
     let d: Document = serde_json::from_slice(bytes)?;
     if d.format != "blockwork-world"
-        || !(1..=14).contains(&d.version)
+        || !(1..=15).contains(&d.version)
         || d.cells.len() > BOUNDS.volume()?
         || !d.yaw.is_finite()
         || !d.pitch.is_finite()
@@ -748,6 +748,15 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
             .is_some_and(|p| p.profile.is_some() || !p.containers.is_empty())
     {
         return Err("Configurable inventories require save version 14".into());
+    }
+    if d.version < 15
+        && (d
+            .entities
+            .as_ref()
+            .is_some_and(|e| e.definitions.has_skin_data())
+            || d.dimensions.as_ref().is_some_and(|d| d.has_skin_data()))
+    {
+        return Err("Skinned entity models require save version 15".into());
     }
     if d.version < 13
         && (d.dimensions.is_some()
@@ -786,14 +795,14 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
             r.blocks.truncate(8);
             r
         }
-        (2..=14, Some(r)) => {
+        (2..=15, Some(r)) => {
             r.validate()?;
             r
         }
         _ => return Err("Save registry/version mismatch".into()),
     };
     let entities = match (d.version, d.entities) {
-        (11..=14, Some(saved)) => entities::World::restore(saved, &registry)?,
+        (11..=15, Some(saved)) => entities::World::restore(saved, &registry)?,
         (1..=10, None) => {
             let mut world = entities::World::new(&registry);
             world.random ^= d.seed;
@@ -809,7 +818,7 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
             registry.blocks.len(),
             registry.find(&d.selected)?,
         ),
-        (3..=14, Some(p)) => p.restore(&registry)?,
+        (3..=15, Some(p)) => p.restore(&registry)?,
         _ => return Err("Save inventory/version mismatch".into()),
     };
     if d.version >= 3
@@ -822,14 +831,14 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
     }
     let recipes = match (d.version, d.recipes) {
         (1 | 2, None) => crate::engine_crafting::Recipes::built_in().available(&registry),
-        (3..=14, Some(r)) => {
+        (3..=15, Some(r)) => {
             r.validate_registry(&registry)?;
             r
         }
         _ => return Err("Save recipe/version mismatch".into()),
     };
     let movement = match (d.version, d.movement) {
-        (5..=14, Some(m)) => m,
+        (5..=15, Some(m)) => m,
         (1..=4, None) => Default::default(),
         _ => return Err("Save movement/version mismatch".into()),
     };
@@ -970,6 +979,16 @@ pub fn reload(client: &mut Client) -> Result<()> {
             client.scene.engine.as_ref().unwrap().ui.theme.legacy_ui,
         )?);
     }
+    let home = client
+        .owned_materials
+        .as_ref()
+        .map(|a| a.root.as_path())
+        .unwrap_or(Path::new("."));
+    entities::assets::prepare(
+        &mut prepared,
+        home,
+        client.engine_assets.as_ref().map(|a| a.root.as_path()),
+    )?;
     *client = prepared;
     Ok(())
 }
@@ -1265,6 +1284,12 @@ pub fn reload_definitions(client: &mut Client, path: &Path) -> Result<()> {
         .transpose()?;
     let smelting = machines::recipes::Definitions::read_home(home)?.compile(&registry)?;
     let entities = entities::definition::Definitions::read_home(home)?;
+    let (entities, entity_assets) = entities::assets::Assets::read(
+        &entities,
+        &registry,
+        home,
+        client.engine_assets.as_ref().map(|a| a.root.as_path()),
+    )?;
     let dimensions = client
         .scene
         .engine
@@ -1292,6 +1317,7 @@ pub fn reload_definitions(client: &mut Client, path: &Path) -> Result<()> {
     client.owned_materials = Some(owned);
     client.scene.engine.as_mut().unwrap().recipes = recipes;
     client.engine_assets = assets;
+    client.entity_assets = std::sync::Arc::new(entity_assets);
     Ok(())
 }
 
@@ -2296,7 +2322,7 @@ mod custom_storage_save_tests {
         };
         state.player.insert_container(1, stack).unwrap();
         let mut value = serde_json::to_value(document(&client).unwrap()).unwrap();
-        assert_eq!(value["version"], 14);
+        assert_eq!(value["version"], SAVE_VERSION);
         let restored = decode(&serde_json::to_vec(&value).unwrap(), None).unwrap();
         assert_eq!(
             restored.scene.engine.as_ref().unwrap().player.containers[1][0],
@@ -2358,5 +2384,45 @@ mod custom_storage_save_tests {
                     .is_err()
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod skinned_entity_save_tests {
+    use super::*;
+    #[test]
+    fn skinned_definitions_roundtrip_and_old_tag_is_rejected_while_legacy_fourteen_loads() {
+        let c = generate(37).unwrap();
+        let mut value = serde_json::to_value(document(&c).unwrap()).unwrap();
+        let copy = decode(&serde_json::to_vec(&value).unwrap(), None).unwrap();
+        assert_eq!(
+            copy.scene
+                .engine
+                .as_ref()
+                .unwrap()
+                .entities
+                .library
+                .definitions,
+            c.scene
+                .engine
+                .as_ref()
+                .unwrap()
+                .entities
+                .library
+                .definitions
+        );
+        value["version"] = json!(14);
+        assert!(
+            decode(&serde_json::to_vec(&value).unwrap(), None)
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("version 15")
+        );
+        value["entities"]["definitions"]["kinds"]
+            .as_array_mut()
+            .unwrap()
+            .truncate(3);
+        assert!(decode(&serde_json::to_vec(&value).unwrap(), None).is_ok());
     }
 }

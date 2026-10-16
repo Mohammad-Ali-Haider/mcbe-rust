@@ -202,6 +202,11 @@ fn schema_twelve_preserves_contents_rejects_invalid_offhands_and_migrates_eleven
     }
     let mut legacy = value.clone();
     legacy["version"] = serde_json::json!(11);
+    // Schema 11 had the original unskinned kinds, without schema-15 resource fields.
+    legacy["entities"]["definitions"]["kinds"]
+        .as_array_mut()
+        .unwrap()
+        .truncate(3);
     assert!(engine::decode(&serde_json::to_vec(&legacy).unwrap(), None).is_err());
     legacy["inventory"]
         .as_object_mut()

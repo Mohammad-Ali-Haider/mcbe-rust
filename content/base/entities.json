@@ -283,6 +283,217 @@
           ]
         }
       ]
+    },
+    {
+      "id": "cow",
+      "label": "Cow",
+      "body": {
+        "width": 0.9,
+        "height": 1.4,
+        "speed": 1.4
+      },
+      "health": 20,
+      "behavior": "flee",
+      "sense": 7,
+      "ambient_weight": 6,
+      "skin": {
+        "source": "local_pack",
+        "pack": "vanilla",
+        "path": "textures/entity/cow/cow.png"
+      },
+      "model_resource": {
+        "pack": "vanilla",
+        "path": "models/entity/cow.geo.json",
+        "geometry": "geometry.cow.v1.8",
+        "material": "ivory",
+        "swings": {
+          "leg0": 1,
+          "leg1": -1,
+          "leg2": -1,
+          "leg3": 1
+        },
+        "poses": {}
+      },
+      "model": [
+        {
+          "bounds": [
+            -0.45,
+            0,
+            -0.45,
+            0.45,
+            1.4,
+            0.45
+          ],
+          "material": "ivory",
+          "swing": 0,
+          "pivot": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pig",
+      "label": "Pig",
+      "body": {
+        "width": 0.9,
+        "height": 0.9,
+        "speed": 1.5
+      },
+      "health": 20,
+      "behavior": "flee",
+      "sense": 7,
+      "ambient_weight": 6,
+      "skin": {
+        "source": "local_pack",
+        "pack": "vanilla",
+        "path": "textures/entity/pig/pig.png"
+      },
+      "model_resource": {
+        "pack": "vanilla",
+        "path": "models/entity/pig.geo.json",
+        "geometry": "geometry.pig.v1.8",
+        "material": "ivory",
+        "swings": {
+          "leg0": 1,
+          "leg1": -1,
+          "leg2": -1,
+          "leg3": 1
+        },
+        "poses": {}
+      },
+      "model": [
+        {
+          "bounds": [
+            -0.45,
+            0,
+            -0.45,
+            0.45,
+            0.9,
+            0.45
+          ],
+          "material": "ivory",
+          "swing": 0,
+          "pivot": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "creeper",
+      "label": "Creeper",
+      "body": {
+        "width": 0.6,
+        "height": 1.7,
+        "speed": 1.5
+      },
+      "health": 20,
+      "behavior": "chase",
+      "sense": 12,
+      "ambient_weight": 3,
+      "skin": {
+        "source": "local_pack",
+        "pack": "vanilla",
+        "path": "textures/entity/creeper/creeper.png"
+      },
+      "model_resource": {
+        "pack": "vanilla",
+        "path": "models/entity/creeper.geo.json",
+        "geometry": "geometry.creeper.v1.8",
+        "material": "ivory",
+        "swings": {
+          "leg0": 1,
+          "leg1": -1,
+          "leg2": -1,
+          "leg3": 1
+        },
+        "poses": {}
+      },
+      "model": [
+        {
+          "bounds": [
+            -0.3,
+            0,
+            -0.3,
+            0.3,
+            1.7,
+            0.3
+          ],
+          "material": "ivory",
+          "swing": 0,
+          "pivot": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "zombie",
+      "label": "Zombie",
+      "body": {
+        "width": 0.6,
+        "height": 1.95,
+        "speed": 1.25
+      },
+      "health": 20,
+      "behavior": "chase",
+      "sense": 12,
+      "ambient_weight": 3,
+      "skin": {
+        "source": "local_pack",
+        "pack": "vanilla",
+        "path": "textures/entity/zombie/zombie.png"
+      },
+      "model_resource": {
+        "pack": "vanilla",
+        "path": "models/entity/zombie.geo.json",
+        "geometry": "geometry.zombie.v1.8",
+        "material": "ivory",
+        "swings": {
+          "rightLeg": 1,
+          "leftLeg": -1,
+          "rightArm": 0.2,
+          "leftArm": -0.2
+        },
+        "poses": {
+          "rightArm": [
+            -90,
+            0,
+            0
+          ],
+          "leftArm": [
+            -90,
+            0,
+            0
+          ]
+        }
+      },
+      "model": [
+        {
+          "bounds": [
+            -0.3,
+            0,
+            -0.3,
+            0.3,
+            1.95,
+            0.3
+          ],
+          "material": "ivory",
+          "swing": 0,
+          "pivot": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
     }
   ]
 }

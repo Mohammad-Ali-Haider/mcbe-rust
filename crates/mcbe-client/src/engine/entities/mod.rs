@@ -1,7 +1,9 @@
 //! Persistent entities with typed optional components and bounded fixed-tick systems.
 pub(crate) mod ai;
+pub(crate) mod assets;
 pub(crate) mod components;
 pub(crate) mod definition;
+mod import;
 pub(crate) mod interaction;
 pub(crate) mod mesh;
 pub(crate) mod model;

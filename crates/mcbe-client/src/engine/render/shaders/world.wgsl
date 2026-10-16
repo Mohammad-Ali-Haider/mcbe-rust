@@ -2,12 +2,13 @@ struct Camera{matrix:mat4x4<f32>,eye:vec4<f32>,settings:vec4<f32>,focus:vec4<f32
 @group(0) @binding(0) var terrain:texture_2d_array<f32>;
 @group(0) @binding(1) var terrain_sampler:sampler;
 @group(0) @binding(2) var<uniform> camera:Camera;
-struct Out{@builtin(position) position:vec4<f32>,@location(0) uv:vec2<f32>,@location(1) @interpolate(flat) layer:u32,@location(2) shade:f32,@location(3) bary:vec3<f32>,@location(4) world:vec3<f32>,@location(5) relative:vec3<f32>,@location(6) @interpolate(flat) tint:vec3<f32>,@location(7) @interpolate(flat) entity:u32};
+@group(0) @binding(3) var creature_skins:texture_2d_array<f32>;
+struct Out{@builtin(position) position:vec4<f32>,@location(0) uv:vec2<f32>,@location(1) @interpolate(flat) layer:u32,@location(2) shade:f32,@location(3) bary:vec3<f32>,@location(4) world:vec3<f32>,@location(5) relative:vec3<f32>,@location(6) @interpolate(flat) tint:vec3<f32>,@location(7) @interpolate(flat) entity:u32,@location(8) @interpolate(flat) skin:u32};
 @vertex fn vs(@location(0) position:vec3<f32>,@location(1) uv:vec2<f32>,@location(2) layer:u32,@location(3) shade:f32,@location(4) bary:vec3<f32>)->Out{
-    var o:Out;o.position=camera.matrix*vec4(position,1.);o.uv=uv;o.layer=layer;o.shade=shade;o.bary=bary;o.world=position;o.relative=position-camera.eye.xyz;o.tint=vec3(1.);o.entity=0u;return o;
+    var o:Out;o.position=camera.matrix*vec4(position,1.);o.uv=uv;o.layer=layer;o.shade=shade;o.bary=bary;o.world=position;o.relative=position-camera.eye.xyz;o.tint=vec3(1.);o.entity=0u;o.skin=0u;return o;
 }
 @vertex fn vs_previous(@location(0) position:vec3<f32>,@location(1) uv:vec2<f32>,@location(2) layer:u32,@location(3) shade:f32,@location(4) bary:vec3<f32>)->Out{
-    var o:Out;o.position=camera.matrix*vec4(position,1.);o.uv=uv;o.layer=layer|0x04000000u;o.shade=shade;o.bary=bary;o.world=position;o.relative=position-camera.eye.xyz;o.tint=vec3(1.);o.entity=0u;return o;
+    var o:Out;o.position=camera.matrix*vec4(position,1.);o.uv=uv;o.layer=layer|0x04000000u;o.shade=shade;o.bary=bary;o.world=position;o.relative=position-camera.eye.xyz;o.tint=vec3(1.);o.entity=0u;o.skin=0u;return o;
 }
 fn noise(p:vec2<u32>,salt:u32)->f32 {
     var n=p.x*1973u+p.y*9277u+salt*26699u;n=(n^(n>>16u))*2246822519u;n=(n^(n>>13u))*3266489917u;
@@ -16,7 +17,8 @@ fn noise(p:vec2<u32>,salt:u32)->f32 {
 fn surface(i:Out,shaded:bool)->vec4<f32>{
     let layer=i.layer&0x003fffffu;
     let custom=(i.layer&0x80000000u)!=0u;
-    let texel=textureSample(terrain,terrain_sampler,i.uv,i32(layer));
+    let dx=dpdx(i.uv);let dy=dpdy(i.uv);var texel:vec4<f32>;
+    if i.skin>0u {texel=textureSampleGrad(creature_skins,terrain_sampler,i.uv,i32(i.skin-1u),dx,dy);}else{texel=textureSampleGrad(terrain,terrain_sampler,i.uv,i32(layer),dx,dy);}
     let thickness=max(max(fwidth(i.bary.x),fwidth(i.bary.y)),fwidth(i.bary.z));
     if camera.lod.w>0.5 && i.entity==0u {
         let pixel=vec2<u32>(i.position.xy);

@@ -6,7 +6,7 @@ use crate::{
 };
 use mcbe_core::motion::Vec3;
 use std::collections::HashMap;
-fn flat() -> Client {
+pub(super) fn flat() -> Client {
     let r = Registry::built_in();
     let floor = r.find("basalt").unwrap();
     let mut cells = HashMap::new();
@@ -328,6 +328,8 @@ fn visible_head_and_nonphysical_decoration_are_pickable() {
     decoration.behavior = None;
     decoration.ambient_weight = 0;
     decoration.model = vec![definition::Part {
+        uv: None,
+        transform: None,
         bounds: [-0.25, 0., -0.25, 0.25, 1., 0.25],
         material: "cobalt".into(),
         swing: 0.,

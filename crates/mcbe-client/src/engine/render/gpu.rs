@@ -170,6 +170,7 @@ pub struct Frame<'a> {
 struct Upload {
     prepared: crate::engine_texture::Prepared,
     terrain: wgpu::Texture,
+    skins: wgpu::Texture,
     ui: wgpu::Texture,
     cursor: usize,
     staged: bool,
@@ -215,6 +216,7 @@ pub struct Renderer {
     atlas: Option<Atlas>,
     meshes: BTreeMap<[i32; 3], Mesh>,
     world_instance: u64,
+    skin_revision: u64,
     revision: u64,
     registry_revision: u64,
     pub stats: Statistics,
@@ -583,6 +585,7 @@ impl Renderer {
             atlas: None,
             meshes: BTreeMap::new(),
             world_instance: 0,
+            skin_revision: 0,
             revision: 0,
             registry_revision: 0,
             stats,
@@ -680,8 +683,10 @@ impl Renderer {
             } else {
                 Prepared::build(client)?
             };
-            if prepared.layers > self.device.limits().max_texture_array_layers {
-                return Err("GPU texture-array limit exceeded by registry".into());
+            if prepared.layers > self.device.limits().max_texture_array_layers
+                || prepared.skin_layers > self.device.limits().max_texture_array_layers
+            {
+                return Err("GPU texture-array limit exceeded by content".into());
             }
             let terrain = self.device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("Minecraft terrain layers"),
@@ -711,9 +716,24 @@ impl Renderer {
                 usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                 view_formats: &[],
             });
+            let skins = self.device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("cached creature skins"),
+                size: wgpu::Extent3d {
+                    width: prepared.skin_width,
+                    height: prepared.skin_width,
+                    depth_or_array_layers: prepared.skin_layers,
+                },
+                mip_level_count: prepared.skin_width.ilog2() + 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            });
             self.uploading = Some(Upload {
                 prepared,
                 terrain,
+                skins,
                 ui,
                 cursor: 0,
                 staged,
@@ -740,6 +760,19 @@ impl Renderer {
                     layer, mip, width, ..
                 } => (
                     &pending.terrain,
+                    *mip,
+                    wgpu::Origin3d {
+                        x: 0,
+                        y: 0,
+                        z: *layer,
+                    },
+                    *width,
+                    *width,
+                ),
+                Step::Skin {
+                    layer, mip, width, ..
+                } => (
+                    &pending.skins,
                     *mip,
                     wgpu::Origin3d {
                         x: 0,
@@ -826,6 +859,15 @@ impl Renderer {
                 wgpu::BindGroupEntry {
                     binding: 2,
                     resource: self.uniform.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(&pending.skins.create_view(
+                        &wgpu::TextureViewDescriptor {
+                            dimension: Some(wgpu::TextureViewDimension::D2Array),
+                            ..Default::default()
+                        },
+                    )),
                 },
             ],
         }));
@@ -953,11 +995,14 @@ impl Renderer {
         let remap = reset || self.registry_revision != state.registry_revision;
         let all = remap || self.mesh_mode_dirty;
         self.stats.async_meshing = state.stream.is_some() && self.async_requested;
-        if remap {
+        if remap || self.skin_revision != client.entity_assets.id {
             if !self.textures(client)? {
                 self.stats.meshes_ready = false;
                 return Ok(());
             }
+            self.skin_revision = client.entity_assets.id;
+        }
+        if remap {
             self.meshes.clear();
         }
         if all {

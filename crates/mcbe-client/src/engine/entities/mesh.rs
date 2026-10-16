@@ -10,6 +10,7 @@ pub const PART_LIMIT: usize = VISIBLE_LIMIT * 32;
 pub struct Instance {
     pub model: [[f32; 4]; 4],
     pub metadata: [u32; 4],
+    pub uv: [[f32; 4]; 6],
 }
 #[derive(Default, serde::Serialize)]
 pub struct Statistics {
@@ -33,6 +34,7 @@ pub struct Frame {
 }
 #[derive(PartialEq)]
 struct Key {
+    assets: u64,
     instance: u64,
     registry: u64,
     terrain: u64,
@@ -70,7 +72,11 @@ pub fn cube() -> Vec<Vertex> {
             bary[n % 3] = 1.;
             out.push(Vertex {
                 position: corners[i],
-                uv: [[0., 1.], [1., 1.], [1., 0.], [0., 0.]][i],
+                uv: if face < 2 {
+                    [[1., 1.], [1., 0.], [0., 0.], [0., 1.]][i]
+                } else {
+                    [[0., 1.], [1., 1.], [1., 0.], [0., 0.]][i]
+                },
                 layer: face as u32,
                 shade: 1.,
                 barycentric: bary,
@@ -94,8 +100,7 @@ pub fn visible(center: [f32; 3], radius: f32, m: Mat4) -> bool {
 }
 const CUBE_ATTRIBUTES: [wgpu::VertexAttribute; 5] =
     wgpu::vertex_attr_array![0=>Float32x3,1=>Float32x2,2=>Uint32,3=>Float32,4=>Float32x3];
-const INSTANCE_ATTRIBUTES: [wgpu::VertexAttribute; 5] =
-    wgpu::vertex_attr_array![5=>Float32x4,6=>Float32x4,7=>Float32x4,8=>Float32x4,9=>Uint32x4];
+const INSTANCE_ATTRIBUTES: [wgpu::VertexAttribute; 11] = wgpu::vertex_attr_array![5=>Float32x4,6=>Float32x4,7=>Float32x4,8=>Float32x4,9=>Uint32x4,10=>Float32x4,11=>Float32x4,12=>Float32x4,13=>Float32x4,14=>Float32x4,15=>Float32x4];
 fn layouts() -> [wgpu::VertexBufferLayout<'static>; 2] {
     [
         wgpu::VertexBufferLayout {
@@ -268,6 +273,7 @@ impl Renderer {
         let state = c.scene.engine.as_ref().unwrap();
         let world = &state.entities;
         let key = Key {
+            assets: c.entity_assets.id,
             instance: state.instance,
             registry: state.registry_revision,
             terrain: state.revision,
@@ -340,9 +346,10 @@ impl Renderer {
                             | (u32::from(selected == Some(id)) * 2);
                     self.pending.push(Instance {
                         model: model.to_cols_array_2d(),
+                        uv: part.uv.unwrap_or([[0., 0., 1., 1.]; 6]),
                         metadata: [
                             u32::from(*material) * 6,
-                            flags,
+                            flags | (c.entity_assets.layer(&e.kind) << 8),
                             id.0 as u32,
                             (id.0 >> 32) as u32,
                         ],
@@ -399,6 +406,9 @@ impl Renderer {
         pass.draw(0..36, 0..self.instances.len() as u32);
     }
     pub fn observation(&self, w: &World) -> serde_json::Value {
-        serde_json::json!({"world":w.observation(),"render":self.stats,"instances":self.instances,"unit_cube_vertices":36,"back_face_culling":true,"depth_testing":true,"shared_cube":true})
+        serde_json::json!({"world":w.observation(),"render":self.stats,"instances":self.instances,"unit_cube_vertices":36,"back_face_culling":true,"depth_testing":true,"shared_cube":true,"instance_stride":std::mem::size_of::<Instance>(),"instance_capacity":PART_LIMIT,"cube_stride":std::mem::size_of::<Vertex>()})
     }
 }
+
+#[cfg(test)]
+mod offscreen;

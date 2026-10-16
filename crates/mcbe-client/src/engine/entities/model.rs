@@ -31,8 +31,10 @@ impl Pose {
             * Mat4::from_translation(pivot)
             * Mat4::from_rotation_x(self.gait.sin() * part.swing * self.walk * 0.6)
             * Mat4::from_translation(-pivot)
-            * Mat4::from_translation(low)
-            * Mat4::from_scale(high - low)
+            * part.transform.map_or_else(
+                || Mat4::from_translation(low) * Mat4::from_scale(high - low),
+                |m| Mat4::from_cols_array_2d(&m),
+            )
     }
 }
 pub fn radius(parts: &[Part]) -> f32 {

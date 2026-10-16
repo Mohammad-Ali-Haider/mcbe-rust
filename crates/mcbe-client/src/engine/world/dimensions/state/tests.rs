@@ -116,6 +116,20 @@ fn schema_thirteen_roundtrips_all_visited_worlds_without_resident_chunks() {
     let value = serde_json::to_value(d).unwrap();
     assert_eq!(value["version"], crate::engine::SAVE_VERSION);
     assert_eq!(value["dimensions"]["inactive"].as_array().unwrap().len(), 2);
+    let mut older = value.clone();
+    older["version"] = serde_json::json!(14);
+    older["entities"]["definitions"]["kinds"]
+        .as_array_mut()
+        .unwrap()
+        .truncate(3);
+    assert!(
+        engine::decode(&serde_json::to_vec(&older).unwrap(), None)
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("version 15"),
+        "inactive skinned definitions also require the new schema"
+    );
     assert!(
         value["dimensions"]["inactive"]
             .as_array()
@@ -246,6 +260,11 @@ fn legacy_world_attachment_keeps_original_generator_and_seed() {
     )
     .unwrap();
     value["version"] = serde_json::json!(12);
+    // Historical schema 12 contained the three original unskinned definitions.
+    value["entities"]["definitions"]["kinds"]
+        .as_array_mut()
+        .unwrap()
+        .truncate(3);
     let mut c = engine::decode(&serde_json::to_vec(&value).unwrap(), None).unwrap();
     assert!(c.scene.engine.as_ref().unwrap().dimensions.is_none());
     attach_legacy(&mut c, Definitions::built_in()).unwrap();
