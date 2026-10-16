@@ -26,7 +26,7 @@ fn brdf(base:vec3<f32>,n:vec3<f32>,v:vec3<f32>,l:vec3<f32>,roughness:f32,metalli
  let h=normalize(v+l);let nv=max(dot(n,v),0.001);let nl=max(dot(n,l),0.001);let nh=max(dot(n,h),0.);let vh=max(dot(v,h),0.);let alpha=roughness*roughness;let a2=alpha*alpha;let denom=nh*nh*(a2-1.)+1.;let distribution=a2/(3.14159265*denom*denom);let k=(roughness+1.)*(roughness+1.)/8.;let geometry=(nv/(nv*(1.-k)+k))*(nl/(nl*(1.-k)+k));let f0=mix(vec3(0.04),base,metallic);let fresnel=f0+(vec3(1.)-f0)*pow(1.-vh,5.);let diffuse=(vec3(1.)-fresnel)*(1.-metallic)*base/3.14159265;return diffuse+distribution*geometry*fresnel/(4.*nv*nl);
 }
 @fragment fn fs(@builtin(position) position:vec4<f32>)->@location(0) vec4<f32>{
- let pixel=vec2<i32>(position.xy);let z=textureLoad(depth,pixel,0);let sky=select(vec3(0.62,0.77,0.89),frame.medium.xyz,frame.medium.w>0.5);if z>=1.{return vec4(sky,1.);}
+ let pixel=vec2<i32>(position.xy);let z=textureLoad(depth,pixel,0);let sky=frame.medium.xyz;if z>=1.{return vec4(sky,1.);}
  let base=textureLoad(albedo,pixel,0).rgb;let data=textureLoad(normals,pixel,0);let n=normalize(data.xyz);let p=world(pixel,z);let material=materials.rows[min(u32(round(data.w)),255u)];let v=normalize(frame.eye.xyz-p);let sun=frame.sun.xyz;let light=max(dot(n,sun),0.);let ao=ambient_occlusion(pixel,p,n);let shadow=visibility(p,n);
  let ambient=mix(vec3(0.11,0.13,0.16),vec3(0.40,0.49,0.62),n.y*0.5+0.5)*base*(1.-material.y*0.65)*ao;
  let direct=brdf(base,n,v,sun,material.x,material.y)*vec3(1.,0.94,0.84)*light*3.2*shadow;let hdr=ambient+direct+base*material.z;var rgb=vec3(1.)-exp(-hdr*frame.parameters.x);if frame.parameters.w>0.5{rgb=base;}

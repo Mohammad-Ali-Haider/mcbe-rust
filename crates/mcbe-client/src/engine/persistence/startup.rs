@@ -29,6 +29,8 @@ pub struct Options {
     pub streamed: bool,
     pub modern: bool,
     pub seed: u64,
+    pub dimensions: bool,
+    pub dimension: Option<String>,
 }
 #[derive(Default)]
 pub struct Progress {
@@ -58,6 +60,19 @@ impl Options {
                 .map(|e| e.path());
         }
         let new_world = source.is_none();
+        if !new_world && self.dimension.is_some() {
+            return Err(
+                "--engine-dimension selects a new world; use U to travel in a continued world"
+                    .into(),
+            );
+        }
+        let dimensions = if self.dimensions && new_world {
+            Some(engine::world::dimensions::Definitions::read_home(
+                &self.home,
+            )?)
+        } else {
+            None
+        };
         let local = crate::engine::content::loader::entry(&self.home);
         let pack = if new_world && local.file_name().is_some_and(|n| n == "pack.json") {
             Some(crate::engine::content::loader::read(&local)?)
@@ -76,7 +91,28 @@ impl Options {
                     Registry::built_in()
                 };
                 if self.streamed {
-                    if self.modern {
+                    if self.modern
+                        && let Some(dimensions) = &dimensions
+                    {
+                        dimensions.validate(&registry)?;
+                        let id = self.dimension.as_deref().unwrap_or(&dimensions.start);
+                        let def = dimensions.get(id)?;
+                        let mut client = crate::engine_stream::generate_config(
+                            def.seed(self.seed),
+                            registry,
+                            def.config(3),
+                        )?;
+                        let r = &client.scene.engine.as_ref().unwrap().registry;
+                        let mut context = engine::world::dimensions::State::new(
+                            dimensions.clone(),
+                            self.seed,
+                            id.into(),
+                            r,
+                        )?;
+                        context.revision = 1;
+                        client.scene.engine.as_mut().unwrap().dimensions = Some(context);
+                        client
+                    } else if self.modern {
                         crate::engine_stream::generate_modern(
                             self.seed,
                             registry,
@@ -101,6 +137,13 @@ impl Options {
                 .with_new_builtins()?
         {
             engine::apply_registry(&mut client, registry)?;
+        }
+        if self.dimensions && client.scene.engine.as_ref().unwrap().dimensions.is_none() {
+            let definitions = dimensions.map_or_else(
+                || engine::world::dimensions::Definitions::read_home(&self.home),
+                Ok,
+            )?;
+            engine::world::dimensions::attach_legacy(&mut client, definitions)?;
         }
         progress.phase(3)?;
         if new_world {
@@ -433,6 +476,8 @@ mod tests {
             streamed: false,
             modern: false,
             seed: 1,
+            dimensions: false,
+            dimension: None,
         };
         let mut service = Service::new(options);
         let mut client = placeholder().unwrap();
@@ -482,6 +527,8 @@ mod tests {
             streamed: true,
             modern: false,
             seed: 1,
+            dimensions: false,
+            dimension: None,
         };
         let progress = Progress::default();
         progress.cancelled.store(true, Ordering::Release);

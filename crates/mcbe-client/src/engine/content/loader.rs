@@ -21,6 +21,12 @@ use std::{
     path::{Component, Path},
 };
 include!(concat!(env!("OUT_DIR"), "/builtin_content.rs"));
+pub(crate) fn embedded_file(name: &str) -> Option<&'static [u8]> {
+    EMBEDDED
+        .iter()
+        .find(|(id, _)| *id == name)
+        .map(|(_, bytes)| *bytes)
+}
 
 #[derive(Clone)]
 pub struct ContentPack {

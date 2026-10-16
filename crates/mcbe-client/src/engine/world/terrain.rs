@@ -1,10 +1,12 @@
 //! Versioned deterministic climate, biome palettes and 3D density sampling.
+use super::generation;
 use crate::{
     engine,
     engine_blocks::{BlockId, Registry},
     scene::Result,
 };
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Biome {
@@ -21,6 +23,8 @@ pub struct Biome {
 #[serde(deny_unknown_fields)]
 pub struct Settings {
     pub version: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub generator: Option<Box<generation::Definition>>,
     pub sea_level: i32,
     pub caves: bool,
     pub ravines: bool,
@@ -51,7 +55,17 @@ struct Palette {
     soil: BlockId,
 }
 #[derive(Clone)]
+struct ClimateCache {
+    temperature: i32,
+    moisture: i32,
+    fallback: usize,
+    ocean: Option<usize>,
+    river: Option<usize>,
+}
+#[derive(Clone)]
 pub struct Terrain {
+    profile: Option<Arc<dyn generation::Generator>>,
+    climate: Option<ClimateCache>,
     pub settings: Settings,
     seed: u64,
     palettes: Vec<Palette>,
@@ -69,14 +83,26 @@ pub struct Sample {
     pub biome: usize,
     pub water: Option<i32>,
     pub ravine: bool,
+    #[serde(skip)]
+    pub column: generation::Column,
 }
 fn fade(t: f64) -> f64 {
     t * t * t * (t * (t * 6. - 15.) + 10.)
 }
 impl Terrain {
     pub fn new(seed: u64, r: &Registry, settings: Settings) -> Result<Self> {
-        if settings.version != 1
-            || !(-1024..=1024).contains(&settings.sea_level)
+        Self::with_generators(seed, r, settings, &generation::Registry::built_in())
+    }
+    pub fn with_generators(
+        seed: u64,
+        r: &Registry,
+        mut settings: Settings,
+        generators: &generation::Registry,
+    ) -> Result<Self> {
+        if !matches!(
+            (settings.version, settings.generator.is_some()),
+            (1, false) | (2, true)
+        ) || !(-1024..=1024).contains(&settings.sea_level)
             || settings.biomes.len() > 64
             || settings.biomes.is_empty()
         {
@@ -99,25 +125,78 @@ impl Terrain {
             {
                 return Err("Invalid biome definition".into());
             }
-            palettes.push(Palette {
-                top: r.find(&b.surface)?,
-                soil: r.find(&b.subsurface)?,
-            });
+            let top = r.find(&b.surface)?;
+            let soil = r.find(&b.subsurface)?;
+            if [top, soil]
+                .into_iter()
+                .any(|id| r.get(id).container.is_some())
+            {
+                return Err("Biome materials must be world blocks".into());
+            }
+            palettes.push(Palette { top, soil });
         }
-        for name in ["ocean", "river", "plains"] {
-            if !names.contains(name) {
-                return Err("Terrain requires ocean, river and plains biomes".into());
+        let mut climate = None;
+        let mut profile = None;
+        let mut materials = generation::Materials::default();
+        if let Some(def) = &settings.generator {
+            let c = &def.climate;
+            if !generation::scale(c.temperature_scale) || !generation::scale(c.moisture_scale) {
+                return Err("Invalid climate noise scales".into());
+            }
+            let named = |name: &str| -> Result<usize> {
+                settings
+                    .biomes
+                    .iter()
+                    .position(|b| b.id == name)
+                    .ok_or_else(|| format!("Unknown generator biome: {name}").into())
+            };
+            climate = Some(ClimateCache {
+                temperature: c.temperature_scale,
+                moisture: c.moisture_scale,
+                fallback: named(&c.fallback)?,
+                ocean: c.ocean.as_deref().map(named).transpose()?,
+                river: c.river.as_deref().map(named).transpose()?,
+            });
+            profile = Some(generators.compile(def)?);
+            materials = def.materials.clone();
+        } else {
+            for name in ["ocean", "river", "plains"] {
+                if !names.contains(name) {
+                    return Err("Terrain requires ocean, river and plains biomes".into());
+                }
             }
         }
+        if let (Some(definition), Some(generator)) = (&mut settings.generator, &profile)
+            && let Some(options) = generator.canonical_options()
+        {
+            definition.options = options;
+        }
+        for name in [
+            &materials.stone,
+            &materials.deep,
+            &materials.water,
+            &materials.leaves,
+            &materials.log,
+        ] {
+            let id = r.find(name)?;
+            if r.get(id).container.is_some() {
+                return Err("Generator materials must be world blocks".into());
+            }
+        }
+        if r.get(r.find(&materials.water)?).fluid.is_none() {
+            return Err("Generator water material must have a fluid component".into());
+        }
         Ok(Self {
+            profile,
+            climate,
             settings,
             seed,
             palettes,
-            stone: r.find("slate")?,
-            deep: r.find("basalt")?,
-            water: r.find("water")?,
-            leaves: r.find("oak_leaves")?,
-            log: r.find("oak_log")?,
+            stone: r.find(&materials.stone)?,
+            deep: r.find(&materials.deep)?,
+            water: r.find(&materials.water)?,
+            leaves: r.find(&materials.leaves)?,
+            log: r.find(&materials.log)?,
         })
     }
     fn hash(&self, x: i32, y: i32, z: i32, salt: u64) -> f64 {
@@ -160,7 +239,76 @@ impl Terrain {
             .position(|b| b.id == id)
             .expect("Required biome")
     }
+    pub fn layered(&self) -> bool {
+        self.profile.as_ref().is_some_and(|p| p.layered())
+    }
+    pub fn intersects(&self, rect: [i32; 4]) -> bool {
+        self.profile
+            .as_ref()
+            .is_none_or(|p| p.intersects(generation::Noise(self.seed), rect))
+    }
+    pub fn residency(&self) -> Option<[(i32, i32); 2]> {
+        self.profile.as_ref().and_then(|p| p.residency())
+    }
+    fn profile_sample(&self, x: i32, z: i32) -> Sample {
+        let profile = self.profile.as_ref().unwrap();
+        let climate = self.climate.as_ref().unwrap();
+        let mut column =
+            profile.column(generation::Noise(self.seed), self.settings.sea_level, x, z);
+        let temperature = self.n2(x, z, climate.temperature, 0x1002);
+        let moisture = self.n2(x, z, climate.moisture, 0x1003);
+        let mut ravine = false;
+        if self.settings.ravines
+            && profile.ravines()
+            && column.water.is_none()
+            && column.wet == generation::WaterBiome::None
+        {
+            let cx = x.div_euclid(512);
+            let cz = z.div_euclid(512);
+            let n = engine::noise(cx, cz, self.seed ^ 0x2001);
+            if n.is_multiple_of(3) && (48..464).contains(&x.rem_euclid(512)) {
+                let middle = cz * 512 + 256 + (self.n2(x, 0, 128, 0x2002) * 80.) as i32;
+                let width = 4. + self.n2(x, z, 64, 0x2003).abs() * 3.;
+                let distance = (z - middle).abs() as f64;
+                if distance < width {
+                    column.top -= ((1. - (distance / width).powi(3)) * 34.).floor() as i32;
+                    ravine = true;
+                }
+            }
+        }
+        let water_biome = match column.wet {
+            generation::WaterBiome::Ocean => climate.ocean,
+            generation::WaterBiome::River => climate.river,
+            generation::WaterBiome::None => None,
+        };
+        let biome = water_biome.unwrap_or_else(|| {
+            self.settings
+                .biomes
+                .iter()
+                .enumerate()
+                .find(|(i, b)| {
+                    Some(*i) != climate.ocean
+                        && Some(*i) != climate.river
+                        && (b.temperature[0]..=b.temperature[1]).contains(&temperature)
+                        && (b.moisture[0]..=b.moisture[1]).contains(&moisture)
+                        && (b.altitude[0]..=b.altitude[1]).contains(&column.top)
+                })
+                .map_or(climate.fallback, |(i, _)| i)
+        });
+        Sample {
+            height: column.top,
+            temperature,
+            moisture,
+            biome,
+            water: column.water,
+            ravine,
+            column,
+        }
+    }
     pub fn sample(&self, x: i32, z: i32) -> Sample {
+        if self.profile.is_some() {
+            return self.profile_sample(x, z);
+        }
         let sea = self.settings.sea_level;
         let continent = self.n2(x, z, 768, 0x1001);
         let temperature = self.n2(x, z, 1024, 0x1002);
@@ -221,6 +369,10 @@ impl Terrain {
                 .unwrap_or_else(|| self.named("plains"))
         };
         Sample {
+            column: generation::Column {
+                water,
+                ..generation::Column::surface(height)
+            },
             height,
             temperature,
             moisture,
@@ -234,7 +386,8 @@ impl Terrain {
         let x = c[0] * 16 + 4 + ((n >> 8) % 8) as i32;
         let z = c[1] * 16 + 4 + ((n >> 16) % 8) as i32;
         let s = self.sample(x, z);
-        if s.water.is_some()
+        if !s.column.present
+            || s.water.is_some()
             || s.ravine
             || n % 100 >= u64::from(self.settings.biomes[s.biome].trees)
         {
@@ -255,6 +408,14 @@ impl Terrain {
     }
     pub fn block(&self, p: [i32; 3], s: Sample, tree: Option<[i32; 3]>) -> Option<BlockId> {
         let [x, y, z] = p;
+        if !s.column.present || s.column.bottom.is_some_and(|b| y < b) {
+            return None;
+        }
+        if let Some(ceiling) = s.column.ceiling
+            && y >= ceiling
+        {
+            return s.column.roof_top.filter(|top| y < *top).map(|_| self.stone);
+        }
         if y >= s.height {
             if s.water.is_some_and(|w| y < w) {
                 return Some(self.water);
@@ -300,7 +461,8 @@ impl Terrain {
                     }
                     let (x, z) = (x * 64, z * 64);
                     let sample = self.sample(x, z);
-                    if self.settings.biomes[sample.biome].id == desired
+                    if sample.column.present
+                        && self.settings.biomes[sample.biome].id == desired
                         && sample.water.is_none()
                         && !sample.ravine
                     {
@@ -312,15 +474,25 @@ impl Terrain {
         self.spawn()
     }
     pub fn spawn(&self) -> [i32; 3] {
-        for radius in 0..=16i32 {
+        let (limit, step): (i32, i32) = if self.profile.is_some() {
+            (64, 8)
+        } else {
+            (16, 32)
+        };
+        for radius in 0..=limit {
             for x in -radius..=radius {
                 for z in -radius..=radius {
                     if x.abs() != radius && z.abs() != radius {
                         continue;
                     }
-                    let (x, z) = (x * 32, z * 32);
+                    let (x, z) = (x * step, z * step);
                     let s = self.sample(x, z);
-                    if s.water.is_none() && !s.ravine && s.height < 128 {
+                    if s.column.present
+                        && s.water.is_none()
+                        && !s.ravine
+                        && (self.profile.is_some() || s.height < 128)
+                        && s.column.ceiling.is_none_or(|v| v > s.height + 8)
+                    {
                         return [x, s.height + 6, z];
                     }
                 }

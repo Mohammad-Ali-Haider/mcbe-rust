@@ -5,3 +5,7 @@ pub(crate) mod storage;
 
 pub(crate) mod terrain;
 pub(crate) mod volume;
+
+pub(crate) mod generation;
+
+pub(crate) mod dimensions;

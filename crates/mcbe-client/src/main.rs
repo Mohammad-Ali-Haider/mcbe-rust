@@ -133,6 +133,8 @@ struct App {
     parkour_live: Option<verification::parkour::Live>,
     controller_live: Option<verification::controller::Live>,
     entity_live: Option<verification::entities::Live>,
+    dimension_live: Option<verification::dimensions::Live>,
+    dimension_graphics: Option<usize>,
     capture_out: Option<PathBuf>,
     simulation_previous: mcbe_core::motion::Vec3,
     palette: engine_ui::Palette,
@@ -225,6 +227,8 @@ impl App {
             parkour_live: None,
             controller_live: None,
             entity_live: None,
+            dimension_live: None,
+            dimension_graphics: None,
             capture_out: None,
             simulation_previous: client.actor.position,
             flight_tap: Default::default(),
@@ -290,6 +294,24 @@ impl App {
             Action::Resume => {
                 self.capture(!self.smoke);
                 self.previous = Instant::now();
+            }
+            Action::Dimensions => {
+                if self
+                    .client
+                    .scene
+                    .engine
+                    .as_ref()
+                    .and_then(|s| s.dimensions.as_ref())
+                    .is_none()
+                {
+                    return Err("Start a generated world to use dimensions".into());
+                }
+                self.menu.page = engine_settings::Page::Closed;
+                self.menu.revision += 1;
+                self.engine_key(KeyCode::KeyU)?;
+                if self.controls.router.device == engine::input::gamepad::Device::Gamepad {
+                    self.controller_focus_panel()?;
+                }
             }
             Action::Save => {
                 self.request_save()?;
@@ -423,6 +445,10 @@ impl App {
             self.notice = Some("Action will follow destination preparation".into());
             return Ok(true);
         }
+        if code == KeyCode::Escape && self.dimension_graphics.is_some() {
+            self.notice = Some("Finishing dimension graphics...".into());
+            return Ok(true);
+        }
         if code == KeyCode::Escape && self.load_busy() {
             self.loader.as_mut().unwrap().cancel();
             self.deferred = None;
@@ -473,6 +499,29 @@ impl App {
                     | KeyCode::F11
             )
         {
+            return Ok(true);
+        }
+        if code == KeyCode::KeyU && !self.palette.open {
+            if self.client.view.is_free() {
+                return Err("Return from free camera before opening dimensions".into());
+            }
+            if self
+                .client
+                .scene
+                .engine
+                .as_ref()
+                .unwrap()
+                .dimensions
+                .is_none()
+            {
+                return Err("Start or continue a generated world to use dimensions".into());
+            }
+            self.palette.open_screen(&self.client, "dimensions")?;
+            let (position, viewport) = self.inventory_pointer();
+            self.palette.move_pointer(&self.client, position, viewport);
+            self.keys.clear();
+            self.capture(false);
+            self.accumulator = 0.;
             return Ok(true);
         }
         if code == KeyCode::KeyV && !self.palette.open {
@@ -575,7 +624,8 @@ impl App {
         if self.palette.open && code != KeyCode::F6 {
             self.palette.viewport = self.inventory_pointer().1;
             self.palette.key(&mut self.client, code)?;
-            if !self.palette.open {
+            self.ui_commands()?;
+            if !self.palette.open && !self.load_busy() {
                 self.capture(true);
             }
             self.keys.clear();
@@ -706,7 +756,7 @@ impl App {
         Ok(true)
     }
     fn load_busy(&self) -> bool {
-        self.loader.as_ref().is_some_and(|s| s.busy())
+        self.dimension_graphics.is_some() || self.loader.as_ref().is_some_and(|s| s.busy())
     }
     fn ensure_loader(&mut self) -> Result<()> {
         if self.loader.is_none() {
@@ -721,6 +771,19 @@ impl App {
         self.capture(false);
         self.notice = Some(message.into());
     }
+    pub(crate) fn ui_commands(&mut self) -> Result<()> {
+        if let Some(id) = self.palette.pending_dimension.take() {
+            if self.startup_blocked() || self.load_busy() || self.close_after_save {
+                return Err("Wait for world preparation before dimension travel".into());
+            }
+            self.ensure_loader()?;
+            self.loader.as_mut().unwrap().dimension(&self.client, &id)?;
+            self.flight_tap.reset();
+            self.world_accumulator = 0.;
+            self.begin_loading("Preparing dimension... | Escape cancels");
+        }
+        Ok(())
+    }
     fn request_travel(&mut self, destination: engine_loading::Destination) -> Result<()> {
         if self.client.view.is_free() {
             self.client.view.mode = engine_camera::Mode::FirstPerson;
@@ -734,6 +797,20 @@ impl App {
         Ok(())
     }
     fn poll_loads(&mut self) -> Result<()> {
+        if self
+            .dimension_graphics
+            .is_some_and(|start| self.frames > start + 1)
+            && self
+                .gpu
+                .as_ref()
+                .is_some_and(|g| g.stats.meshes_ready && g.stats.distant_ready)
+        {
+            self.dimension_graphics = None;
+            self.previous = Instant::now();
+            self.accumulator = 0.;
+            self.world_accumulator = 0.;
+            self.notice = Some("Dimension ready | U: Dimensions".into());
+        }
         let event = if let Some(loader) = &mut self.loader {
             loader.poll(&mut self.client)?
         } else {
@@ -748,7 +825,16 @@ impl App {
                 self.simulation_previous = self.client.actor.position;
                 self.accumulator = 0.;
                 self.previous = Instant::now();
-                if event.reload {
+                if let Some(id) = &event.dimension {
+                    self.dimension_graphics = self.gpu.as_ref().map(|_| self.frames);
+                    self.palette = engine_ui::Palette::recover(&self.client);
+                    self.flight_tap.reset();
+                    self.notice = Some(if self.dimension_graphics.is_some() {
+                        "Preparing dimension graphics...".into()
+                    } else {
+                        format!("Dimension ready: {id} | U: Dimensions")
+                    });
+                } else if event.reload {
                     self.palette = engine_ui::Palette::recover(&self.client);
                     self.notice = Some("Reloaded saved world and inventory".into());
                 } else {
@@ -1240,10 +1326,12 @@ impl App {
         verification::parkour::advance(self)?;
         verification::controller::advance(self)?;
         verification::entities::advance(self)?;
+        verification::dimensions::advance(self)?;
         let now = Instant::now();
         let dt = (now - self.previous).as_secs_f32().min(0.25);
         self.previous = now;
         self.controller_poll(dt)?;
+        self.ui_commands()?;
         if !self.smoke {
             self.advance_machines(dt);
         }
@@ -1685,6 +1773,7 @@ impl ApplicationHandler for App {
         }
         match event {
             WindowEvent::CloseRequested => {
+                self.dimension_graphics = None;
                 if self.startup_blocked() && self.startup.as_ref().is_some_and(|s| s.ready) {
                     self.startup.as_mut().unwrap().counters.graphics_cancelled = true;
                     if let Some(gpu) = &mut self.gpu {
@@ -1918,7 +2007,11 @@ impl ApplicationHandler for App {
                             },
                             shift: self.modifiers.shift_key(),
                         };
-                        if let Err(e) = self.palette.click(&mut self.client, pointer) {
+                        if let Err(e) = self
+                            .palette
+                            .click(&mut self.client, pointer)
+                            .and_then(|_| self.ui_commands())
+                        {
                             self.notice = Some(e.to_string());
                         }
                     }
@@ -2815,6 +2908,8 @@ fn main() -> Result<()> {
         parkour_live: None,
         controller_live: None,
         entity_live: None,
+        dimension_live: None,
+        dimension_graphics: None,
         capture_out: None,
         simulation_previous: client.actor.position,
         settings: Default::default(),

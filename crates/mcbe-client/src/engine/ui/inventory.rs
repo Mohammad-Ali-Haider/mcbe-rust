@@ -27,6 +27,7 @@ pub struct Pointer {
 }
 #[derive(Default)]
 pub struct Palette {
+    pub pending_dimension: Option<String>,
     pub screen: String,
     pub station: Option<[i32; 3]>,
     pub model: super::framework::screen::Model,
@@ -128,6 +129,51 @@ impl Palette {
             .entry("ui_controls".into())
             .or_insert_with(|| "Tab / arrows navigate, Enter selects".into());
         let state = client.scene.engine.as_ref().unwrap();
+        if self.screen_id() == "dimensions"
+            && let Some(d) = &state.dimensions
+        {
+            let count = d.definitions.dimensions.len();
+            let last = count
+                .div_ceil(crate::engine::world::dimensions::screen::PAGE)
+                .saturating_sub(1);
+            let page = (model.number("dimension_page").max(0.) as usize).min(last);
+            model.numbers.insert("dimension_page".into(), page as f64);
+            model.numbers.insert("dimension_count".into(), count as f64);
+            model
+                .texts
+                .insert("dimension_active_id".into(), d.active.clone());
+            model.texts.insert(
+                "dimension_active_label".into(),
+                d.definitions
+                    .get(&d.active)
+                    .map(|v| v.label.clone())
+                    .unwrap_or_else(|_| d.active.clone()),
+            );
+            for i in 0..crate::engine::world::dimensions::screen::PAGE {
+                if let Some(def) = d
+                    .definitions
+                    .dimensions
+                    .get(page * crate::engine::world::dimensions::screen::PAGE + i)
+                {
+                    model
+                        .texts
+                        .insert(format!("dimension_id_{i}"), def.id.clone());
+                    model
+                        .texts
+                        .insert(format!("dimension_label_{i}"), def.label.clone());
+                    model.numbers.insert(
+                        format!("dimension_visited_{i}"),
+                        if d.inactive.contains_key(&def.id) {
+                            1.
+                        } else {
+                            0.
+                        },
+                    );
+                } else {
+                    model.texts.remove(&format!("dimension_id_{i}"));
+                }
+            }
+        }
         if let Some(f) = self.station.and_then(|p| state.machines.furnaces.get(&p)) {
             model
                 .numbers
@@ -237,6 +283,11 @@ impl Palette {
         }
         if self.screen_id() != "inventory" {
             let document = self.document(client, self.viewport)?;
+            if self.screen_id() == "dimensions"
+                && matches!(key, KeyCode::PageUp | KeyCode::PageDown)
+            {
+                return self.control_page(client, if key == KeyCode::PageDown { 1 } else { -1 });
+            }
             let direction = match key {
                 KeyCode::ArrowLeft => Some([-1., 0.]),
                 KeyCode::ArrowRight => Some([1., 0.]),
@@ -366,7 +417,28 @@ impl Palette {
         self.revision = self.revision.wrapping_add(1);
         Ok(())
     }
+    pub(crate) fn page_dimensions(&mut self, client: &Client, delta: i32) {
+        let count = client
+            .scene
+            .engine
+            .as_ref()
+            .and_then(|s| s.dimensions.as_ref())
+            .map_or(0, |d| d.definitions.dimensions.len());
+        let last = count
+            .div_ceil(crate::engine::world::dimensions::screen::PAGE)
+            .saturating_sub(1) as i32;
+        let page = (self.model.number("dimension_page") as i32 + delta).clamp(0, last);
+        self.model
+            .numbers
+            .insert("dimension_page".into(), page as f64);
+        self.hover = None;
+        self.revision = self.revision.wrapping_add(1);
+    }
     pub fn scroll(&mut self, client: &Client, delta: i32) {
+        if self.screen_id() == "dimensions" {
+            self.page_dimensions(client, delta);
+            return;
+        }
         let count = self
             .visible(&client.scene.engine.as_ref().unwrap().registry)
             .len();
@@ -448,6 +520,20 @@ impl Palette {
                     &mut self.model,
                 )?;
                 match effect {
+                    super::framework::screen::Effect::TravelDimension(id) => {
+                        client
+                            .scene
+                            .engine
+                            .as_ref()
+                            .unwrap()
+                            .dimensions
+                            .as_ref()
+                            .ok_or("Dimension registry is unavailable")?
+                            .definitions
+                            .get(&id)?;
+                        self.close(client)?;
+                        self.pending_dimension = Some(id);
+                    }
                     super::framework::screen::Effect::None => {}
                     super::framework::screen::Effect::Close => self.close(client)?,
                     super::framework::screen::Effect::Open(id) => self.open_screen(client, &id)?,

@@ -49,6 +49,12 @@ impl Library {
             .register("crafting_table", Arc::new(table))
             .expect("Table screen");
         result
+            .register(
+                "dimensions",
+                Arc::new(crate::engine::world::dimensions::screen::Picker),
+            )
+            .expect("Dimension picker");
+        result
             .register("ui_lab", Arc::new(Laboratory))
             .expect("Code-built UI laboratory");
         result

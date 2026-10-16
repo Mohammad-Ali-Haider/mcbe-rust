@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "id": "cavern",
+  "label": "Caverns",
+  "seed_offset": 504147,
+  "terrain": {
+    "version": 2,
+    "sea_level": 64,
+    "caves": false,
+    "ravines": false,
+    "biomes": [
+      {
+        "id": "moss_cavern",
+        "label": "Moss Caverns",
+        "surface": "moss",
+        "subsurface": "earth",
+        "trees": 0,
+        "temperature": [
+          -1,
+          1
+        ],
+        "moisture": [
+          0.1,
+          1
+        ],
+        "altitude": [
+          -2147483648,
+          2147483647
+        ]
+      },
+      {
+        "id": "stone_cavern",
+        "label": "Stone Caverns",
+        "surface": "slate",
+        "subsurface": "basalt",
+        "trees": 0,
+        "temperature": [
+          -1,
+          1
+        ],
+        "moisture": [
+          -1,
+          1
+        ],
+        "altitude": [
+          -2147483648,
+          2147483647
+        ]
+      }
+    ],
+    "generator": {
+      "kind": "cavern",
+      "options": {
+        "version": 1,
+        "floor": 24,
+        "floor_scale": 96,
+        "floor_height": 18,
+        "clearance": 48,
+        "ceiling_scale": 128,
+        "ceiling_height": 10,
+        "roof_thickness": 20,
+        "water_level": 16
+      },
+      "climate": {
+        "fallback": "stone_cavern",
+        "ocean": null,
+        "river": null,
+        "temperature_scale": 1024,
+        "moisture_scale": 640
+      },
+      "materials": {
+        "stone": "slate",
+        "deep": "basalt",
+        "water": "water",
+        "leaves": "oak_leaves",
+        "log": "oak_log"
+      }
+    }
+  },
+  "environment": {
+    "fog_color": [
+      0.04,
+      0.055,
+      0.075
+    ]
+  }
+}

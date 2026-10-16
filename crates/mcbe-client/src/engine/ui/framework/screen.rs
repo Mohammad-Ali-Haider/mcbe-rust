@@ -33,6 +33,8 @@ pub enum Action {
     Close,
     Open { screen: String },
     Increment { key: String, amount: f64 },
+    SetNumber { key: String, value: f64 },
+    TravelDimension { dimension: String },
     SetText { key: String, value: String },
     Custom { id: String },
 }
@@ -40,7 +42,10 @@ impl Action {
     pub fn validate(&self) -> Result<()> {
         let key = match self {
             Self::Open { screen } => screen,
-            Self::Increment { key, .. } | Self::SetText { key, .. } => key,
+            Self::Increment { key, .. }
+            | Self::SetNumber { key, .. }
+            | Self::SetText { key, .. } => key,
+            Self::TravelDimension { dimension } => dimension,
             Self::Custom { id } => id,
             Self::Close => return Ok(()),
         };
@@ -48,6 +53,8 @@ impl Action {
             return Err("UI action key invalid".into());
         }
         if matches!(self,Self::Increment{amount,..} if !amount.is_finite() || amount.abs()>1e6)
+            || matches!(self,Self::SetNumber{value,..} if !value.is_finite() || value.abs()>1e6)
+            || matches!(self,Self::TravelDimension{dimension} if !crate::engine::blocks::state::identifier(dimension))
             || matches!(self,Self::SetText{value,..} if value.len()>512)
         {
             return Err("UI action value invalid".into());
@@ -59,12 +66,23 @@ pub enum Effect {
     None,
     Close,
     Open(String),
+    TravelDimension(String),
 }
 pub trait Screen: Send + Sync {
     fn build(&self, model: &Model) -> Document;
     fn action(&self, action: &Action, model: &mut Model) -> Result<Effect> {
         action.validate()?;
         match action {
+            Action::TravelDimension { dimension } => Ok(Effect::TravelDimension(dimension.clone())),
+            Action::SetNumber { key, value } => {
+                if !model.numbers.contains_key(key)
+                    && model.numbers.len() + model.texts.len() >= 128
+                {
+                    return Err("UI model exceeds128 values".into());
+                }
+                model.numbers.insert(key.clone(), *value);
+                Ok(Effect::None)
+            }
             Action::Close => Ok(Effect::Close),
             Action::Open { screen } => Ok(Effect::Open(screen.clone())),
             Action::Increment { key, amount } => {

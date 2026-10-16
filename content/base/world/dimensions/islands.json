@@ -1,0 +1,182 @@
+{
+  "version": 1,
+  "id": "islands",
+  "label": "Floating Islands",
+  "seed_offset": 719531,
+  "terrain": {
+    "version": 2,
+    "sea_level": 64,
+    "caves": false,
+    "ravines": false,
+    "biomes": [
+      {
+        "id": "ocean",
+        "label": "Ocean",
+        "surface": "sand",
+        "subsurface": "sand",
+        "trees": 0,
+        "temperature": [
+          -1,
+          1
+        ],
+        "moisture": [
+          -1,
+          1
+        ],
+        "altitude": [
+          -2147483648,
+          2147483647
+        ]
+      },
+      {
+        "id": "river",
+        "label": "River",
+        "surface": "sand",
+        "subsurface": "clay",
+        "trees": 0,
+        "temperature": [
+          -1,
+          1
+        ],
+        "moisture": [
+          -1,
+          1
+        ],
+        "altitude": [
+          -2147483648,
+          2147483647
+        ]
+      },
+      {
+        "id": "snow",
+        "label": "Snowy Peaks",
+        "surface": "snow",
+        "subsurface": "slate",
+        "trees": 0,
+        "temperature": [
+          -1,
+          0.2
+        ],
+        "moisture": [
+          -1,
+          1
+        ],
+        "altitude": [
+          128,
+          2147483647
+        ]
+      },
+      {
+        "id": "mountains",
+        "label": "Mountains",
+        "surface": "slate",
+        "subsurface": "slate",
+        "trees": 0,
+        "temperature": [
+          -1,
+          1
+        ],
+        "moisture": [
+          -1,
+          1
+        ],
+        "altitude": [
+          120,
+          2147483647
+        ]
+      },
+      {
+        "id": "desert",
+        "label": "Desert",
+        "surface": "sand",
+        "subsurface": "sand",
+        "trees": 0,
+        "temperature": [
+          0.25,
+          1
+        ],
+        "moisture": [
+          -1,
+          0.15
+        ],
+        "altitude": [
+          -2147483648,
+          2147483647
+        ]
+      },
+      {
+        "id": "forest",
+        "label": "Forest",
+        "surface": "meadow",
+        "subsurface": "earth",
+        "trees": 65,
+        "temperature": [
+          -1,
+          1
+        ],
+        "moisture": [
+          0.1,
+          1
+        ],
+        "altitude": [
+          -2147483648,
+          2147483647
+        ]
+      },
+      {
+        "id": "plains",
+        "label": "Plains",
+        "surface": "meadow",
+        "subsurface": "earth",
+        "trees": 16,
+        "temperature": [
+          -1,
+          1
+        ],
+        "moisture": [
+          -1,
+          1
+        ],
+        "altitude": [
+          -2147483648,
+          2147483647
+        ]
+      }
+    ],
+    "generator": {
+      "kind": "islands",
+      "options": {
+        "version": 1,
+        "spacing": 192,
+        "radius": 72,
+        "altitude": 112,
+        "altitude_variation": 24,
+        "thickness": 32,
+        "relief": 14,
+        "detail_scale": 32,
+        "detail_height": 3
+      },
+      "climate": {
+        "fallback": "plains",
+        "ocean": "ocean",
+        "river": "river",
+        "temperature_scale": 1024,
+        "moisture_scale": 640
+      },
+      "materials": {
+        "stone": "slate",
+        "deep": "basalt",
+        "water": "water",
+        "leaves": "oak_leaves",
+        "log": "oak_log"
+      }
+    }
+  },
+  "environment": {
+    "fog_color": [
+      0.62,
+      0.77,
+      0.89
+    ]
+  }
+}

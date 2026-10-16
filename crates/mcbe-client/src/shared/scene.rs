@@ -479,6 +479,8 @@ pub struct Client {
     pub appearance: std::sync::Arc<crate::engine::player::appearance::Appearance>,
     pub owned_materials: Option<crate::engine_materials::Owned>,
     pub engine_gpu_prepared: std::cell::RefCell<Option<crate::engine_texture::Prepared>>,
+    pub engine_distant_prepared:
+        std::cell::RefCell<Option<crate::engine::render::distance::Prepared>>,
     pub movement: crate::engine_player::Movement,
     pub engine_render_cache: std::cell::RefCell<Option<crate::render::EngineCache>>,
     pub engine_cache_enabled: bool,
@@ -545,6 +547,7 @@ impl Client {
                 crate::engine::player::appearance::Appearance::fallback(),
             ),
             engine_gpu_prepared: std::cell::RefCell::new(None),
+            engine_distant_prepared: std::cell::RefCell::new(None),
             movement: Default::default(),
             scene,
             owned_materials: None,
@@ -586,6 +589,16 @@ impl Client {
         self.placement = self.available_materials[(index + 1) % self.available_materials.len()];
     }
     pub fn set_spawn(&mut self, position: Vec3) -> Result<()> {
+        self.set_spawn_checked(position, &|| false)
+    }
+    pub fn set_spawn_checked(
+        &mut self,
+        position: Vec3,
+        cancelled: &dyn Fn() -> bool,
+    ) -> Result<()> {
+        if cancelled() {
+            return Err("World preparation cancelled".into());
+        }
         let actor = Actor::new(position, self.movement.body())?;
         if self
             .scene
@@ -594,7 +607,7 @@ impl Client {
             .and_then(|s| s.stream.as_ref())
             .is_some()
         {
-            crate::engine_stream::prepare(self, position)?;
+            crate::engine_stream::prepare_with_cancel(self, position, cancelled)?;
         }
         self.scene.recenter(position)?;
         if self.scene.engine.is_some() {

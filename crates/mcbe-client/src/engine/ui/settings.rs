@@ -85,6 +85,7 @@ pub enum Action {
     Changed,
     Resume,
     Save,
+    Dimensions,
     Fullscreen,
 }
 impl Menu {
@@ -116,7 +117,7 @@ impl Menu {
     }
     pub fn count(&self) -> usize {
         match self.page {
-            Page::Pause => 3,
+            Page::Pause => 4,
             Page::Graphics => 8,
             _ => 10,
         }
@@ -135,7 +136,12 @@ impl Menu {
     }
     pub fn labels(&self, s: &Settings, streamed: bool, fullscreen: bool) -> Vec<String> {
         if self.page == Page::Pause {
-            return vec!["Resume Game".into(), "Settings".into(), "Save World".into()];
+            return vec![
+                "Resume Game".into(),
+                "Settings".into(),
+                "Save World".into(),
+                "Dimensions".into(),
+            ];
         }
         if self.page == Page::Graphics {
             return vec![
@@ -210,7 +216,8 @@ impl Menu {
                     self.selected = 0;
                     Action::None
                 }
-                _ => Action::Save,
+                2 => Action::Save,
+                _ => Action::Dimensions,
             };
         }
         if self.page == Page::Graphics {

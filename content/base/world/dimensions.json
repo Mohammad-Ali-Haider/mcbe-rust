@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "start": "surface",
+  "dimensions": [
+    "dimensions/surface.json",
+    "dimensions/cavern.json",
+    "dimensions/islands.json"
+  ]
+}

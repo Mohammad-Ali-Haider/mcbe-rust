@@ -64,7 +64,28 @@ impl SavedMachines {
             furnaces,
         })
     }
-    fn restore(self, r: &Registry, recipes: &Recipes) -> Result<Machines> {
+    /// Reset only changed recipes before strict timer validation under the new pack.
+    pub fn reconfigured(
+        m: &Machines,
+        old: &Registry,
+        new: &Registry,
+        previous: &Recipes,
+        next: &Recipes,
+    ) -> Result<Self> {
+        let previous = previous.definitions.clone().available(new).compile(new)?;
+        let mut saved = Self::capture(m, old)?;
+        for f in &mut saved.furnaces {
+            if let Some(input) = &f.slots[0] {
+                let id = new.find(&input.block)?;
+                if previous.get(id) != next.get(id) {
+                    f.cook_ms = 0;
+                    f.cooking = None;
+                }
+            }
+        }
+        Ok(saved)
+    }
+    pub(crate) fn restore(self, r: &Registry, recipes: &Recipes) -> Result<Machines> {
         if self.furnaces.len() > MAX_MACHINES {
             return Err("Saved machine budget exceeded".into());
         }
@@ -120,14 +141,14 @@ pub fn restore(
 ) -> Result<()> {
     let state = client.scene.engine.as_ref().unwrap();
     let recipes = match definitions {
-        Some(d) if matches!(version, 6..=12) => d.compile(&state.registry)?,
+        Some(d) if matches!(version, 6..=13) => d.compile(&state.registry)?,
         None if version < 6 => Definitions::built_in()
             .available(&state.registry)
             .compile(&state.registry)?,
         _ => return Err("Save smelting/version mismatch".into()),
     };
     let machines = match saved {
-        Some(s) if matches!(version, 6..=12) => s.restore(&state.registry, &recipes)?,
+        Some(s) if matches!(version, 6..=13) => s.restore(&state.registry, &recipes)?,
         None if version < 6 => Machines::default(),
         _ => return Err("Save machines/version mismatch".into()),
     };
@@ -155,10 +176,6 @@ pub fn validate_positions(state: &WorldState, machines: &Machines, r: &Registry)
         }
     }
     Ok(())
-}
-pub fn remap(m: &Machines, old: &Registry, new: &Registry, recipes: &Recipes) -> Result<Machines> {
-    let saved = SavedMachines::capture(m, old)?;
-    saved.restore(new, recipes)
 }
 
 #[cfg(test)]

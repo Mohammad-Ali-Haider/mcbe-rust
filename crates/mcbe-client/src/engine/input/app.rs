@@ -212,7 +212,7 @@ impl App {
             if frame.pressed(B::Start) || frame.pressed(B::East) {
                 self.palette.key(&mut self.client, K::Escape)?;
                 self.controls.keyboard.close();
-                if !self.palette.open {
+                if !self.palette.open && !self.load_busy() {
                     self.capture(true);
                 }
                 return Ok(());
@@ -231,7 +231,19 @@ impl App {
             if frame.pressed(B::RightShoulder) {
                 self.palette.control_page(&self.client, 1)?;
             }
-            if frame.pressed(B::View) {
+            if frame.pressed(B::View)
+                && self
+                    .palette
+                    .document(&self.client, self.palette.viewport)?
+                    .widgets
+                    .iter()
+                    .any(|w| {
+                        matches!(
+                            w.widget.kind,
+                            crate::engine::ui::framework::widgets::Kind::Search
+                        )
+                    })
+            {
                 self.palette.search = true;
                 self.palette.revision += 1;
             }
@@ -256,12 +268,13 @@ impl App {
                     true,
                 )?;
             }
+            self.ui_commands()?;
             if self.palette.search {
                 self.controls
                     .keyboard
                     .show(&self.client, self.palette.viewport)?;
             }
-            if !self.palette.open {
+            if !self.palette.open && !self.load_busy() {
                 self.capture(true);
             }
             return Ok(());
@@ -277,7 +290,11 @@ impl App {
             return Ok(());
         }
         if frame.pressed(B::View) {
-            self.engine_key(K::F12)?;
+            self.engine_key(if frame.down(B::RightStick) {
+                K::KeyU
+            } else {
+                K::F12
+            })?;
             self.controller_focus_panel()?;
             return Ok(());
         }

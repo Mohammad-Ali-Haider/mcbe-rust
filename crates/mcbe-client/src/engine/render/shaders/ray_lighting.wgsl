@@ -85,6 +85,6 @@ fn ray_noise(p:vec2<u32>)->f32{var n=p.x*1973u+p.y*9277u+8917u;n=(n^(n>>16u))*22
   reflection=reflected_color(p+n*0.035,reflect(-view,n))*fresnel*(1.-material.x*0.8);
  }
  let hdr=ambient+direct+indirect*base*(1.-material.y)+reflection+base*material.z;let rgb=vec3(1.)-exp(-hdr*frame.parameters.x);
- let sky=select(vec3(0.62,0.77,0.89),frame.medium.xyz,frame.medium.w>0.5);let d=select(distance(p_world,frame.eye.xyz),distance(p_world.xz,frame.eye.xz),frame.fog.z>0.5 && frame.medium.w<0.5);let fog=clamp((d-frame.fog.x)/(frame.fog.y-frame.fog.x),0.,1.);
+ let sky=frame.medium.xyz;let d=select(distance(p_world,frame.eye.xyz),distance(p_world.xz,frame.eye.xz),frame.fog.z>0.5 && frame.medium.w<0.5);let fog=clamp((d-frame.fog.x)/(frame.fog.y-frame.fog.x),0.,1.);
  return mix(fallback,vec4(mix(rgb,sky,fog),1.),weight);
 }

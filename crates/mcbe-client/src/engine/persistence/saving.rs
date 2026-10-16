@@ -52,6 +52,7 @@ pub struct Event {
     pub timing: SaveTiming,
 }
 struct Stamp {
+    dimensions: Option<u64>,
     entities: u64,
     movement: crate::engine_player::Movement,
     instance: u64,
@@ -66,6 +67,7 @@ impl Stamp {
     fn capture(client: &Client) -> Self {
         let s = client.scene.engine.as_ref().unwrap();
         Self {
+            dimensions: s.dimensions.as_ref().map(|d| d.revision),
             entities: s.entities.stats.revision,
             movement: client.movement,
             instance: s.instance,
@@ -79,7 +81,8 @@ impl Stamp {
     }
     fn matches(&self, client: &Client) -> bool {
         client.scene.engine.as_ref().is_some_and(|s| {
-            s.entities.stats.revision == self.entities
+            s.dimensions.as_ref().map(|d| d.revision) == self.dimensions
+                && s.entities.stats.revision == self.entities
                 && s.instance == self.instance
                 && s.revision == self.revision
                 && s.registry_revision == self.registry

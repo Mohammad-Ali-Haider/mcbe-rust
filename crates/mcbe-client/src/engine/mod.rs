@@ -31,7 +31,7 @@ use std::{
 };
 
 pub const CHECKPOINT: u32 = 48;
-pub const SAVE_VERSION: u32 = 12;
+pub const SAVE_VERSION: u32 = 13;
 pub const BOUNDS: Bounds = Bounds {
     min: [-40, 0, -40],
     max: [40, 40, 40],
@@ -39,6 +39,7 @@ pub const BOUNDS: Bounds = Bounds {
 pub const SPAWN: Vec3 = Vec3::new(0.5, 4., -9.5);
 #[derive(Clone)]
 pub struct WorldState {
+    pub dimensions: Option<world::dimensions::State>,
     pub entities: entities::World,
     pub original_entity_revision: u64,
     pub fluids: fluids::Fluids,
@@ -86,6 +87,7 @@ impl WorldState {
         let mut entities = entities::World::new(&registry);
         entities.random ^= seed;
         Self {
+            dimensions: None,
             entities,
             original_entity_revision: 0,
             fluids: Default::default(),
@@ -116,7 +118,8 @@ impl WorldState {
     }
     pub fn pending(&self) -> usize {
         if let Some(stream) = &self.stream {
-            return self.fluids.pending()
+            return usize::from(self.dimensions.as_ref().is_some_and(|d| d.pending()))
+                + self.fluids.pending()
                 + stream.pending()
                 + self.player.changed_slots(&self.original_player)
                 + self.machines.changed(&self.original_machines)
@@ -151,6 +154,8 @@ struct Cell {
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Document {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    dimensions: Option<world::dimensions::Saved>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     entities: Option<entities::Saved>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -393,6 +398,7 @@ enum SavedTerrain {
     ),
 }
 pub struct SaveSnapshot {
+    dimensions: Option<world::dimensions::State>,
     entities: entities::Saved,
     entity_revision: u64,
     fluids: BTreeMap<[i32; 3], u16>,
@@ -428,6 +434,7 @@ impl SaveSnapshot {
     pub fn capture(client: &Client) -> Result<Self> {
         let s = client.scene.engine.as_ref().ok_or("Engine world missing")?;
         Ok(Self {
+            dimensions: s.dimensions.clone(),
             entities: s.entities.saved(),
             entity_revision: s.entities.stats.revision,
             fluids: s.fluids.amounts.clone(),
@@ -505,6 +512,11 @@ impl SaveSnapshot {
             ),
         };
         Ok(Document {
+            dimensions: self
+                .dimensions
+                .as_ref()
+                .map(|d| d.saved(&self.registry))
+                .transpose()?,
             entities: Some(self.entities.clone()),
             fluids: Some(
                 self.fluids
@@ -660,6 +672,9 @@ impl CommittedSave {
             (SavedTerrain::Finite(blocks), None) => state.original_blocks = blocks,
             _ => return Ok(false),
         }
+        if let (Some(current), Some(saved)) = (&mut state.dimensions, &self.snapshot.dimensions) {
+            current.baseline = saved.revision;
+        }
         state.original_entity_revision = self.snapshot.entity_revision;
         state.original_player = self.snapshot.player;
         state.original_machines = self.snapshot.machines;
@@ -679,13 +694,22 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
     }
     let d: Document = serde_json::from_slice(bytes)?;
     if d.format != "blockwork-world"
-        || !(1..=12).contains(&d.version)
+        || !(1..=13).contains(&d.version)
         || d.cells.len() > BOUNDS.volume()?
         || !d.yaw.is_finite()
         || !d.pitch.is_finite()
         || !(-1.5..=1.5).contains(&d.pitch)
     {
         return Err("Unsupported or invalid engine save".into());
+    }
+    if d.version < 13
+        && (d.dimensions.is_some()
+            || d.generator
+                .as_ref()
+                .and_then(|g| g.terrain.as_ref())
+                .is_some_and(|t| t.version >= 2))
+    {
+        return Err("Dimension registries and modular generators require save version 13".into());
     }
     if d.version < 12 && d.inventory.as_ref().is_some_and(|p| p.offhand.is_some()) {
         return Err("Offhand contents require save version 12".into());
@@ -715,14 +739,14 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
             r.blocks.truncate(8);
             r
         }
-        (2..=12, Some(r)) => {
+        (2..=13, Some(r)) => {
             r.validate()?;
             r
         }
         _ => return Err("Save registry/version mismatch".into()),
     };
     let entities = match (d.version, d.entities) {
-        (11..=12, Some(saved)) => entities::World::restore(saved, &registry)?,
+        (11..=13, Some(saved)) => entities::World::restore(saved, &registry)?,
         (1..=10, None) => {
             let mut world = entities::World::new(&registry);
             world.random ^= d.seed;
@@ -738,7 +762,7 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
             registry.blocks.len(),
             registry.find(&d.selected)?,
         ),
-        (3..=12, Some(p)) => p.restore(&registry)?,
+        (3..=13, Some(p)) => p.restore(&registry)?,
         _ => return Err("Save inventory/version mismatch".into()),
     };
     if d.version >= 3
@@ -751,14 +775,14 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
     }
     let recipes = match (d.version, d.recipes) {
         (1 | 2, None) => crate::engine_crafting::Recipes::built_in().available(&registry),
-        (3..=12, Some(r)) => {
+        (3..=13, Some(r)) => {
             r.validate_registry(&registry)?;
             r
         }
         _ => return Err("Save recipe/version mismatch".into()),
     };
     let movement = match (d.version, d.movement) {
-        (5..=12, Some(m)) => m,
+        (5..=13, Some(m)) => m,
         (1..=4, None) => Default::default(),
         _ => return Err("Save movement/version mismatch".into()),
     };
@@ -811,9 +835,15 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
         client.pitch = d.pitch;
         persistence::machines::restore(&mut client, d.machines, d.smelting, d.version)?;
         fluids::restore(&mut client.scene, d.fluids, d.version)?;
+        if let Some(saved) = d.dimensions {
+            let state = client.scene.engine.as_ref().unwrap();
+            let dimensions =
+                world::dimensions::State::restore(saved, &state.registry, &state.smelting)?;
+            client.scene.engine.as_mut().unwrap().dimensions = Some(dimensions);
+        }
         return Ok(client);
     }
-    if d.generator.is_some() || d.edits.is_some() {
+    if d.generator.is_some() || d.edits.is_some() || d.dimensions.is_some() {
         return Err("Legacy save cannot contain streamed fields".into());
     }
     let basalt = registry.find("basalt")?;
@@ -955,6 +985,15 @@ fn apply_registry_entities(
     registry: Registry,
     definitions: Option<entities::definition::Definitions>,
 ) -> Result<()> {
+    apply_registry_complete(client, registry, definitions, None, None)
+}
+fn apply_registry_complete(
+    client: &mut Client,
+    registry: Registry,
+    definitions: Option<entities::definition::Definitions>,
+    dimension_definitions: Option<world::dimensions::Definitions>,
+    smelting_override: Option<machines::recipes::Recipes>,
+) -> Result<()> {
     registry.validate()?;
     let state = client.scene.engine.as_ref().ok_or("Engine world missing")?;
     for p in state.fluids.amounts.keys() {
@@ -1019,20 +1058,33 @@ fn apply_registry_entities(
     let player = remap_player(&state.player)?;
     let original_player = remap_player(&state.original_player)?;
     let recipes = state.recipes.clone().available(&registry);
-    let smelting = state
-        .smelting
-        .definitions
-        .clone()
-        .available(&registry)
-        .compile(&registry)?;
-    let machines =
-        persistence::machines::remap(&state.machines, &state.registry, &registry, &smelting)?;
-    let original_machines = persistence::machines::remap(
+    let smelting = smelting_override.map_or_else(
+        || {
+            state
+                .smelting
+                .definitions
+                .clone()
+                .available(&registry)
+                .compile(&registry)
+        },
+        Ok,
+    )?;
+    let machines = persistence::machines::SavedMachines::reconfigured(
+        &state.machines,
+        &state.registry,
+        &registry,
+        &state.smelting,
+        &smelting,
+    )?
+    .restore(&registry, &smelting)?;
+    let original_machines = persistence::machines::SavedMachines::reconfigured(
         &state.original_machines,
         &state.registry,
         &registry,
+        &state.smelting,
         &smelting,
-    )?;
+    )?
+    .restore(&registry, &smelting)?;
     for p in machines.furnaces.keys() {
         let id = stream.as_ref().map_or_else(
             || blocks.get(p).copied(),
@@ -1061,7 +1113,7 @@ fn apply_registry_entities(
     });
     let entities = state
         .entities
-        .reconfigured(entity_definitions.compile(&registry)?)?;
+        .reconfigured(entity_definitions.clone().compile(&registry)?)?;
     for e in entities.records.values() {
         if let Some(physics) = &e.physics {
             let actor = physics.actor(e.transform.position)?;
@@ -1079,7 +1131,22 @@ fn apply_registry_entities(
     {
         return Err("Updated model overlaps the player; move to clear space before F6".into());
     }
+    let dimensions = state
+        .dimensions
+        .as_ref()
+        .map(|d| {
+            d.rebind(
+                &state.registry,
+                &registry,
+                &state.smelting,
+                &smelting,
+                Some(entity_definitions),
+                dimension_definitions,
+            )
+        })
+        .transpose()?;
     let state = client.scene.engine.as_mut().unwrap();
+    state.dimensions = dimensions;
     state.entities = entities;
     state.blocks = blocks;
     state.geometry = geometry;
@@ -1156,24 +1223,19 @@ pub fn reload_definitions(client: &mut Client, path: &Path) -> Result<()> {
     let ui = std::sync::Arc::new(ui::framework::Library::read_home(home)?);
     let smelting = machines::recipes::Definitions::read_home(home)?.compile(&registry)?;
     let entities = entities::definition::Definitions::read_home(home)?;
-    apply_registry_entities(client, registry, Some(entities))?;
+    let dimensions = client
+        .scene
+        .engine
+        .as_ref()
+        .unwrap()
+        .dimensions
+        .as_ref()
+        .map(|_| world::dimensions::Definitions::read_home(home))
+        .transpose()?;
+    apply_registry_complete(client, registry, Some(entities), dimensions, Some(smelting))?;
     let state = client.scene.engine.as_mut().unwrap();
     state.ui = ui;
     client.appearance = appearance;
-    for f in state
-        .machines
-        .furnaces
-        .values_mut()
-        .chain(state.original_machines.furnaces.values_mut())
-    {
-        if let Some(input) = f.slots[0]
-            && state.smelting.get(input.id) != smelting.get(input.id)
-        {
-            f.cook_ms = 0;
-        }
-    }
-    state.smelting = smelting;
-    state.machines.rehydrate(&state.smelting);
     client.owned_materials = Some(owned);
     client.scene.engine.as_mut().unwrap().recipes = recipes;
     client.engine_assets = assets;
@@ -1192,6 +1254,8 @@ pub fn launch(args: &[String]) -> Result<()> {
             .to_path_buf()
     };
     let mut source = None;
+    let mut dimension = None;
+    let mut dimension_case = String::from("showcase");
     let mut definitions = None;
     let mut render_method = None;
     let mut render_distance = None;
@@ -1219,7 +1283,7 @@ pub fn launch(args: &[String]) -> Result<()> {
             "--engine-naive" => {},
             "--engine-stream" | "--engine-finite" | "--engine-sync-mesh" => {},
             "--engine-continue" => resume = true,
-            "--engine-entity-smoke" | "--engine-entity-case" | "--engine-controller-smoke" | "--engine-controller-case" | "--engine-parkour-smoke" | "--engine-parkour-case" | "--engine-lighting-smoke" | "--engine-lighting-case" | "--engine-renderer" | "--engine-bucket-smoke" | "--engine-bucket-case" | "--engine-fluid-smoke" | "--engine-fluid-case" | "--engine-terrain-smoke" | "--engine-terrain-case" | "--engine-player-smoke" | "--engine-player-case" | "--engine-table-smoke" | "--engine-furnace-smoke" | "--engine-ui-smoke" | "--engine-ui-lab-smoke" | "--engine-render-distance" | "--engine-home" | "--engine-load" | "--engine-study" | "--engine-distance-motion-smoke" | "--engine-distance-smoke" | "--engine-distance-settings-smoke" | "--engine-distance-shrink-smoke" | "--engine-features-smoke" | "--engine-settings-smoke" | "--engine-preview-smoke" | "--engine-preview-case" | "--engine-startup-gpu-close-smoke" | "--engine-startup-retry-smoke" | "--engine-startup-smoke" | "--engine-startup-close-smoke" | "--engine-startup-error-smoke" | "--engine-v1-study" | "--engine-v1-smoke" | "--engine-v1-wire-smoke" | "--engine-v1-fly-smoke" | "--engine-v1-noclip-smoke" | "--engine-v1-sneak-smoke" | "--engine-loading-study" | "--engine-loading-smoke" | "--engine-loading-close-smoke" | "--engine-save-study" | "--engine-save-smoke" | "--engine-save-close-smoke" | "--engine-async-smoke" | "--engine-stream-profile" | "--engine-stream-study" | "--engine-stream-smoke" | "--engine-stream-wire-smoke" | "--engine-smoke" | "--engine-palette-smoke" | "--engine-wire-smoke" | "--engine-window-smoke" | "--engine-edit-smoke" | "--engine-benchmark" | "--engine-profile" | "--engine-render-smoke" | "--engine-mesh-smoke" | "--engine-camera" | "--engine-inventory-study" | "--engine-inventory-smoke" | "--engine-seed" | "--engine-blocks" | "--engine-pack-root" => {
+            "--engine-dimensions-smoke" | "--engine-dimensions-case" | "--engine-dimension" | "--engine-entity-smoke" | "--engine-entity-case" | "--engine-controller-smoke" | "--engine-controller-case" | "--engine-parkour-smoke" | "--engine-parkour-case" | "--engine-lighting-smoke" | "--engine-lighting-case" | "--engine-renderer" | "--engine-bucket-smoke" | "--engine-bucket-case" | "--engine-fluid-smoke" | "--engine-fluid-case" | "--engine-terrain-smoke" | "--engine-terrain-case" | "--engine-player-smoke" | "--engine-player-case" | "--engine-table-smoke" | "--engine-furnace-smoke" | "--engine-ui-smoke" | "--engine-ui-lab-smoke" | "--engine-render-distance" | "--engine-home" | "--engine-load" | "--engine-study" | "--engine-distance-motion-smoke" | "--engine-distance-smoke" | "--engine-distance-settings-smoke" | "--engine-distance-shrink-smoke" | "--engine-features-smoke" | "--engine-settings-smoke" | "--engine-preview-smoke" | "--engine-preview-case" | "--engine-startup-gpu-close-smoke" | "--engine-startup-retry-smoke" | "--engine-startup-smoke" | "--engine-startup-close-smoke" | "--engine-startup-error-smoke" | "--engine-v1-study" | "--engine-v1-smoke" | "--engine-v1-wire-smoke" | "--engine-v1-fly-smoke" | "--engine-v1-noclip-smoke" | "--engine-v1-sneak-smoke" | "--engine-loading-study" | "--engine-loading-smoke" | "--engine-loading-close-smoke" | "--engine-save-study" | "--engine-save-smoke" | "--engine-save-close-smoke" | "--engine-async-smoke" | "--engine-stream-profile" | "--engine-stream-study" | "--engine-stream-smoke" | "--engine-stream-wire-smoke" | "--engine-smoke" | "--engine-palette-smoke" | "--engine-wire-smoke" | "--engine-window-smoke" | "--engine-edit-smoke" | "--engine-benchmark" | "--engine-profile" | "--engine-render-smoke" | "--engine-mesh-smoke" | "--engine-camera" | "--engine-inventory-study" | "--engine-inventory-smoke" | "--engine-seed" | "--engine-blocks" | "--engine-pack-root" => {
                 let flag = &args[i]; i+=1; let value = args.get(i).ok_or("Engine option requires a value")?;
                 match flag.as_str() {
                     "--engine-entity-case"=>entity_case=value.clone(),
@@ -1229,6 +1293,8 @@ pub fn launch(args: &[String]) -> Result<()> {
                     "--engine-renderer" => render_method=Some(match value.as_str(){"forward"=>render::methods::Method::Forward,"deferred"=>render::methods::Method::Deferred,"ray_traced"=>render::methods::Method::RayTraced,_=>return Err("Renderer must be forward, deferred or ray_traced".into())}),
                     "--engine-render-distance" => {let distance:i32=value.parse()?;if !(2..=crate::engine_stream::MAX_RADIUS).contains(&distance) {return Err("Render distance must be 2..255 chunks".into());}render_distance=Some(distance);},
                     "--engine-home" => home=PathBuf::from(value),
+                    "--engine-dimension" => dimension=Some(value.clone()),
+                    "--engine-dimensions-case" => dimension_case=value.clone(),
                     "--engine-blocks" => definitions=Some(PathBuf::from(value)),
                     "--engine-pack-root" => pack_root=PathBuf::from(value),
                     "--engine-load" => source=Some(PathBuf::from(value)),
@@ -1250,6 +1316,7 @@ pub fn launch(args: &[String]) -> Result<()> {
     let streamed = !args.iter().any(|a| a == "--engine-finite")
         && (out.is_none()
             || startup_test
+            || dimension.is_some()
             || args.iter().any(|a| {
                 a.starts_with("--engine-bucket-")
                     || a.starts_with("--engine-fluid-")
@@ -1269,7 +1336,10 @@ pub fn launch(args: &[String]) -> Result<()> {
         pack_root,
         resume,
         streamed,
+        dimensions: out.is_none() || dimension.is_some(),
+        dimension: dimension.clone(),
         modern: out.is_none()
+            || dimension.is_some()
             || args.iter().any(|a| {
                 matches!(
                     a.as_str(),
@@ -1335,7 +1405,9 @@ pub fn launch(args: &[String]) -> Result<()> {
         app.frame_limit = 4;
     }
     if let Some(out) = &out {
-        if args.iter().any(|a| a == "--engine-entity-smoke") {
+        if args.iter().any(|a| a == "--engine-dimensions-smoke") {
+            crate::verification::dimensions::prepare(&mut app, out, &dimension_case)?;
+        } else if args.iter().any(|a| a == "--engine-entity-smoke") {
             crate::verification::entities::prepare(&mut app, out, &entity_case)?;
         } else if args.iter().any(|a| a == "--engine-controller-smoke") {
             crate::verification::controller::prepare(&mut app, out, &controller_case)?;

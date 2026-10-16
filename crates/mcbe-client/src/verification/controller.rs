@@ -24,7 +24,7 @@ pub struct Live {
 fn require(ok: bool, message: &str) -> Result<()> {
     if ok { Ok(()) } else { Err(message.into()) }
 }
-fn sample(app: &mut App, pad: Option<Pad>) -> Result<()> {
+pub(super) fn sample(app: &mut App, pad: Option<Pad>) -> Result<()> {
     let context = app.controller_context();
     let now = app.controls.now + Duration::from_millis(16);
     app.controls.injected = true;
@@ -34,10 +34,10 @@ fn sample(app: &mut App, pad: Option<Pad>) -> Result<()> {
         .sample(pad.map(|pad| Snapshot { slot: 0, pad }), context, now);
     app.controller_apply(frame, context, 1. / 60.)
 }
-fn neutral(app: &mut App) -> Result<()> {
+pub(super) fn neutral(app: &mut App) -> Result<()> {
     sample(app, Some(Pad::default()))
 }
-fn tap(app: &mut App, b: B) -> Result<()> {
+pub(super) fn tap(app: &mut App, b: B) -> Result<()> {
     sample(
         app,
         Some(Pad {
@@ -47,7 +47,7 @@ fn tap(app: &mut App, b: B) -> Result<()> {
     )?;
     neutral(app)
 }
-fn focus(app: &mut App, target: Target) -> Result<()> {
+pub(super) fn focus(app: &mut App, target: Target) -> Result<()> {
     let count = app.palette.control_points(&app.client)?.len();
     for _ in 0..=count {
         if app.palette.hover == Some(target) {

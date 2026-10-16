@@ -81,7 +81,7 @@ pub fn center(p: Vec3) -> Column {
     ]
 }
 impl Generator {
-    pub fn new(seed: u64, registry: &Registry, config: Config) -> Result<Self> {
+    pub fn new(seed: u64, registry: &Registry, mut config: Config) -> Result<Self> {
         config.validate(registry)?;
         let ids = [
             registry.find("meadow")?,
@@ -119,6 +119,9 @@ impl Generator {
             .clone()
             .map(|s| super::terrain::Terrain::new(seed, registry, s))
             .transpose()?;
+        if let Some(terrain) = &terrain {
+            config.terrain = Some(terrain.settings.clone());
+        }
         Ok(Self {
             terrain,
             config,
@@ -527,7 +530,7 @@ pub fn set_radius(client: &mut Client, radius: i32) -> Result<()> {
     Ok(())
 }
 /// Teleports and save loading prepare the whole bounded destination before movement.
-pub fn prepare(client: &mut Client, position: Vec3) -> Result<()> {
+pub fn validate_position(client: &Client, position: Vec3) -> Result<()> {
     let state = client.scene.engine.as_ref().ok_or("Engine missing")?;
     let stream = state.stream.as_ref().ok_or("Streamed world missing")?;
     if !position.finite() {
@@ -563,6 +566,19 @@ pub fn prepare(client: &mut Client, position: Vec3) -> Result<()> {
             }
         }
     }
+    Ok(())
+}
+pub fn prepare_with_cancel(
+    client: &mut Client,
+    position: Vec3,
+    cancelled: &dyn Fn() -> bool,
+) -> Result<()> {
+    if cancelled() {
+        return Err("World preparation cancelled".into());
+    }
+    validate_position(client, position)?;
+    let state = client.scene.engine.as_ref().ok_or("Engine missing")?;
+    let stream = state.stream.as_ref().ok_or("Streamed world missing")?;
     if stream.volume.is_some() {
         super::volume::recenter(&mut client.scene, position, false);
         let state = client.scene.engine.as_ref().unwrap();
@@ -577,6 +593,9 @@ pub fn prepare(client: &mut Client, position: Vec3) -> Result<()> {
             .copied()
             .collect::<Vec<_>>();
         for key in keys {
+            if cancelled() {
+                return Err("World preparation cancelled".into());
+            }
             if client
                 .scene
                 .engine
@@ -620,6 +639,9 @@ pub fn prepare(client: &mut Client, position: Vec3) -> Result<()> {
         .collect();
     let generator = stream.generator.clone();
     for c in missing {
+        if cancelled() {
+            return Err("World preparation cancelled".into());
+        }
         let started = Instant::now();
         let blocks = generator.generate(c);
         insert(
@@ -750,17 +772,38 @@ pub fn generate_modern(
         radius: 3,
         exhibits: Vec::new(),
     };
+    generate_config(seed, registry, config)
+}
+pub fn generate_config(seed: u64, registry: Registry, config: Config) -> Result<Client> {
+    generate_config_checked(seed, registry, config, &|| false)
+}
+pub fn generate_config_checked(
+    seed: u64,
+    registry: Registry,
+    config: Config,
+    cancelled: &dyn Fn() -> bool,
+) -> Result<Client> {
+    if cancelled() {
+        return Err("World preparation cancelled".into());
+    }
     let generator = Generator::new(seed, &registry, config)?;
-    let spawn = generator.terrain.as_ref().unwrap().spawn();
+    let spawn = generator
+        .terrain
+        .as_ref()
+        .ok_or("Modern generator required")?
+        .spawn();
     let mut state = WorldState::new(seed, registry, 0, None);
     state.stream = Some(State::new(generator));
     let mut client = Client::new(Scene::from_engine(HashMap::new(), state)?)?;
     client.scene.bounds = BOUNDS;
-    client.set_spawn(Vec3::new(
-        spawn[0] as f32 + 0.5,
-        spawn[1] as f32,
-        spawn[2] as f32 + 0.5,
-    ))?;
+    client.set_spawn_checked(
+        Vec3::new(
+            spawn[0] as f32 + 0.5,
+            spawn[1] as f32,
+            spawn[2] as f32 + 0.5,
+        ),
+        cancelled,
+    )?;
     client.yaw = 0.7;
     client.pitch = -0.15;
     Ok(client)

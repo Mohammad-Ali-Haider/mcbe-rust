@@ -179,7 +179,7 @@ fn schema_twelve_preserves_contents_rejects_invalid_offhands_and_migrates_eleven
         .swap_hands()
         .unwrap();
     let value = serde_json::to_value(snapshot.document().unwrap()).unwrap();
-    assert_eq!(value["version"], 12);
+    assert_eq!(value["version"], engine::SAVE_VERSION);
     let restored = engine::decode(&serde_json::to_vec(&value).unwrap(), None).unwrap();
     assert_eq!(
         restored.scene.engine.as_ref().unwrap().player.offhand,

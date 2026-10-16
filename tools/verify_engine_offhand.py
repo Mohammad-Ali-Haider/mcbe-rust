@@ -29,7 +29,7 @@ def main():
             assert ch['item_vertices']==ch['main_item_vertices']+ch['offhand_item_vertices']
             assert ch['mesh_uploads']<=2,(name,ch['mesh_uploads'])
             saves=list((target/'saves').glob('*.blockworld'));assert len(saves)==1,(name,saves)
-            d=read(saves[0]);assert d['version']==12 and d['inventory']['offhand']['block']==ch['offhand']
+            d=read(saves[0]);assert d['version']==13 and d['inventory']['offhand']['block']==ch['offhand']
             if case in ['offhand-back','offhand-front']: assert ch['body_vertices']==432 and ch['hand_vertices']==0
             else: assert ch['body_vertices']==0 and ch['hand_vertices']==144
             if case=='offhand-only': assert ch['main_item_vertices']==0

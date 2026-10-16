@@ -35,8 +35,10 @@ fn surface(i:Out,shaded:bool)->vec4<f32>{
         let value=noise(pixel,7u);
         let glass=(i.layer&0x40000000u)!=0u;
         if !far && (!glass || (i.layer&0x00400000u)!=0u) && value<a {discard;}
-        if fine && (value>=a || value<a*b) {discard;}
-        if field && value>=a*b {discard;}
+        let layered=fine && field;
+        if layered && value>=a {discard;}
+        if fine && !layered && (value>=a || value<a*b) {discard;}
+        if field && !layered && value>=a*b {discard;}
         let trunk=(i.layer&0x00800000u)!=0u;
         let tree_detail=select(1.,1.-smoothstep(384.,640.,d),trunk);
         if object && value>=a*(1.-smoothstep(1024.,1536.,d))*tree_detail {discard;}
@@ -64,7 +66,7 @@ fn surface(i:Out,shaded:bool)->vec4<f32>{
 }
 fn fogged(i:Out,color:vec4<f32>)->vec4<f32>{var rgb=color.rgb;
     let fog_distance=select(distance(i.world,camera.eye.xyz),distance(i.world.xz,camera.eye.xz),camera.settings.w>0.5 && camera.medium.w<0.5);
-    let fog=clamp((fog_distance-camera.settings.y)/(camera.settings.z-camera.settings.y),0.,1.);rgb=mix(rgb,select(vec3(0.62,0.77,0.89),camera.medium.xyz,camera.medium.w>0.5),fog);
+    let fog=clamp((fog_distance-camera.settings.y)/(camera.settings.z-camera.settings.y),0.,1.);rgb=mix(rgb,camera.medium.xyz,fog);
     return vec4(rgb,color.a);
 }
 

@@ -126,6 +126,10 @@ impl Palette {
         )
     }
     pub fn control_page(&mut self, client: &Client, delta: i32) -> Result<()> {
+        if self.screen_id() == "dimensions" {
+            self.page_dimensions(client, delta);
+            return self.control_focus(client);
+        }
         let document = self.document(client, self.viewport)?;
         let Some((grid, columns, rows)) = document.catalog() else {
             return Ok(());

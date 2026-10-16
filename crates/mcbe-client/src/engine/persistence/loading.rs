@@ -28,6 +28,7 @@ pub enum Destination {
     Overlook,
 }
 struct Guard {
+    dimensions: Option<u64>,
     entities: u64,
     movement: crate::engine_player::Movement,
     instance: u64,
@@ -40,6 +41,7 @@ impl Guard {
     fn capture(client: &Client) -> Result<Self> {
         let s = client.scene.engine.as_ref().ok_or("Engine world missing")?;
         Ok(Self {
+            dimensions: s.dimensions.as_ref().map(|d| d.revision),
             entities: s.entities.stats.revision,
             movement: client.movement,
             instance: s.instance,
@@ -51,7 +53,8 @@ impl Guard {
     }
     fn matches(&self, client: &Client, reload: bool) -> bool {
         client.scene.engine.as_ref().is_some_and(|s| {
-            s.instance == self.instance
+            s.dimensions.as_ref().map(|d| d.revision) == self.dimensions
+                && s.instance == self.instance
                 && client.movement == self.movement
                 && s.registry_revision == self.registry
                 && s.edit_revision == self.edits
@@ -64,6 +67,7 @@ impl Guard {
     }
 }
 enum Operation {
+    Dimension(Box<crate::engine::world::dimensions::Travel>),
     Travel {
         generator: Arc<Generator>,
         geometry: Arc<crate::engine_geometry::Library>,
@@ -95,6 +99,7 @@ struct Region {
     chunks: BTreeSet<[i32; 3]>,
 }
 enum Prepared {
+    Dimension(Box<Client>),
     Travel(Box<Region>),
     Reload(Box<Client>),
 }
@@ -109,6 +114,7 @@ enum Job {
     Stop,
 }
 struct Finished {
+    dimension: Option<String>,
     id: u64,
     guard: Guard,
     reload: bool,
@@ -134,6 +140,7 @@ pub struct Counters {
 }
 #[derive(Serialize)]
 pub struct Event {
+    pub dimension: Option<String>,
     pub id: u64,
     pub reload: bool,
     pub applied: bool,
@@ -343,12 +350,19 @@ impl Service {
                                 operation,
                             } = *request;
                             let started = Instant::now();
-                            let reload = matches!(&operation, Operation::Reload { .. });
+                            let dimension=match &operation {Operation::Dimension(t)=>Some(t.destination.clone()),_=>None};
+                            let reload=matches!(&operation,Operation::Reload {..});
                             let result = (|| -> Result<Prepared> {
                                 if token.load(Ordering::Acquire) != id {
                                     return Err("Preparation superseded".into());
                                 }
                                 match operation {
+                                    Operation::Dimension(travel)=>{
+                                        if token.load(Ordering::Acquire)!=id {return Err("Dimension travel superseded".into());}
+                                        let client=travel.prepare_with_token(&token,id)?;
+                                        if token.load(Ordering::Acquire)!=id {return Err("Dimension travel superseded".into());}
+                                        Ok(Prepared::Dimension(Box::new(client)))
+                                    },
                                     Operation::Travel {
                                         generator,
                                         geometry,
@@ -424,6 +438,7 @@ impl Service {
                             .map_err(|e| e.to_string());
                             if completed
                                 .send(Finished {
+                                    dimension,
                                     id,
                                     guard,
                                     reload,
@@ -474,6 +489,11 @@ impl Service {
             .peak_requests
             .max(usize::from(self.active) + usize::from(self.pending.is_some()));
         Ok(())
+    }
+    pub fn dimension(&mut self, client: &Client, id: &str) -> Result<()> {
+        let started = Instant::now();
+        let travel = crate::engine::world::dimensions::Travel::capture(client, id)?;
+        self.request(client, Operation::Dimension(Box::new(travel)), started)
     }
     pub fn travel(&mut self, client: &Client, destination: Destination) -> Result<()> {
         let started = Instant::now();
@@ -534,6 +554,7 @@ impl Service {
         self.counters.worker_jobs += usize::from(done.off_thread);
         self.counters.worker_ms += done.milliseconds;
         let mut event = Event {
+            dimension: done.dimension.clone(),
             id: done.id,
             reload: done.reload,
             applied: false,
@@ -546,7 +567,10 @@ impl Service {
                 self.sender
                     .send(Job::Dispose(Box::new(Retired::Prepared(prepared))))?;
             }
-        } else if !done.guard.matches(client, done.reload) {
+        } else if !done
+            .guard
+            .matches(client, done.reload || done.dimension.is_some())
+        {
             self.counters.stale += 1;
             event.error = Some("World changed while preparing; request cancelled".into());
             if let Ok(prepared) = done.result {
@@ -562,6 +586,16 @@ impl Service {
                 Ok(prepared) => {
                     let started = Instant::now();
                     match prepared {
+                        Prepared::Dimension(mut prepared) => {
+                            // Registry guards prove that these shared decoded assets still match.
+                            prepared.engine_assets = client.engine_assets.take();
+                            prepared.owned_materials = client.owned_materials.take();
+                            *prepared.engine_gpu_prepared.borrow_mut() =
+                                client.engine_gpu_prepared.borrow_mut().take();
+                            let old = std::mem::replace(client, *prepared);
+                            self.sender
+                                .send(Job::Dispose(Box::new(Retired::Client(Box::new(old)))))?;
+                        }
                         Prepared::Reload(prepared) => {
                             let old = std::mem::replace(client, *prepared);
                             self.sender
@@ -850,5 +884,88 @@ mod tests {
         drop(loader);
         fs::remove_file(path).unwrap();
         fs::remove_dir(directory).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod dimension_tests {
+    use super::*;
+    use crate::engine::world::dimensions;
+    use std::time::Duration;
+    fn client() -> Client {
+        let mut c = stream::generate(713, crate::engine_blocks::Registry::built_in()).unwrap();
+        stream::set_radius(&mut c, 2).unwrap();
+        dimensions::attach_legacy(&mut c, dimensions::Definitions::built_in()).unwrap();
+        c
+    }
+    fn settle(service: &mut Service, c: &mut Client) -> Vec<Event> {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        let mut events = Vec::new();
+        while service.busy() {
+            if let Some(e) = service.poll(c).unwrap() {
+                events.push(e);
+            }
+            assert!(Instant::now() < deadline);
+            thread::sleep(Duration::from_millis(1));
+        }
+        events
+    }
+    #[test]
+    fn dimensions_prepare_off_thread_and_latest_request_wins() {
+        let mut c = client();
+        let mut s = Service::new().unwrap();
+        let original = c.scene.engine.as_ref().unwrap().instance;
+        s.dimension(&c, "cavern").unwrap();
+        s.dimension(&c, "islands").unwrap();
+        let events = settle(&mut s, &mut c);
+        assert_ne!(c.scene.engine.as_ref().unwrap().instance, original);
+        assert_eq!(
+            c.scene
+                .engine
+                .as_ref()
+                .unwrap()
+                .dimensions
+                .as_ref()
+                .unwrap()
+                .active,
+            "islands"
+        );
+        assert!(
+            events
+                .iter()
+                .any(|e| e.applied && e.off_thread && e.dimension.as_deref() == Some("islands"))
+        );
+        assert_eq!(s.counters.applied, 1);
+        assert_eq!(s.counters.superseded, 1);
+        assert!(s.counters.peak_requests <= 2);
+        assert!(
+            !c.scene
+                .engine
+                .as_ref()
+                .unwrap()
+                .dimensions
+                .as_ref()
+                .unwrap()
+                .inactive
+                .contains_key("cavern")
+        );
+    }
+    #[test]
+    fn dimension_cancel_and_inventory_staleness_preserve_the_source() {
+        let mut c = client();
+        let instance = c.scene.engine.as_ref().unwrap().instance;
+        let mut s = Service::new().unwrap();
+        s.dimension(&c, "cavern").unwrap();
+        s.cancel();
+        settle(&mut s, &mut c);
+        assert_eq!(c.scene.engine.as_ref().unwrap().instance, instance);
+        assert_eq!(s.counters.applied, 0);
+        s.dimension(&c, "islands").unwrap();
+        let state = c.scene.engine.as_mut().unwrap();
+        state.player.swap_hands().unwrap();
+        let events = settle(&mut s, &mut c);
+        assert!(events.iter().any(|e| !e.applied && e.error.is_some()));
+        assert_eq!(s.counters.stale, 1);
+        assert_eq!(c.scene.engine.as_ref().unwrap().instance, instance);
     }
 }

@@ -25,3 +25,5 @@ pub(crate) mod parkour;
 pub(crate) mod controller;
 
 pub(crate) mod entities;
+
+pub(crate) mod dimensions;

@@ -68,6 +68,52 @@ impl Request {
         }
     }
 }
+pub struct Prepared {
+    key: Key,
+    mesh: Mesh,
+}
+pub fn prepare(client: &Client, token: &AtomicU64, epoch: u64) -> Result<Option<Prepared>> {
+    let s = client
+        .scene
+        .engine
+        .as_ref()
+        .ok_or("Dimension terrain missing")?;
+    let Some(stream) = s
+        .stream
+        .as_ref()
+        .filter(|s| s.generator.config.radius > engine_stream::DETAIL_RADIUS)
+    else {
+        return Ok(None);
+    };
+    let key = Key {
+        instance: s.instance,
+        registry: s.registry_revision,
+        edits: s.edit_revision,
+        center: stream.center,
+        radius: stream.generator.config.radius,
+    };
+    let r = Request {
+        solid_surface: false,
+        epoch,
+        key,
+        generator: stream.generator.clone(),
+        geometry: s.geometry.clone(),
+        edits: Arc::new(stream.edits.iter().map(|(p, id)| (*p, *id)).collect()),
+        side: s.registry.find("earth")?,
+        stone: s.registry.find("slate")?,
+        log: s
+            .registry
+            .find("oak_log")
+            .or_else(|_| s.registry.find("clay"))?,
+        leaf: stream
+            .generator
+            .terrain
+            .as_ref()
+            .map_or_else(|| s.registry.find("moss"), |t| Ok(t.leaves))?,
+    };
+    let mesh = build(&r, token)?.ok_or("Dimension LOD preparation was cancelled")?;
+    Ok(Some(Prepared { key, mesh }))
+}
 struct Finished {
     epoch: u64,
     key: Key,
@@ -104,26 +150,58 @@ impl Builder<'_> {
         {
             return false;
         }
+        let layered = self
+            .request
+            .generator
+            .terrain
+            .as_ref()
+            .is_some_and(|t| t.layered());
+        let core = if layered { CORE } else { FIELD_CORE };
         let [xmin, zmin, xmax, zmax] = self.view;
         let [cx, cz] = center(self.request.key);
         if x >= xmax || z >= zmax || x + size <= xmin || z + size <= zmin {
             return true;
         }
-        if x >= cx - FIELD_CORE
-            && z >= cz - FIELD_CORE
-            && x + size <= cx + FIELD_CORE
-            && z + size <= cz + FIELD_CORE
-        {
+        if x >= cx - core && z >= cz - core && x + size <= cx + core && z + size <= cz + core {
             return true;
         }
         let cuts_view = x < xmin || z < zmin || x + size > xmax || z + size > zmax;
-        let cuts_core = x < cx + FIELD_CORE
-            && z < cz + FIELD_CORE
-            && x + size > cx - FIELD_CORE
-            && z + size > cz - FIELD_CORE;
+        let cuts_core =
+            x < cx + core && z < cz + core && x + size > cx - core && z + size > cz - core;
         let distance = (x + size / 2 - cx).abs().max((z + size / 2 - cz).abs());
-        let step = (distance / 32).clamp(2, 64);
-        if size > 2 && (size > step || cuts_view || cuts_core) {
+        let step = if layered && distance < 128 {
+            1
+        } else {
+            (distance / 32).clamp(if layered { 1 } else { 2 }, 64)
+        };
+        if layered
+            && !self
+                .request
+                .generator
+                .terrain
+                .as_ref()
+                .unwrap()
+                .intersects([x - 64, z - 64, x + size + 64, z + size + 64])
+        {
+            return true;
+        }
+        let hidden_island = layered
+            && size > 1
+            && self.request.generator.terrain.as_ref().is_some_and(|t| {
+                [
+                    [x, z],
+                    [x + size, z],
+                    [x, z + size],
+                    [x + size, z + size],
+                    [x + size / 2, z + size / 2],
+                ]
+                .iter()
+                .all(|[a, b]| !t.sample(*a, *b).column.present)
+                    && t.intersects([x, z, x + size, z + size])
+            });
+        if size > (if layered { 1 } else { 2 })
+            && (size > step || cuts_view || cuts_core || hidden_island)
+        {
             let h = size / 2;
             for (dx, dz) in [(0, 0), (h, 0), (0, h), (h, h)] {
                 if !self.node(x + dx, z + dz, h) {
@@ -537,6 +615,26 @@ fn build(r: &Request, token: &AtomicU64) -> Result<Option<Mesh>> {
         stitched_edges: 0,
         fine_vertices: 0,
     };
+    if r.generator.terrain.as_ref().is_some_and(|t| t.layered()) {
+        let mut b = Builder {
+            request: r,
+            token,
+            view,
+            cells: Vec::new(),
+            visited: 0,
+        };
+        if !b.node(-8192, -8192, 16384) || !layered::build(r, token, &b.cells, &mut mesh)? {
+            return Ok(None);
+        }
+        objects(r, &mut mesh);
+        if !trees(r, view, token, &mut mesh) {
+            return Ok(None);
+        }
+        if mesh.vertices.len() + mesh.water.len() > MAX_VERTICES {
+            return Err("Layered terrain budget exceeded".into());
+        }
+        return Ok(Some(mesh));
+    }
     let solid = Request {
         solid_surface: r.generator.terrain.is_some(),
         ..r.clone()
@@ -718,6 +816,38 @@ impl Distant {
             ],
         )
     }
+    fn adopt(&mut self, device: &wgpu::Device, mesh: Mesh, key: Key) {
+        self.previous_buffer = self.buffer.take();
+        self.previous_water_buffer = self.water_buffer.take();
+        self.previous_water_vertices = self.water_vertices;
+        self.water_vertices = mesh.water.len() as u32;
+        self.water_buffer = (!mesh.water.is_empty()).then(|| {
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("blended distant water"),
+                contents: bytemuck::cast_slice(&mesh.water),
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_SRC,
+            })
+        });
+        self.previous_vertices = self.vertices;
+        self.previous_key = self.adopted;
+        self.crossfades += usize::from(self.previous_buffer.is_some());
+        self.vertices = mesh.vertices.len() as u32;
+        self.leaves = mesh.leaves;
+        self.area = mesh.area;
+        self.trees = mesh.trees;
+        self.objects = mesh.objects;
+        self.stitched_edges = mesh.stitched_edges;
+        self.fine_vertices = mesh.fine_vertices;
+        self.buffer = (!mesh.vertices.is_empty()).then(|| {
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("stitched terrain and vegetation LOD"),
+                contents: bytemuck::cast_slice(&mesh.vertices),
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_SRC,
+            })
+        });
+        self.adopted = Some(key);
+        self.fade_started = Some(Instant::now());
+    }
     pub fn update(&mut self, client: &Client, device: &wgpu::Device) -> Result<bool> {
         if self.fraction() >= 1. {
             self.previous_buffer = None;
@@ -761,8 +891,20 @@ impl Distant {
                 }
             }
         }
-        if let Some(worker) = &self.worker {
-            match worker.receiver.try_recv() {
+        if let Some(prepared) = client.engine_distant_prepared.borrow_mut().take() {
+            if Some(prepared.key) == key {
+                self.adopt(device, prepared.mesh, prepared.key);
+                self.jobs += 1;
+            } else {
+                self.discarded += 1;
+            }
+        }
+        if let Some(result) = self
+            .worker
+            .as_ref()
+            .map(|worker| worker.receiver.try_recv())
+        {
+            match result {
                 Ok(done) => {
                     self.busy = false;
                     if done.epoch == self.epoch
@@ -771,36 +913,7 @@ impl Distant {
                         if let Some(mesh) =
                             done.mesh.map_err(|e| format!("Distant terrain: {e}"))?
                         {
-                            self.previous_buffer = self.buffer.take();
-                            self.previous_water_buffer = self.water_buffer.take();
-                            self.previous_water_vertices = self.water_vertices;
-                            self.water_vertices = mesh.water.len() as u32;
-                            self.water_buffer = (!mesh.water.is_empty()).then(|| {
-                                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                                    label: Some("blended distant water"),
-                                    contents: bytemuck::cast_slice(&mesh.water),
-                                    usage: wgpu::BufferUsages::VERTEX,
-                                })
-                            });
-                            self.previous_vertices = self.vertices;
-                            self.previous_key = self.adopted;
-                            self.crossfades += usize::from(self.previous_buffer.is_some());
-                            self.vertices = mesh.vertices.len() as u32;
-                            self.leaves = mesh.leaves;
-                            self.area = mesh.area;
-                            self.trees = mesh.trees;
-                            self.objects = mesh.objects;
-                            self.stitched_edges = mesh.stitched_edges;
-                            self.fine_vertices = mesh.fine_vertices;
-                            self.buffer = (!mesh.vertices.is_empty()).then(|| {
-                                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                                    label: Some("stitched terrain and vegetation LOD"),
-                                    contents: bytemuck::cast_slice(&mesh.vertices),
-                                    usage: wgpu::BufferUsages::VERTEX,
-                                })
-                            });
-                            self.adopted = self.wanted;
-                            self.fade_started = Some(Instant::now());
+                            self.adopt(device, mesh, done.key);
                         }
                     } else {
                         self.discarded += 1;
@@ -1036,3 +1149,5 @@ mod tests {
         assert_eq!(ground(&r, 100, 100).1, r.side);
     }
 }
+
+mod layered;

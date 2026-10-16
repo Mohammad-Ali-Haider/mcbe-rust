@@ -1036,6 +1036,55 @@ impl Renderer {
         self.stats.omitted_internal_faces = self.meshes.values().map(|m| m.occluded_faces).sum();
         Ok(())
     }
+    pub fn dump_distant_geometry(&self, out: &std::path::Path) -> Result<serde_json::Value> {
+        let mut rows = Vec::new();
+        for (name, source, count) in [
+            (
+                "distant-solid.bin",
+                self.distant.buffer.as_ref(),
+                self.distant.vertices,
+            ),
+            (
+                "distant-water.bin",
+                self.distant.water_buffer.as_ref(),
+                self.distant.water_vertices,
+            ),
+        ] {
+            let bytes = u64::from(count) * std::mem::size_of::<engine_mesh::Vertex>() as u64;
+            if bytes == 0 {
+                std::fs::write(out.join(name), [])?;
+                continue;
+            }
+            let source = source.ok_or("Distant buffer missing")?;
+            let staging = self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("verification distant readback"),
+                size: bytes,
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                mapped_at_creation: false,
+            });
+            let mut encoder = self
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("verification distant copy"),
+                });
+            encoder.copy_buffer_to_buffer(source, 0, &staging, 0, bytes);
+            self.queue.submit(Some(encoder.finish()));
+            let (tx, rx) = std::sync::mpsc::channel();
+            staging.slice(..).map_async(wgpu::MapMode::Read, move |r| {
+                let _ = tx.send(r);
+            });
+            self.device.poll(wgpu::PollType::Wait)?;
+            rx.recv()??;
+            let mapped = staging.slice(..).get_mapped_range();
+            std::fs::write(out.join(name), &mapped)?;
+            drop(mapped);
+            staging.unmap();
+            rows.push(serde_json::json!({"file":name,"vertices":count,"bytes":bytes}));
+        }
+        Ok(
+            serde_json::json!({"complete":true,"vertex_stride":40,"buffers":rows,"actual_gpu_buffer_readback":true}),
+        )
+    }
     pub fn verify_geometry(&self, client: &Client) -> Result<serde_json::Value> {
         let state = client.scene.engine.as_ref().unwrap();
         let keys: BTreeSet<_> = state.blocks.chunk_keys().collect();
@@ -1209,11 +1258,18 @@ impl Renderer {
             client.target()?
         };
         let (lod, lod_old) = self.distant.blend();
+        let fog_color = client
+            .scene
+            .engine
+            .as_ref()
+            .and_then(|s| s.dimensions.as_ref())
+            .and_then(|d| d.definitions.get(&d.active).ok())
+            .map_or([0.62, 0.77, 0.89], |d| d.environment.fog_color);
         let uniform = Camera {
             medium: if underwater {
                 [0.04, 0.21, 0.34, 1.]
             } else {
-                [0.; 4]
+                [fog_color[0], fog_color[1], fog_color[2], 0.]
             },
             lod,
             lod_old,
@@ -1586,9 +1642,9 @@ impl Renderer {
                             wgpu::LoadOp::Load
                         } else {
                             wgpu::LoadOp::Clear(wgpu::Color {
-                                r: 0.62,
-                                g: 0.77,
-                                b: 0.89,
+                                r: fog_color[0] as f64,
+                                g: fog_color[1] as f64,
+                                b: fog_color[2] as f64,
                                 a: 1.,
                             })
                         },

@@ -26,14 +26,24 @@ impl Volume {
                 if !generator.bounds().contains([x * 16, 0, z * 16]) {
                     continue;
                 }
-                let heights = [[0, 0], [15, 0], [0, 15], [15, 15], [8, 8]]
-                    .map(|p| generator.visible_surface(x * 16 + p[0], z * 16 + p[1]).0);
-                let ground = [[0, 0], [15, 0], [0, 15], [15, 15], [8, 8]]
-                    .map(|p| generator.ground_height(x * 16 + p[0], z * 16 + p[1]));
-                let low = (ground.iter().min().unwrap() - 64).div_euclid(16);
-                let high = (heights.iter().max().unwrap() + 16).div_euclid(16);
-                for y in low..=high {
-                    wanted.insert([x, y, z]);
+                if let Some(ranges) = generator.terrain.as_ref().and_then(|t| t.residency()) {
+                    for (low, high) in ranges {
+                        if high > low {
+                            for y in low.div_euclid(16)..=(high - 1).div_euclid(16) {
+                                wanted.insert([x, y, z]);
+                            }
+                        }
+                    }
+                } else {
+                    let heights = [[0, 0], [15, 0], [0, 15], [15, 15], [8, 8]]
+                        .map(|p| generator.visible_surface(x * 16 + p[0], z * 16 + p[1]).0);
+                    let ground = [[0, 0], [15, 0], [0, 15], [15, 15], [8, 8]]
+                        .map(|p| generator.ground_height(x * 16 + p[0], z * 16 + p[1]));
+                    let low = (ground.iter().min().unwrap() - 64).div_euclid(16);
+                    let high = (heights.iter().max().unwrap() + 16).div_euclid(16);
+                    for y in low..=high {
+                        wanted.insert([x, y, z]);
+                    }
                 }
                 for y in center[1] - 2..=center[1] + 2 {
                     if let Some(world_y) = y.checked_mul(16)
@@ -51,6 +61,10 @@ impl Volume {
         }
     }
 }
+fn empty_chunk() -> Arc<Chunk> {
+    static EMPTY: std::sync::OnceLock<Arc<Chunk>> = std::sync::OnceLock::new();
+    EMPTY.get_or_init(|| Arc::new(Chunk::default())).clone()
+}
 pub fn generate(generator: &Generator, k: Key) -> Arc<Chunk> {
     let t = generator.terrain.as_ref().expect("Modern terrain");
     let samples: Vec<_> = (0..16)
@@ -58,11 +72,20 @@ pub fn generate(generator: &Generator, k: Key) -> Arc<Chunk> {
         .collect();
     let top = samples
         .iter()
-        .map(|s| s.water.unwrap_or(s.height).max(s.height) + 6)
+        .filter(|s| s.column.present)
+        .map(|s| {
+            s.column
+                .roof_top
+                .unwrap_or(s.water.unwrap_or(s.height).max(s.height) + 6)
+        })
         .max()
-        .unwrap();
-    if k[1] * 16 > top {
-        return Arc::new(Chunk::default());
+        .unwrap_or(i32::MIN + 32);
+    if k[1] * 16 > top
+        || samples
+            .iter()
+            .all(|s| !s.column.present || s.column.bottom.is_some_and(|b| k[1] * 16 + 15 < b))
+    {
+        return empty_chunk();
     }
     let tree = t.tree([k[0], k[2]]);
     let mut chunk = Chunk::default();

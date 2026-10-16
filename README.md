@@ -61,7 +61,7 @@ cargo build --release --locked
 
 Start with [Architecture and source map](docs/ARCHITECTURE.md), then read
 [Edit, run and commit](docs/DEVELOPMENT.md), [Blocks](docs/BLOCKS.md),
-[Controls](docs/CONTROLS.md), [UI authoring](docs/UI.md), [Stations](docs/STATIONS.md), [Cameras and skins](docs/CAMERA.md), [Terrain](docs/TERRAIN.md), [Water and swimming](docs/FLUIDS.md), [Items and buckets](docs/ITEMS.md), [Movement](docs/MOVEMENT.md), [Rendering](docs/RENDERING.md) and [Milestone history](docs/HISTORY.md).
+[Controls](docs/CONTROLS.md), [UI authoring](docs/UI.md), [Stations](docs/STATIONS.md), [Cameras and skins](docs/CAMERA.md), [Terrain](docs/TERRAIN.md), [Dimensions and generation](docs/DIMENSIONS.md), [Water and swimming](docs/FLUIDS.md), [Items and buckets](docs/ITEMS.md), [Movement](docs/MOVEMENT.md), [Rendering](docs/RENDERING.md) and [Milestone history](docs/HISTORY.md).
 
 Walking, sprinting, sneaking, flight/noclip, inventory/crafting, JSON models,
 slab/stair states, glass, unified component packs, optional signal behaviors,
@@ -73,6 +73,11 @@ detail within 8 chunks. Distant hills/trees use stitched, progressively blended
 geometry. Caves, transparent buildings and edits to distant generated trees are
 not fully represented by that surface approximation. Maximum-range LOD uses
 more memory than the earlier flat approximation.
+
+Run `cargo new-world` to try the three editable dimension examples. Press U or
+Escape -> Dimensions to visit the surface, caverns and floating islands. Worlds
+retain separate edits, fluids, furnaces, entities and return positions; inventory
+and offhand are shared. Add named worlds through JSON; see DIMENSIONS.md.
 
 Run `cargo new-world` to try the new terrain. Continuing an older save keeps its
 original generator. Water flow, swimming and persistent measured buckets are implemented.

@@ -51,6 +51,19 @@ pub fn rows(
             vec![h("Esc", "B", "pad_b", "Back")],
         );
     }
+    if palette.open && palette.screen_id() == "dimensions" {
+        return (
+            vec![
+                h("Arrows", "D-pad", "pad_nav", "Navigate"),
+                h("Enter", "A", "pad_a", "Visit"),
+                h("PgUp/Dn", "LB/RB", "pad_lb", "Page"),
+            ],
+            vec![
+                h("Tab", "LT/RT", "pad_rt", "Focus"),
+                h("Esc", "B", "pad_b", "Close"),
+            ],
+        );
+    }
     if palette.open {
         return (
             vec![
