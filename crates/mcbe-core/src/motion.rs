@@ -297,13 +297,98 @@ impl SolidScene {
         if let Some(y) = stepped_y {
             result.y = y;
         }
-        Ok((result, std::array::from_fn(|a| movement[a] != velocity[a])))
+        let mut hit = std::array::from_fn(|a| movement[a] != velocity[a]);
+        // Reconstructing a center from a clipped displacement can round the
+        // body into the contact plane. Snap only swept, overlapping contacts
+        // to the nearest representable center on the clear side of that plane.
+        let (start_low, start_high) = bounds(position, body);
+        for a in [1, 0, 2] {
+            if velocity[a] == 0. {
+                continue;
+            }
+            for b in &self.boxes {
+                if (velocity[a] > 0. && start_high[a] > b.min[a])
+                    || (velocity[a] < 0. && start_low[a] < b.max[a])
+                {
+                    continue;
+                }
+                let (rl, rh) = bounds(result, body);
+                if !(0..3).all(|i| rl[i] < b.max[i] && rh[i] > b.min[i]) {
+                    continue;
+                }
+                hit[a] = true;
+                let half = if a == 1 { 0. } else { body.width * 0.5 };
+                if velocity[a] > 0. {
+                    let extent = if a == 1 { body.height } else { half };
+                    result[a] = b.min[a] - extent;
+                    while bounds(result, body).1[a] > b.min[a] {
+                        result[a] = result[a].next_down();
+                    }
+                } else {
+                    result[a] = b.max[a] + half;
+                    while bounds(result, body).0[a] < b.max[a] {
+                        result[a] = result[a].next_up();
+                    }
+                }
+            }
+        }
+        Ok((result, hit))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn rounded_wall_contacts_remain_clear_on_the_next_tick() {
+        for axis in [0, 2] {
+            for sign in [-1., 1.] {
+                let mut lo = Vec3::new(-30., 0., -30.);
+                let mut hi = Vec3::new(30., 8., 30.);
+                lo[axis] = -16.;
+                hi[axis] = -15.;
+                let scene = SolidScene {
+                    boxes: vec![
+                        SolidBox::new(lo, hi).unwrap(),
+                        SolidBox::new(Vec3::new(-40., 0., -40.), Vec3::new(40., 1., 40.)).unwrap(),
+                    ],
+                };
+                let mut p = Vec3::new(0.5, 1., 0.5);
+                p[axis] = if sign > 0. { -16.31 } else { -14.69 };
+                let mut actor = Actor::new(p, Body::PROBE).unwrap();
+                for tick in 0..20 {
+                    actor.velocity = Vec3::new(0., -0.0784, 0.);
+                    actor.velocity[axis] = if tick == 0 {
+                        let (low, high) = bounds(actor.position, actor.body);
+                        if sign > 0. {
+                            lo[axis] - high[axis]
+                        } else {
+                            hi[axis] - low[axis]
+                        }
+                    } else {
+                        sign * 0.18
+                    };
+                    actor = actor.tick_solid(&scene).unwrap();
+                    assert_eq!(actor.position.y, 1.);
+                    let (low, high) = bounds(actor.position, actor.body);
+                    assert!(
+                        !scene
+                            .boxes
+                            .iter()
+                            .any(|b| (0..3).all(|a| low[a] < b.max[a] && high[a] > b.min[a]))
+                    );
+                }
+            }
+        }
+        let scene = SolidScene {
+            boxes: vec![SolidBox::new(Vec3::new(-1., 0., -1.), Vec3::new(1., 1., 1.)).unwrap()],
+        };
+        assert!(
+            scene
+                .move_actor(Vec3::new(0., 0.9, 0.), Body::PROBE, Vec3::default(), false)
+                .is_err()
+        );
+    }
     #[test]
     fn fast_wall_preserves_slide() {
         let scene = SolidScene {
