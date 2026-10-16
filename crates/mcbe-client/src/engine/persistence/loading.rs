@@ -413,6 +413,7 @@ impl Service {
                                         }
                                         let skin_home=owned_root.clone().unwrap_or_default();let skin_root=root.clone();
                                         if let Some(home) = owned_root {
+                                            client.animations=Arc::new(crate::engine::animation::Library::read_home(&home)?);
                                             client.appearance=Arc::new(crate::engine::player::appearance::Appearance::read_home(&home)?);
                                             client.scene.engine.as_mut().unwrap().ui = Arc::new(
                                                 crate::engine::ui::framework::Library::read_home(

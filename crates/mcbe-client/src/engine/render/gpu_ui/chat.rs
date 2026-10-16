@@ -1,7 +1,13 @@
 use super::{Atlas, Canvas};
 use crate::engine::ui::chat::{Chat, Kind};
 impl Atlas {
-    pub(super) fn chat_overlay(&self, c: &mut Canvas, chat: &Chat, viewport: [f32; 2]) {
+    pub(super) fn chat_overlay(
+        &self,
+        c: &mut Canvas,
+        chat: &Chat,
+        viewport: [f32; 2],
+        animations: &crate::engine::animation::Library,
+    ) {
         let [width, height] = viewport;
         let panel = (width - 8.).clamp(32., 420.);
         let columns = ((panel - 12.) / 8.).max(1.) as usize;
@@ -10,25 +16,34 @@ impl Atlas {
         } else {
             5
         };
-        let lines = chat.lines(columns, rows, std::time::Instant::now());
+        let now = std::time::Instant::now();
+        let lines = if chat.open {
+            chat.lines(columns, rows, now)
+                .into_iter()
+                .map(|(k, t)| (k, t, 1.))
+                .collect()
+        } else {
+            chat.faded_lines(columns, rows, now, animations)
+        };
         let input_y = (height - 48.).max(16.);
         let base = if chat.open {
             input_y - 16.
         } else {
             height - 43.
         };
-        for (i, (kind, line)) in lines.iter().rev().enumerate() {
+        for (i, (kind, line, opacity)) in lines.iter().rev().enumerate() {
             let y = base - i as f32 * 12.;
             if y < 4. {
                 break;
             }
-            c.rect([4., y - 2., panel, 12.], [0., 0., 0., 0.65]);
-            let color = match kind {
+            c.rect([4., y - 2., panel, 12.], [0., 0., 0., 0.65 * opacity]);
+            let mut color = match kind {
                 Kind::Error => [1., 0.38, 0.38, 1.],
                 Kind::System => [0.72, 1., 0.72, 1.],
                 Kind::Command => [0.65, 0.75, 0.85, 1.],
                 Kind::Player => [1.; 4],
             };
+            color[3] *= opacity;
             self.text(c, 8., y, line, color);
         }
         if chat.open {

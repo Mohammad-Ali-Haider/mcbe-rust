@@ -197,7 +197,34 @@ impl Chat {
             self.revision = self.revision.wrapping_add(1);
         }
     }
+    pub fn fading(&self, now: Instant, seconds: f32) -> bool {
+        !self.open
+            && self.messages.iter().any(|m| {
+                m.until > now && m.until.saturating_duration_since(now).as_secs_f32() < seconds
+            })
+    }
     pub fn lines(&self, columns: usize, rows: usize, now: Instant) -> Vec<(Kind, String)> {
+        self.visual_lines(columns, rows, now, None)
+            .into_iter()
+            .map(|(k, t, _)| (k, t))
+            .collect()
+    }
+    pub fn faded_lines(
+        &self,
+        columns: usize,
+        rows: usize,
+        now: Instant,
+        animations: &crate::engine::animation::Library,
+    ) -> Vec<(Kind, String, f32)> {
+        self.visual_lines(columns, rows, now, Some(animations))
+    }
+    fn visual_lines(
+        &self,
+        columns: usize,
+        rows: usize,
+        now: Instant,
+        animations: Option<&crate::engine::animation::Library>,
+    ) -> Vec<(Kind, String, f32)> {
         let mut lines = Vec::new();
         let columns = columns.max(1);
         for m in &self.messages {
@@ -206,7 +233,14 @@ impl Chat {
             }
             let chars: Vec<_> = m.text.chars().collect();
             for chunk in chars.chunks(columns) {
-                lines.push((m.kind, chunk.iter().collect()));
+                let opacity = animations
+                    .filter(|a| a.enabled && !self.open)
+                    .map_or(1., |a| {
+                        let duration = f64::from(a.clip("chat_fade").duration);
+                        let remaining = m.until.saturating_duration_since(now).as_secs_f64();
+                        1. - a.blend("chat_fade", (duration - remaining).max(0.))
+                    });
+                lines.push((m.kind, chunk.iter().collect(), opacity));
             }
         }
         self.scroll_limit.set(lines.len().saturating_sub(rows));
@@ -265,3 +299,32 @@ impl Chat {
 }
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod animation_tests {
+    use super::*;
+    #[test]
+    fn wrapped_messages_fade_together_and_open_history_stays_readable() {
+        let now = Instant::now();
+        let mut c = Chat::default();
+        c.messages.push_back(Message {
+            text: "abcdefgh".into(),
+            kind: Kind::System,
+            until: now + Duration::from_millis(400),
+        });
+        let a = crate::engine::animation::Library::shared();
+        assert!(c.fading(now, a.clip("chat_fade").duration));
+        let lines = c.faded_lines(4, 8, now, &a);
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0].2, lines[1].2);
+        assert!(lines[0].2 > 0. && lines[0].2 < 1.);
+        c.open = true;
+        assert_eq!(c.faded_lines(4, 8, now, &a)[0].2, 1.);
+        assert!(!c.fading(now, 1.));
+        c.open = false;
+        assert!(
+            c.faded_lines(4, 8, now + Duration::from_secs(1), &a)
+                .is_empty()
+        );
+    }
+}

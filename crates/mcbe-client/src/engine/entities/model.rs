@@ -7,7 +7,11 @@ pub struct Pose {
     gait: f32,
 }
 impl Pose {
-    pub fn new(e: &Entity, position: [f32; 3]) -> Self {
+    pub fn new(
+        e: &Entity,
+        position: [f32; 3],
+        animations: &crate::engine::animation::Library,
+    ) -> Self {
         let walk = e
             .physics
             .as_ref()
@@ -20,7 +24,12 @@ impl Pose {
             root: Mat4::from_translation(Vec3::from(position))
                 * Mat4::from_rotation_y(e.transform.yaw),
             walk,
-            gait: e.visual.as_ref().map_or(0., |v| v.gait),
+            gait: animations.wave(
+                "entity_walk",
+                (e.visual.as_ref().map_or(0., |v| v.gait)
+                    - super::components::distance(position, e.transform.position) * 7.)
+                    / std::f32::consts::TAU,
+            ),
         }
     }
     pub fn part(&self, part: &Part) -> Mat4 {
@@ -29,7 +38,7 @@ impl Pose {
         let pivot = Vec3::from(part.pivot);
         self.root
             * Mat4::from_translation(pivot)
-            * Mat4::from_rotation_x(self.gait.sin() * part.swing * self.walk * 0.6)
+            * Mat4::from_rotation_x(self.gait * part.swing * self.walk * 0.6)
             * Mat4::from_translation(-pivot)
             * part.transform.map_or_else(
                 || Mat4::from_translation(low) * Mat4::from_scale(high - low),

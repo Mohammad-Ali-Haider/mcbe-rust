@@ -1,6 +1,7 @@
 //! Shared UI documents, layout, themes and code-defined screen controllers.
 mod grids;
 pub(crate) mod layout;
+pub(crate) mod motion;
 pub(crate) mod screen;
 pub(crate) mod theme;
 pub(crate) mod widgets;

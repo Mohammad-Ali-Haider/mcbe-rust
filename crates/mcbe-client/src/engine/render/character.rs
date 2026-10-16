@@ -19,26 +19,35 @@ fn root(position: [f32; 3], yaw: f32, crouched: bool) -> Mat4 {
 }
 fn swing(client: &Client, hand: Hand) -> f32 {
     if client.view.swing_hand == hand {
-        (client.view.swing * std::f32::consts::PI).sin()
+        client.animations.wave("player_use", 1. - client.view.swing)
     } else {
         0.
     }
 }
-fn arm(client: &Client, hand: Hand) -> f32 {
+fn walk(client: &Client, position: [f32; 3]) -> f32 {
+    let remaining = ((position[0] - client.actor.position.x).powi(2)
+        + (position[2] - client.actor.position.z).powi(2))
+    .sqrt();
+    client.animations.wave(
+        "player_walk",
+        (client.view.gait - remaining * 8.) / std::f32::consts::TAU,
+    )
+}
+fn arm(client: &Client, hand: Hand, position: [f32; 3]) -> f32 {
     let sign = if hand == Hand::Main { -1. } else { 1. };
-    sign * client.view.gait.sin() * client.view.walk * 0.55 - swing(client, hand) * 0.8
+    sign * walk(client, position) * client.view.walk * 0.55 - swing(client, hand) * 0.8
 }
 pub fn body(client: &Client, position: [f32; 3], skin: [f32; 4]) -> Vec<SkinVertex> {
     let mut out = Vec::with_capacity(12 * 36);
     let base = root(position, client.yaw, client.movement.crouched);
-    let swing = client.view.gait.sin() * client.view.walk * 0.55;
+    let swing = walk(client, position) * client.view.walk * 0.55;
     for c in &client.appearance.model.cubes {
         let angle = match c.bone.as_str() {
             "head" | "hat" => client.pitch,
             "rightLeg" | "rightPants" => swing,
-            "leftArm" | "leftSleeve" => arm(client, Hand::Off),
+            "leftArm" | "leftSleeve" => arm(client, Hand::Off, position),
             "leftLeg" | "leftPants" => -swing,
-            "rightArm" | "rightSleeve" => arm(client, Hand::Main),
+            "rightArm" | "rightSleeve" => arm(client, Hand::Main, position),
             _ => 0.,
         };
         // Imported cuboid X positions oppose the avatar's anatomical right axis.
@@ -48,19 +57,36 @@ pub fn body(client: &Client, position: [f32; 3], skin: [f32; 4]) -> Vec<SkinVert
     }
     out
 }
+#[cfg(test)]
 pub fn hand(client: &Client, skin: [f32; 4]) -> Vec<SkinVertex> {
-    let mut out = hand_geometry(client, skin, Hand::Main);
+    hand_at(
+        client,
+        skin,
+        [
+            client.actor.position.x,
+            client.actor.position.y,
+            client.actor.position.z,
+        ],
+    )
+}
+fn hand_at(client: &Client, skin: [f32; 4], position: [f32; 3]) -> Vec<SkinVertex> {
+    let mut out = hand_geometry(client, skin, Hand::Main, position);
     if client
         .scene
         .engine
         .as_ref()
         .is_some_and(|s| s.player.offhand.is_some())
     {
-        out.extend(hand_geometry(client, skin, Hand::Off));
+        out.extend(hand_geometry(client, skin, Hand::Off, position));
     }
     out
 }
-fn hand_geometry(client: &Client, skin: [f32; 4], hand: Hand) -> Vec<SkinVertex> {
+fn hand_geometry(
+    client: &Client,
+    skin: [f32; 4],
+    hand: Hand,
+    position: [f32; 3],
+) -> Vec<SkinVertex> {
     let sign = if hand == Hand::Main { 1. } else { -1. };
     let (bone, sleeve) = if hand == Hand::Main {
         ("rightArm", "rightSleeve")
@@ -78,7 +104,7 @@ fn hand_geometry(client: &Client, skin: [f32; 4], hand: Hand) -> Vec<SkinVertex>
             Vec3::from(c.origin) + Vec3::from(c.size) * 0.5
         });
     let swing = swing(client, hand);
-    let bob = client.view.gait.sin() * client.view.walk * 0.012;
+    let bob = walk(client, position) * client.view.walk * 0.012;
     let base = Mat4::from_translation(Vec3::new(
         sign * (0.55 - swing * 0.12),
         -0.40 + bob,
@@ -112,7 +138,7 @@ pub fn item_hand(client: &Client, position: [f32; 3], first: bool, hand: Hand) -
     };
     let mut out = crate::engine::items::mesh(state, stack);
     let swing = swing(client, hand);
-    let bob = client.view.gait.sin() * client.view.walk * 0.012;
+    let bob = walk(client, position) * client.view.walk * 0.012;
     let container = state.registry.get(stack.id).container.is_some();
     let transform = if first {
         Mat4::from_translation(Vec3::new(
@@ -143,7 +169,7 @@ pub fn item_hand(client: &Client, position: [f32; 3], first: bool, hand: Hand) -
                 .cubes
                 .iter()
                 .find(|c| c.bone == bone)
-                .map_or(Mat4::IDENTITY, |c| pivot(c, arm(client, hand)))
+                .map_or(Mat4::IDENTITY, |c| pivot(c, arm(client, hand, position)))
             * Mat4::from_translation(anchor)
             * Mat4::from_scale(Vec3::splat(5.))
     };
@@ -173,6 +199,7 @@ struct Key {
     registry: u64,
     selected: Option<crate::engine_inventory::Stack>,
     appearance: usize,
+    animations: u64,
 }
 pub struct Renderer {
     skin_pipeline: wgpu::RenderPipeline,
@@ -378,6 +405,7 @@ impl Renderer {
             registry: state.registry_revision,
             selected: state.player.slots[state.player.active],
             appearance: std::sync::Arc::as_ptr(&client.appearance) as usize,
+            animations: client.animations.id,
         };
         if self.key.as_ref() == Some(&key) {
             return;
@@ -390,7 +418,7 @@ impl Renderer {
             body(client, position, skin)
         };
         self.hand = if self.first && !hidden {
-            hand(client, skin)
+            hand_at(client, skin, position)
         } else {
             Vec::new()
         };

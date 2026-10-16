@@ -43,6 +43,8 @@ struct Camera {
 }
 #[derive(PartialEq, Eq)]
 struct UiKey {
+    animations: u64,
+    animation_bucket: u64,
     chat_revision: u64,
     entity: Option<(crate::engine::entities::components::Id, u16, u16, bool)>,
     controls_revision: u64,
@@ -204,6 +206,7 @@ pub struct Renderer {
     ui_key: Option<UiKey>,
     ui_vertices: u32,
     ui_epoch: Instant,
+    ui_motion: crate::engine::ui::framework::motion::Motion,
     _instance: wgpu::Instance,
     surface: Option<wgpu::Surface<'static>>,
     offscreen_target: Option<wgpu::Texture>,
@@ -622,6 +625,7 @@ impl Renderer {
             ui_key: None,
             ui_vertices: 0,
             ui_epoch: Instant::now(),
+            ui_motion: Default::default(),
             _instance: instance,
             surface,
             offscreen_target,
@@ -1583,7 +1587,22 @@ impl Renderer {
         } else {
             super::super::input::hints::Use::Place
         };
+        let ui_seconds = self.ui_epoch.elapsed().as_secs_f64();
+        let animated = client.animations.enabled
+            && (self.ui_motion.active(ui_seconds, &client.animations)
+                || frame.startup
+                || !self.stats.meshes_ready
+                || frame.chat.fading(
+                    std::time::Instant::now(),
+                    client.animations.clip("chat_fade").duration,
+                ));
         let key = UiKey {
+            animations: client.animations.id,
+            animation_bucket: if animated {
+                (ui_seconds * 60.) as u64 + 1
+            } else {
+                0
+            },
             chat_revision: frame.chat.revision,
             entity: entity_target
                 .as_ref()
@@ -1655,7 +1674,7 @@ impl Renderer {
                 state.entities.records.len(),
                 state.entities.stats.active
             );
-            let composition = self.atlas.as_ref().unwrap().compose(
+            let composition = self.atlas.as_ref().unwrap().compose_animated(
                 client,
                 palette,
                 Context {
@@ -1681,6 +1700,8 @@ impl Renderer {
                     statistics: &label,
                     notice: frame.notice,
                 },
+                &mut self.ui_motion,
+                ui_seconds,
             );
             self.ui_preview_at = composition.preview_at;
             self.preview_mesh = if !frame.startup && !frame.menu.open() {

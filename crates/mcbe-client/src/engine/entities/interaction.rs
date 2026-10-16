@@ -69,7 +69,7 @@ pub fn target(c: &Client) -> Result<Option<Id>> {
     for (_, e) in candidates {
         if e.visual.is_some() {
             let d = s.entities.library.get(&e.kind)?;
-            let pose = super::model::Pose::new(e, e.transform.position);
+            let pose = super::model::Pose::new(e, e.transform.position, &c.animations);
             for part in &d.model {
                 let inverse = pose.part(part).inverse();
                 let p = inverse

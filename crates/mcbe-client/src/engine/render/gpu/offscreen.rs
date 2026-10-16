@@ -475,3 +475,113 @@ fn production_island_frames_keep_coverage_during_detail_arrival_and_eviction() {
     std::fs::write(out.join("coverage.json"),serde_json::to_vec_pretty(&serde_json::json!({"initial_chunks":initial_chunks,"frames":rows,"ray_rendering":ray_rendering,"rough_mirror_changed_pixels":different,"rendering":renderer.rendering_observation(),"statistics":renderer.stats})).unwrap()).unwrap();
     eprintln!("Production offscreen island coverage: {rows:?}");
 }
+
+#[test]
+#[ignore = "Explicit production offscreen UI animation/cache check; no window"]
+fn production_ui_animation_settles_and_stops_uploading_after_skipped_frames() {
+    let out = std::env::var_os("MCBE_ANIMATION_PREVIEW_OUT")
+        .or_else(|| std::env::var_os("MCBE_LOD_PREVIEW_OUT"))
+        .map(std::path::PathBuf::from)
+        .expect("Set MCBE_ANIMATION_PREVIEW_OUT");
+    std::fs::create_dir_all(&out).unwrap();
+    let mut c = crate::engine::generate(713).unwrap();
+    c.view.mode = crate::engine::player::camera::Mode::Free;
+    let mut renderer = Renderer::offscreen(512, 288).unwrap();
+    renderer.set_async(false);
+    renderer.stats.gui_scale = 1.;
+    renderer
+        .device
+        .push_error_scope(wgpu::ErrorFilter::Validation);
+    let actor = [c.actor.position.x, c.actor.position.y, c.actor.position.z];
+    let eye = [actor[0], actor[1] + 6., actor[2] + 12.];
+    let direction = (Vec3::from(actor) - Vec3::from(eye)).normalize().to_array();
+    let palette = Palette::recover(&c);
+    let settings = crate::engine_settings::Settings::default();
+    let menu = crate::engine_settings::Menu::default();
+    let chat = Chat::default();
+    let controls = Runtime::default();
+    let draw = |r: &mut Renderer, c: &crate::scene::Client, t: f64| {
+        r.ui_epoch = Instant::now() - std::time::Duration::from_secs_f64(t);
+        assert!(
+            r.draw(
+                c,
+                &palette,
+                frame(&settings, &menu, &chat, &controls, eye, direction, actor)
+            )
+            .unwrap()
+        );
+    };
+    draw(&mut renderer, &c, 1.);
+    let start = capture(&renderer, &out.join("ui-initial.png"));
+    // Skip the entire animation interval: the final state must still be drawn.
+    draw(&mut renderer, &c, 10.);
+    let settled = capture(&renderer, &out.join("ui-settled.png"));
+    assert_ne!(start, settled);
+    draw(&mut renderer, &c, 10.);
+    let idle = renderer.stats.ui_uploads;
+    draw(&mut renderer, &c, 10.);
+    assert_eq!(renderer.stats.ui_uploads, idle);
+    c.scene.engine.as_mut().unwrap().player.active = 1;
+    draw(&mut renderer, &c, 11.);
+    let before = capture(&renderer, &out.join("selection-before.png"));
+    draw(&mut renderer, &c, 11.07);
+    let mid = capture(&renderer, &out.join("selection-mid.png"));
+    draw(&mut renderer, &c, 11.3);
+    let end = capture(&renderer, &out.join("selection-end.png"));
+    assert_ne!(before, mid);
+    assert_ne!(mid, end);
+    draw(&mut renderer, &c, 12.);
+    let idle = renderer.stats.ui_uploads;
+    draw(&mut renderer, &c, 12.);
+    assert_eq!(renderer.stats.ui_uploads, idle);
+    let mut disabled = (*c.animations).clone();
+    disabled.enabled = false;
+    c.animations = std::sync::Arc::new(disabled.compile().unwrap());
+    c.scene.engine.as_mut().unwrap().player.active = 2;
+    draw(&mut renderer, &c, 13.);
+    let idle = renderer.stats.ui_uploads;
+    draw(&mut renderer, &c, 14.);
+    assert_eq!(
+        renderer.stats.ui_uploads, idle,
+        "disabled animations must stay cached"
+    );
+    // Exercise the real inventory overlay and its interleaved 3D preview, whose
+    // draw ranges change while zero-alpha animation quads appear/disappear.
+    let mut enabled = (*c.animations).clone();
+    enabled.enabled = true;
+    c.animations = std::sync::Arc::new(enabled.compile().unwrap());
+    let mut palette = palette;
+    palette.open = true;
+    palette.hover = Some(crate::engine_ui::Target::Slot(
+        crate::engine_inventory::Slot::Player(0),
+    ));
+    palette.revision += 1;
+    let inventory_draw = |r: &mut Renderer, t: f64| {
+        r.ui_epoch = Instant::now() - std::time::Duration::from_secs_f64(t);
+        assert!(
+            r.draw(
+                &c,
+                &palette,
+                frame(&settings, &menu, &chat, &controls, eye, direction, actor)
+            )
+            .unwrap()
+        );
+    };
+    inventory_draw(&mut renderer, 15.);
+    let opening = capture(&renderer, &out.join("inventory-initial.png"));
+    inventory_draw(&mut renderer, 15.07);
+    let middle = capture(&renderer, &out.join("inventory-mid.png"));
+    inventory_draw(&mut renderer, 15.3);
+    let complete = capture(&renderer, &out.join("inventory-end.png"));
+    assert_ne!(opening, middle);
+    assert_ne!(middle, complete);
+    assert!(renderer.stats.preview_vertices > 0 && renderer.ui_preview_at.is_some());
+    inventory_draw(&mut renderer, 16.);
+    let idle = renderer.stats.ui_uploads;
+    let preview_idle = renderer.stats.preview_uploads;
+    inventory_draw(&mut renderer, 17.);
+    assert_eq!(renderer.stats.ui_uploads, idle);
+    assert_eq!(renderer.stats.preview_uploads, preview_idle);
+    assert!(pollster::block_on(renderer.device.pop_error_scope()).is_none());
+    std::fs::write(out.join("ui-animation.json"),serde_json::to_vec_pretty(&serde_json::json!({"ui_uploads":renderer.stats.ui_uploads,"skipped_frame_settled":true,"idle_uploads_stopped":true,"disabled_uploads_stopped":true,"inventory_preview_verified":true,"renderer":renderer.rendering_observation()})).unwrap()).unwrap();
+}

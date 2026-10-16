@@ -1,5 +1,6 @@
 //! Engine terrain, player inventory, recipes and versioned saves.
 //! Optional installed Minecraft texture bindings are handled in engine_assets.
+pub(crate) mod animation;
 pub(crate) mod blocks;
 pub(crate) mod commands;
 pub(crate) mod content;
@@ -1274,6 +1275,7 @@ pub fn reload_definitions(client: &mut Client, path: &Path) -> Result<()> {
         .map(|a| a.root.as_path())
         .or(pack_home)
         .unwrap_or(path.parent().unwrap().parent().unwrap_or(Path::new(".")));
+    let animations = std::sync::Arc::new(animation::Library::read_home(home)?);
     let appearance = std::sync::Arc::new(player::appearance::Appearance::read_home(home)?);
     let owned = crate::engine_materials::load(&registry, home)?;
     let ui = std::sync::Arc::new(ui::framework::Library::read_home(home)?);
@@ -1313,6 +1315,7 @@ pub fn reload_definitions(client: &mut Client, path: &Path) -> Result<()> {
     client.scene.engine.as_mut().unwrap().player = configured_player;
     let state = client.scene.engine.as_mut().unwrap();
     state.ui = ui;
+    client.animations = animations;
     client.appearance = appearance;
     client.owned_materials = Some(owned);
     client.scene.engine.as_mut().unwrap().recipes = recipes;

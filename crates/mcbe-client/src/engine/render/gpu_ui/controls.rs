@@ -160,6 +160,7 @@ impl Atlas {
         palette: &Palette,
         ctx: &Context<'_>,
         viewport: [f32; 2],
+        motion: &mut impl FnMut(&str, f32, f32, &'static str) -> f32,
     ) {
         let controls = ctx.controls;
         let menu = ctx.menu;
@@ -167,7 +168,11 @@ impl Atlas {
         let theme = &client.scene.engine.as_ref().unwrap().ui.theme;
         if controls.keyboard.open {
             c.clip = None;
-            c.rect([0., 0., viewport[0], viewport[1]], [0., 0., 0., 0.48]);
+            let reveal = motion("keyboard:reveal", 1., 0., "ui_reveal");
+            c.rect(
+                [0., 0., viewport[0], viewport[1]],
+                [0., 0., 0., 0.48 * reveal],
+            );
             let mut model = Model::default();
             model
                 .texts
@@ -192,14 +197,18 @@ impl Atlas {
                             self.text_scaled(c, r[0], r[1], &model.text(text), style.text, scale)
                         }
                         Kind::Button { text, .. } => {
-                            c.rect(
-                                r,
-                                if node.rect.contains(controls.keyboard.pointer) {
-                                    [0.25, 0.62, 0.32, 1.]
-                                } else {
-                                    style.fill
-                                },
-                            );
+                            c.rect(r, {
+                                let weight = motion(
+                                    &format!("keyboard:{}", node.widget.id),
+                                    f32::from(node.rect.contains(controls.keyboard.pointer)),
+                                    0.,
+                                    "ui_focus",
+                                );
+                                let active = [0.25, 0.62, 0.32, 1.];
+                                std::array::from_fn(|a| {
+                                    style.fill[a] + (active[a] - style.fill[a]) * weight
+                                })
+                            });
                             let width = self.label_width(text) * scale;
                             self.text_scaled(
                                 c,

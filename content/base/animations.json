@@ -1,0 +1,208 @@
+{
+  "version": 1,
+  "enabled": true,
+  "clips": {
+    "player_walk": {
+      "duration": 1,
+      "playback": "loop",
+      "tracks": {
+        "value": [
+          {
+            "time": 0,
+            "value": 0,
+            "easing": "sine_out"
+          },
+          {
+            "time": 0.25,
+            "value": 1,
+            "easing": "sine_in"
+          },
+          {
+            "time": 0.5,
+            "value": 0,
+            "easing": "sine_out"
+          },
+          {
+            "time": 0.75,
+            "value": -1,
+            "easing": "sine_in"
+          },
+          {
+            "time": 1,
+            "value": 0,
+            "easing": "linear"
+          }
+        ]
+      }
+    },
+    "entity_walk": {
+      "duration": 1,
+      "playback": "loop",
+      "tracks": {
+        "value": [
+          {
+            "time": 0,
+            "value": 0,
+            "easing": "sine_out"
+          },
+          {
+            "time": 0.25,
+            "value": 1,
+            "easing": "sine_in"
+          },
+          {
+            "time": 0.5,
+            "value": 0,
+            "easing": "sine_out"
+          },
+          {
+            "time": 0.75,
+            "value": -1,
+            "easing": "sine_in"
+          },
+          {
+            "time": 1,
+            "value": 0,
+            "easing": "linear"
+          }
+        ]
+      }
+    },
+    "player_use": {
+      "duration": 1,
+      "playback": "once",
+      "tracks": {
+        "value": [
+          {
+            "time": 0,
+            "value": 0,
+            "easing": "sine_out"
+          },
+          {
+            "time": 0.5,
+            "value": 1,
+            "easing": "sine_in"
+          },
+          {
+            "time": 1,
+            "value": 0,
+            "easing": "linear"
+          }
+        ]
+      }
+    },
+    "ui_focus": {
+      "duration": 0.14,
+      "playback": "once",
+      "tracks": {
+        "value": [
+          {
+            "time": 0,
+            "value": 0,
+            "easing": "out_cubic"
+          },
+          {
+            "time": 0.14,
+            "value": 1,
+            "easing": "linear"
+          }
+        ]
+      }
+    },
+    "ui_selection": {
+      "duration": 0.16,
+      "playback": "once",
+      "tracks": {
+        "value": [
+          {
+            "time": 0,
+            "value": 0,
+            "easing": "out_cubic"
+          },
+          {
+            "time": 0.16,
+            "value": 1,
+            "easing": "linear"
+          }
+        ]
+      }
+    },
+    "ui_progress": {
+      "duration": 0.18,
+      "playback": "once",
+      "tracks": {
+        "value": [
+          {
+            "time": 0,
+            "value": 0,
+            "easing": "out_cubic"
+          },
+          {
+            "time": 0.18,
+            "value": 1,
+            "easing": "linear"
+          }
+        ]
+      }
+    },
+    "ui_reveal": {
+      "duration": 0.18,
+      "playback": "once",
+      "tracks": {
+        "value": [
+          {
+            "time": 0,
+            "value": 0,
+            "easing": "out_cubic"
+          },
+          {
+            "time": 0.18,
+            "value": 1,
+            "easing": "linear"
+          }
+        ]
+      }
+    },
+    "chat_fade": {
+      "duration": 0.8,
+      "playback": "once",
+      "tracks": {
+        "value": [
+          {
+            "time": 0,
+            "value": 0,
+            "easing": "out_cubic"
+          },
+          {
+            "time": 0.8,
+            "value": 1,
+            "easing": "linear"
+          }
+        ]
+      }
+    },
+    "loading": {
+      "duration": 1.2,
+      "playback": "loop",
+      "tracks": {
+        "value": [
+          {
+            "time": 0,
+            "value": 0.45,
+            "easing": "smooth_step"
+          },
+          {
+            "time": 0.6,
+            "value": 1,
+            "easing": "smooth_step"
+          },
+          {
+            "time": 1.2,
+            "value": 0.45,
+            "easing": "linear"
+          }
+        ]
+      }
+    }
+  }
+}

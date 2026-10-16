@@ -83,7 +83,7 @@ struct Canvas {
 impl Canvas {
     fn quad(&mut self, s: Sprite, r: [f32; 4], color: [f32; 4]) {
         let [x, y, w, h] = r;
-        if w <= 0. || h <= 0. {
+        if w <= 0. || h <= 0. || color[3] <= 0. {
             return;
         }
         let clipped = self
@@ -379,7 +379,37 @@ impl Atlas {
     pub fn preview_skin(&self) -> Option<[u32; 4]> {
         self.inventory.get("skin").map(|s| [s.x, s.y, s.w, s.h])
     }
+    #[cfg(test)]
     pub fn compose(&self, client: &Client, palette: &Palette, ctx: Context<'_>) -> Composition {
+        self.compose_inner(client, palette, ctx, None, 0.)
+    }
+    pub fn compose_animated(
+        &self,
+        client: &Client,
+        palette: &Palette,
+        ctx: Context<'_>,
+        motion: &mut crate::engine::ui::framework::motion::Motion,
+        now: f64,
+    ) -> Composition {
+        motion.begin(now);
+        let result = self.compose_inner(client, palette, ctx, Some(&mut *motion), now);
+        motion.finish();
+        result
+    }
+    fn compose_inner(
+        &self,
+        client: &Client,
+        palette: &Palette,
+        ctx: Context<'_>,
+        mut motion: Option<&mut crate::engine::ui::framework::motion::Motion>,
+        now: f64,
+    ) -> Composition {
+        let mut motion_value = |id: &str, target: f32, initial: f32, role: &'static str| {
+            motion.as_deref_mut().map_or(target, |m| {
+                m.value(id, target, initial, role, &client.animations)
+            })
+        };
+
         use crate::engine_inventory::Slot;
         use crate::engine_ui::Target;
         let width = ctx.width as f32 / ctx.scale;
@@ -392,6 +422,14 @@ impl Atlas {
             width,
             height,
             white: self.white,
+        };
+        let pulse = if client.animations.enabled {
+            client
+                .animations
+                .sample("loading", "value", now)
+                .unwrap_or(1.)
+        } else {
+            1.
         };
         if ctx.startup {
             c.rect([0., 0., width, height], [0.035, 0.05, 0.065, 1.]);
@@ -409,6 +447,7 @@ impl Atlas {
             for ch in message.chars() {
                 if self.label_width(&line) + 6. > panel_width || ch == '|' {
                     self.text(&mut c, left, y, &line, [1.; 4]);
+                    c.rect([left, top + 96., panel_width, 2.], [0.38, 0.88, 0.8, pulse]);
                     line.clear();
                     y += 12.;
                 }
@@ -427,7 +466,13 @@ impl Atlas {
         }
         if ctx.menu.open() {
             use crate::engine_settings::Page;
-            c.rect([0., 0., width, height], [0., 0., 0., 0.65]);
+            let reveal = motion_value(
+                &format!("menu:{:?}:reveal", ctx.menu.page),
+                1.,
+                0.,
+                "ui_reveal",
+            );
+            c.rect([0., 0., width, height], [0., 0., 0., 0.65 * reveal]);
             let [left, top] = ctx.menu.origin_for(viewport);
             c.rect(
                 [
@@ -453,19 +498,23 @@ impl Atlas {
             {
                 let y = top + 34. + i as f32 * 23.;
                 let active = ctx.menu.selected == i;
-                c.rect(
-                    [left, y, 340., 20.],
-                    if active {
-                        [0.28, 0.55, 0.24, 1.]
-                    } else {
-                        [0.27, 0.28, 0.29, 1.]
-                    },
-                );
+                c.rect([left, y, 340., 20.], {
+                    let weight = motion_value(
+                        &format!("menu:{:?}:{i}", ctx.menu.page),
+                        f32::from(active),
+                        0.,
+                        "ui_focus",
+                    );
+                    let off = [0.27, 0.28, 0.29, 1.];
+                    let on = [0.28, 0.55, 0.24, 1.];
+                    std::array::from_fn(|a| off[a] + (on[a] - off[a]) * weight)
+                });
                 c.rect([left, y + 18., 340., 2.], [0.04, 0.05, 0.04, 1.]);
                 self.text(&mut c, left + 20., y + 6., label, [1.; 4]);
                 if ctx.menu.page == Page::Settings && i == 0 {
-                    let value = (ctx.settings.render_distance - 2) as f32
+                    let target = (ctx.settings.render_distance - 2) as f32
                         / (crate::engine_stream::MAX_RADIUS - 2) as f32;
+                    let value = motion_value("menu:distance", target, target, "ui_progress");
                     c.rect([left + 30., y + 15., 280., 2.], [0.07, 0.09, 0.07, 1.]);
                     c.rect([left + 30., y + 15., 280. * value, 2.], [0.7, 1., 0.65, 1.]);
                     c.rect([left + 28. + 280. * value, y + 14., 4., 4.], [1.; 4]);
@@ -510,7 +559,7 @@ impl Atlas {
                 },
                 [0.65, 0.8, 0.65, 1.],
             );
-            self.control_overlay(&mut c, client, palette, &ctx, viewport);
+            self.control_overlay(&mut c, client, palette, &ctx, viewport, &mut motion_value);
             return Composition {
                 vertices: c.vertices,
                 preview_at: None,
@@ -521,6 +570,12 @@ impl Atlas {
         let bar_width = player.profile.hotbar_slots as f32 * 20. + 2.;
         let x = (width - bar_width) / 2.;
         let y = height - 22.;
+        let selection = motion_value(
+            "hotbar:selection",
+            player.active as f32,
+            player.active as f32,
+            "ui_selection",
+        );
         c.rect([x, y, bar_width, 22.], [0.25, 0.25, 0.25, 0.8]);
         if let Some(s) = self.start {
             c.quad(s, [x, y, 1., 22.], [1., 1., 1., 0.65]);
@@ -530,11 +585,18 @@ impl Atlas {
         }
         for i in 0..player.profile.hotbar_slots {
             if !state.ui.theme.legacy_ui {
-                let style = state.ui.theme.style(if i == player.active {
-                    "hotbar_selected"
-                } else {
-                    "slot"
-                });
+                let mut style = state.ui.theme.style("slot");
+                let selected = state.ui.theme.style("hotbar_selected");
+                let weight = motion_value(
+                    &format!("hotbar:{i}"),
+                    f32::from(i == player.active),
+                    0.,
+                    "ui_focus",
+                );
+                for a in 0..4 {
+                    style.border[a] += (selected.border[a] - style.border[a]) * weight;
+                    style.fill[a] += (selected.fill[a] - style.fill[a]) * weight;
+                }
                 let rect = [x + 1. + i as f32 * 20., y + 1., 19., 20.];
                 c.rect(rect, style.border);
                 c.rect([rect[0] + 1., rect[1] + 1., 17., 18.], style.fill);
@@ -566,11 +628,7 @@ impl Atlas {
             );
         }
         if let Some(s) = self.selected {
-            c.quad(
-                s,
-                [x - 1. + player.active as f32 * 20., y - 1., 24., 24.],
-                [1.; 4],
-            );
+            c.quad(s, [x - 1. + selection * 20., y - 1., 24., 24.], [1.; 4]);
         }
         if !ctx.chat.open
             && self.cross.is_none()
@@ -731,14 +789,30 @@ impl Atlas {
             }
         }
         if ctx.loading {
-            self.text(&mut c, 6., height - 60., "Preparing terrain...", [1.; 4]);
+            self.text(
+                &mut c,
+                6.,
+                height - 60.,
+                "Preparing terrain...",
+                [1., 1., 1., pulse],
+            );
         }
         if let Some(notice) = ctx.notice {
-            self.text(&mut c, 6., height - 49., notice, [1.; 4]);
+            let id = notice
+                .bytes()
+                .fold(0u64, |a, b| a.wrapping_mul(31) + u64::from(b));
+            let reveal = motion_value(&format!("notice:{id}"), 1., 0., "ui_reveal");
+            self.text(&mut c, 6., height - 49., notice, [1., 1., 1., reveal]);
         }
         if palette.open {
             use crate::engine::ui::framework::widgets::{Binding, Kind};
-            c.rect([0., 0., width, height], [0., 0., 0., 0.4]);
+            let reveal = motion_value(
+                &format!("screen:{}:reveal", palette.screen_id()),
+                1.,
+                0.,
+                "ui_reveal",
+            );
+            c.rect([0., 0., width, height], [0., 0., 0., 0.4 * reveal]);
             let model = palette.ui_model(client);
             let result = palette.crafting_result(client, false);
             let table_result = palette.crafting_result(client, true);
@@ -892,9 +966,15 @@ impl Atlas {
                                                 [1.; 4],
                                             );
                                         }
-                                        if palette.hover == Some(Target::Catalog(*id as u16)) {
-                                            c.rect(cell, [1., 1., 1., 0.3]);
-                                        }
+                                        let weight = motion_value(
+                                            &format!("{}:catalog:{}", palette.screen_id(), *id),
+                                            f32::from(
+                                                palette.hover == Some(Target::Catalog(*id as u16)),
+                                            ),
+                                            0.,
+                                            "ui_focus",
+                                        );
+                                        c.rect(cell, [1., 1., 1., 0.3 * weight]);
                                     }
                                 }
                             }
@@ -976,9 +1056,13 @@ impl Atlas {
                                         &state.registry,
                                     );
                                 }
-                                if palette.hover == Some(target) {
-                                    c.rect(r, [1., 1., 1., 0.25]);
-                                }
+                                let weight = motion_value(
+                                    &format!("{}:slot:{}", palette.screen_id(), node.widget.id),
+                                    f32::from(palette.hover == Some(target)),
+                                    0.,
+                                    "ui_focus",
+                                );
+                                c.rect(r, [1., 1., 1., 0.25 * weight]);
                             }
                             Kind::Button { text, .. } => {
                                 c.rect(r, style.border);
@@ -997,9 +1081,13 @@ impl Atlas {
                                 } else {
                                     c.rect(inside, style.fill);
                                 }
-                                if palette.hover == Some(Target::Button(index as u16)) {
-                                    c.rect(inside, [1., 1., 1., 0.2]);
-                                }
+                                let weight = motion_value(
+                                    &format!("{}:button:{}", palette.screen_id(), node.widget.id),
+                                    f32::from(palette.hover == Some(Target::Button(index as u16))),
+                                    0.,
+                                    "ui_focus",
+                                );
+                                c.rect(inside, [1., 1., 1., 0.2 * weight]);
                                 self.text_scaled(
                                     &mut c,
                                     r[0] + (r[2] - self.label_width(text) * scale) / 2.,
@@ -1012,6 +1100,12 @@ impl Atlas {
                             Kind::Progress { value, maximum } => {
                                 c.rect(r, style.border);
                                 let fraction = (model.number(value) / maximum).clamp(0., 1.) as f32;
+                                let fraction = motion_value(
+                                    &format!("{}:progress:{}", palette.screen_id(), node.widget.id),
+                                    fraction,
+                                    0.,
+                                    "ui_progress",
+                                );
                                 let fill = [
                                     r[0] + scale,
                                     r[1] + scale,
@@ -1066,10 +1160,10 @@ impl Atlas {
             }
         }
         if !ctx.chat.open {
-            self.control_overlay(&mut c, client, palette, &ctx, viewport);
+            self.control_overlay(&mut c, client, palette, &ctx, viewport, &mut motion_value);
         }
         if !palette.open {
-            self.chat_overlay(&mut c, ctx.chat, viewport);
+            self.chat_overlay(&mut c, ctx.chat, viewport, &client.animations);
         }
 
         Composition {

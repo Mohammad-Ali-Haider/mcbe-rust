@@ -476,6 +476,7 @@ pub struct Input {
 pub struct Client {
     pub parkour: crate::engine::player::locomotion::parkour::State,
     pub view: crate::engine::player::camera::Rig,
+    pub animations: std::sync::Arc<crate::engine::animation::Library>,
     pub appearance: std::sync::Arc<crate::engine::player::appearance::Appearance>,
     pub owned_materials: Option<crate::engine_materials::Owned>,
     pub engine_gpu_prepared: std::cell::RefCell<Option<crate::engine_texture::Prepared>>,
@@ -544,6 +545,7 @@ impl Client {
         Ok(Self {
             parkour: Default::default(),
             view: Default::default(),
+            animations: crate::engine::animation::Library::shared(),
             appearance: std::sync::Arc::new(
                 crate::engine::player::appearance::Appearance::fallback(),
             ),

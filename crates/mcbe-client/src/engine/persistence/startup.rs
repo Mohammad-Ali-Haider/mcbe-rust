@@ -223,6 +223,7 @@ impl Options {
             let state = client.scene.engine.as_ref().unwrap();
             state.ui.validate_inventory(&state.player.profile)?;
         }
+        client.animations = Arc::new(crate::engine::animation::Library::read_home(&self.home)?);
         client.appearance = Arc::new(crate::engine::player::appearance::Appearance::read_home(
             &self.home,
         )?);

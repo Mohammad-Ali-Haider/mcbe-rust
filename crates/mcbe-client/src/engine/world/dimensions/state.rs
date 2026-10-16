@@ -408,6 +408,7 @@ pub struct Travel {
     pub recipes: crate::engine_crafting::Recipes,
     pub smelting: machines::recipes::Recipes,
     pub ui: Arc<crate::engine::ui::framework::Library>,
+    pub animations: Arc<crate::engine::animation::Library>,
     pub appearance: Arc<crate::engine::player::appearance::Appearance>,
     pub entity_assets: Arc<crate::engine::entities::assets::Assets>,
     pub camera_mode: crate::engine::player::camera::Mode,
@@ -452,6 +453,7 @@ impl Travel {
             recipes: s.recipes.clone(),
             smelting: s.smelting.clone(),
             ui: s.ui.clone(),
+            animations: client.animations.clone(),
             appearance: client.appearance.clone(),
             entity_assets: client.entity_assets.clone(),
             camera_mode: client.view.mode,
@@ -503,6 +505,7 @@ impl Travel {
         s.original_player = self.original_player;
         s.ui = self.ui;
         s.loaded = self.loaded;
+        client.animations = self.animations;
         client.appearance = self.appearance;
         {
             let state = client.scene.engine.as_ref().unwrap();

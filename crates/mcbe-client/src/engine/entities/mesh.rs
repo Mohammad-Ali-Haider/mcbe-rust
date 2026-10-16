@@ -34,6 +34,7 @@ pub struct Frame {
 }
 #[derive(PartialEq)]
 struct Key {
+    animations: u64,
     assets: u64,
     instance: u64,
     registry: u64,
@@ -273,6 +274,7 @@ impl Renderer {
         let state = c.scene.engine.as_ref().unwrap();
         let world = &state.entities;
         let key = Key {
+            animations: c.animations.id,
             assets: c.entity_assets.id,
             instance: state.instance,
             registry: state.registry_revision,
@@ -338,7 +340,7 @@ impl Renderer {
                     e.transform.previous[a]
                         + (e.transform.position[a] - e.transform.previous[a]) * blend.clamp(0., 1.)
                 });
-                let pose = super::model::Pose::new(e, position);
+                let pose = super::model::Pose::new(e, position, &c.animations);
                 for (part, material) in d.model.iter().zip(&w.library.materials[kind]) {
                     let model = pose.part(part);
                     let flags =

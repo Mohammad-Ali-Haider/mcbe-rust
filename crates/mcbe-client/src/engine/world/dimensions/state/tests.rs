@@ -7,7 +7,9 @@ fn client() -> Client {
     c
 }
 fn travel(c: &mut Client, id: &str) {
+    let animations = c.animations.clone();
     *c = Travel::capture(c, id).unwrap().prepare().unwrap();
+    assert!(std::sync::Arc::ptr_eq(&animations, &c.animations));
 }
 fn seed_source(c: &mut Client) {
     let s = c.scene.engine.as_mut().unwrap();
