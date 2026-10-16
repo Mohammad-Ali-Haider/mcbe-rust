@@ -61,7 +61,7 @@ cargo build --release --locked
 
 Start with [Architecture and source map](docs/ARCHITECTURE.md), then read
 [Edit, run and commit](docs/DEVELOPMENT.md), [Blocks](docs/BLOCKS.md),
-[Controls](docs/CONTROLS.md), [UI authoring](docs/UI.md), [Stations](docs/STATIONS.md), [Cameras and skins](docs/CAMERA.md), [Terrain](docs/TERRAIN.md), [Water and swimming](docs/FLUIDS.md), [Items and buckets](docs/ITEMS.md), [Rendering](docs/RENDERING.md) and [Milestone history](docs/HISTORY.md).
+[Controls](docs/CONTROLS.md), [UI authoring](docs/UI.md), [Stations](docs/STATIONS.md), [Cameras and skins](docs/CAMERA.md), [Terrain](docs/TERRAIN.md), [Water and swimming](docs/FLUIDS.md), [Items and buckets](docs/ITEMS.md), [Movement](docs/MOVEMENT.md), [Rendering](docs/RENDERING.md) and [Milestone history](docs/HISTORY.md).
 
 Walking, sprinting, sneaking, flight/noclip, inventory/crafting, JSON models,
 slab/stair states, glass, unified component packs, optional signal behaviors,
@@ -87,3 +87,6 @@ Ray-traced lighting is available through Escape -> Settings -> Rendering on
 supported DX12 hardware. Forward remains the default for maximum speed.
 Reflection/indirect switches and quality budgets are documented in
 [Rendering](docs/RENDERING.md); unsupported hardware uses Deferred lighting.
+
+Wall traversal: hold C to grip, W/S to climb, Ctrl plus movement to wall-run,
+Space to jump away or pull onto a ledge, and Shift to drop.
