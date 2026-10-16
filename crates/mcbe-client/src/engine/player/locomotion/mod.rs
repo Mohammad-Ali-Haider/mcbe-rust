@@ -1,4 +1,5 @@
 //! Environment queries and a shared extension interface for movement controllers.
+pub(crate) mod parkour;
 pub(crate) mod swimming;
 use crate::engine::fluids;
 use crate::scene::{Client, Input, Result};
@@ -62,13 +63,12 @@ impl Environment {
 /// Implement another controller and include it in the ordered dispatch table.
 pub trait Controller: Sync {
     fn eligible(&self, environment: &Environment) -> bool;
-    fn step(&self, client: &mut Client, input: Input, environment: &Environment) -> Result<()>;
+    fn step(&self, client: &mut Client, input: Input, environment: &Environment) -> Result<bool>;
 }
-static CONTROLLERS: [&dyn Controller; 1] = [&swimming::Swimming];
+static CONTROLLERS: [&dyn Controller; 2] = [&swimming::Swimming, &parkour::Parkour];
 pub fn apply(client: &mut Client, input: Input, environment: &Environment) -> Result<bool> {
     for c in CONTROLLERS {
-        if c.eligible(environment) {
-            c.step(client, input, environment)?;
+        if c.eligible(environment) && c.step(client, input, environment)? {
             return Ok(true);
         }
     }

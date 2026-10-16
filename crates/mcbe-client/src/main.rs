@@ -129,6 +129,7 @@ struct App {
     frame_limit: usize,
     fluid_live: Option<verification::fluids::Live>,
     lighting_live: Option<verification::lighting::Live>,
+    parkour_live: Option<verification::parkour::Live>,
     capture_out: Option<PathBuf>,
     simulation_previous: mcbe_core::motion::Vec3,
     palette: engine_ui::Palette,
@@ -217,6 +218,7 @@ impl App {
             frame_limit: 3,
             fluid_live: None,
             lighting_live: None,
+            parkour_live: None,
             capture_out: None,
             simulation_previous: client.actor.position,
             flight_tap: Default::default(),
@@ -301,6 +303,19 @@ impl App {
     fn startup_running(&self) -> bool {
         self.startup.as_ref().is_some_and(|s| s.running())
     }
+    fn movement_input(&self) -> Input {
+        let down = |key| f32::from(self.keys.contains(&key));
+        Input {
+            grab: self.keys.contains(&KeyCode::KeyC),
+            forward: down(KeyCode::KeyW) - down(KeyCode::KeyS),
+            side: down(KeyCode::KeyD) - down(KeyCode::KeyA),
+            jump: self.keys.contains(&KeyCode::Space),
+            sneak: self.keys.contains(&KeyCode::ShiftLeft)
+                || self.keys.contains(&KeyCode::ShiftRight),
+            sprint: self.keys.contains(&KeyCode::ControlLeft)
+                || self.keys.contains(&KeyCode::ControlRight),
+        }
+    }
     fn jump_event(&mut self, pressed: bool, repeat: bool, now: Instant) -> Result<()> {
         if self.client.scene.engine.is_none()
             || self.startup_blocked()
@@ -310,6 +325,9 @@ impl App {
             || self.palette.open
             || self.inventory_open
             || self.client.view.is_free()
+            || self.client.parkour.action != engine::player::locomotion::parkour::Action::Idle
+            || (self.client.movement.mode == engine_player::Mode::Walking
+                && self.keys.contains(&KeyCode::KeyC))
         {
             self.flight_tap.reset();
         } else if self.flight_tap.event(pressed, repeat, now) {
@@ -1190,6 +1208,7 @@ impl App {
         }
         verification::fluids::advance(self)?;
         verification::lighting::advance(self)?;
+        verification::parkour::advance(self)?;
         let now = Instant::now();
         let dt = (now - self.previous).as_secs_f32().min(0.25);
         self.previous = now;
@@ -1213,15 +1232,8 @@ impl App {
             self.accumulator += dt;
             while self.accumulator >= 0.05 {
                 self.simulation_previous = self.client.actor.position;
-                self.client.tick_motion(Input {
-                    forward: down(KeyCode::KeyW) - down(KeyCode::KeyS),
-                    side: down(KeyCode::KeyD) - down(KeyCode::KeyA),
-                    jump: self.keys.contains(&KeyCode::Space),
-                    sneak: self.keys.contains(&KeyCode::ShiftLeft)
-                        || self.keys.contains(&KeyCode::ShiftRight),
-                    sprint: self.keys.contains(&KeyCode::ControlLeft)
-                        || self.keys.contains(&KeyCode::ControlRight),
-                })?;
+                let input = self.movement_input();
+                self.client.tick_motion(input)?;
                 self.accumulator -= 0.05;
             }
         } else {
@@ -2746,6 +2758,7 @@ fn main() -> Result<()> {
         frame_limit: 3,
         fluid_live: None,
         lighting_live: None,
+        parkour_live: None,
         capture_out: None,
         simulation_previous: client.actor.position,
         settings: Default::default(),
@@ -2934,6 +2947,20 @@ mod flight_input_tests {
         app.engine_key(KeyCode::KeyF).unwrap();
         assert_eq!(app.client.movement.mode, engine_player::Mode::Flying);
         app.engine_key(KeyCode::KeyF).unwrap();
+        assert_eq!(app.client.movement.mode, engine_player::Mode::Walking);
+    }
+    #[test]
+    fn grip_reserves_walking_space_but_does_not_disable_flight_taps_in_air() {
+        let mut app = app();
+        let now = Instant::now();
+        app.keys.insert(KeyCode::KeyC);
+        press(&mut app, now);
+        press(&mut app, now + Duration::from_millis(100));
+        assert_eq!(app.client.movement.mode, engine_player::Mode::Walking);
+        app.engine_key(KeyCode::KeyF).unwrap();
+        assert_eq!(app.client.movement.mode, engine_player::Mode::Flying);
+        press(&mut app, now + Duration::from_millis(200));
+        press(&mut app, now + Duration::from_millis(300));
         assert_eq!(app.client.movement.mode, engine_player::Mode::Walking);
     }
     #[test]

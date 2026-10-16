@@ -569,14 +569,18 @@ impl Atlas {
                 [1.; 4],
             );
         }
-        let mode = match client.movement.mode {
-            crate::engine_player::Mode::Noclip => "NOCLIP | N COLLISION",
-            crate::engine_player::Mode::Flying => "FLYING | SPACE UP | SHIFT DOWN",
-            crate::engine_player::Mode::Walking if client.movement.swimming => {
-                "SWIMMING | SPACE UP | SHIFT DIVE | CTRL FAST"
+        let mode = if !client.parkour.label().is_empty() {
+            client.parkour.label()
+        } else {
+            match client.movement.mode {
+                crate::engine_player::Mode::Noclip => "NOCLIP | N COLLISION",
+                crate::engine_player::Mode::Flying => "FLYING | SPACE UP | SHIFT DOWN",
+                crate::engine_player::Mode::Walking if client.movement.swimming => {
+                    "SWIMMING | SPACE UP | SHIFT DIVE | CTRL FAST"
+                }
+                crate::engine_player::Mode::Walking if client.movement.crouched => "SNEAKING",
+                _ => "",
             }
-            crate::engine_player::Mode::Walking if client.movement.crouched => "SNEAKING",
-            _ => "",
         };
         if !mode.is_empty() && !client.view.is_free() {
             self.text(

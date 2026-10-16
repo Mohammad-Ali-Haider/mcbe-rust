@@ -42,6 +42,7 @@ struct Camera {
 }
 #[derive(PartialEq, Eq)]
 struct UiKey {
+    parkour: crate::engine::player::locomotion::parkour::Action,
     ray_status: u8,
     camera_mode: crate::engine::player::camera::Mode,
     startup: bool,
@@ -1325,6 +1326,7 @@ impl Renderer {
             2
         };
         let key = UiKey {
+            parkour: client.parkour.action,
             ray_status,
             camera_mode: client.view.mode,
             startup: frame.startup,

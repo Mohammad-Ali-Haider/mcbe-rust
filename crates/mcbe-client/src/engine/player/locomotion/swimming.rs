@@ -6,7 +6,8 @@ impl Controller for Swimming {
     fn eligible(&self, e: &Environment) -> bool {
         e.immersion > 0.2
     }
-    fn step(&self, c: &mut Client, input: Input, e: &Environment) -> Result<()> {
+    fn step(&self, c: &mut Client, input: Input, e: &Environment) -> Result<bool> {
+        c.parkour.reset();
         c.movement.swimming = true;
         if c.movement.crouched && crate::engine_player::clear(c, Body::PROBE)? {
             c.movement.crouched = false;
@@ -51,7 +52,7 @@ impl Controller for Swimming {
         actor.on_ground = ground[1] && proposed.y < 0.;
         actor.falling = actor.velocity.y < 0.;
         c.actor = actor;
-        Ok(())
+        Ok(true)
     }
 }
 #[cfg(test)]

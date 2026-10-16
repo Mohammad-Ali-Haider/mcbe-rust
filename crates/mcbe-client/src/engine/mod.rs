@@ -1135,6 +1135,7 @@ pub fn launch(args: &[String]) -> Result<()> {
     let mut camera = 0u8;
     let mut preview_case = "neutral".to_owned();
     let mut player_case = "first".to_owned();
+    let mut parkour_case = "hang".to_owned();
     let mut lighting_case = "lit".to_owned();
     let mut bucket_case = "partial".to_owned();
     let mut fluid_case = "flow".to_owned();
@@ -1147,9 +1148,10 @@ pub fn launch(args: &[String]) -> Result<()> {
             "--engine-naive" => {},
             "--engine-stream" | "--engine-finite" | "--engine-sync-mesh" => {},
             "--engine-continue" => resume = true,
-            "--engine-lighting-smoke" | "--engine-lighting-case" | "--engine-renderer" | "--engine-bucket-smoke" | "--engine-bucket-case" | "--engine-fluid-smoke" | "--engine-fluid-case" | "--engine-terrain-smoke" | "--engine-terrain-case" | "--engine-player-smoke" | "--engine-player-case" | "--engine-table-smoke" | "--engine-furnace-smoke" | "--engine-ui-smoke" | "--engine-ui-lab-smoke" | "--engine-render-distance" | "--engine-home" | "--engine-load" | "--engine-study" | "--engine-distance-motion-smoke" | "--engine-distance-smoke" | "--engine-distance-settings-smoke" | "--engine-distance-shrink-smoke" | "--engine-features-smoke" | "--engine-settings-smoke" | "--engine-preview-smoke" | "--engine-preview-case" | "--engine-startup-gpu-close-smoke" | "--engine-startup-retry-smoke" | "--engine-startup-smoke" | "--engine-startup-close-smoke" | "--engine-startup-error-smoke" | "--engine-v1-study" | "--engine-v1-smoke" | "--engine-v1-wire-smoke" | "--engine-v1-fly-smoke" | "--engine-v1-noclip-smoke" | "--engine-v1-sneak-smoke" | "--engine-loading-study" | "--engine-loading-smoke" | "--engine-loading-close-smoke" | "--engine-save-study" | "--engine-save-smoke" | "--engine-save-close-smoke" | "--engine-async-smoke" | "--engine-stream-profile" | "--engine-stream-study" | "--engine-stream-smoke" | "--engine-stream-wire-smoke" | "--engine-smoke" | "--engine-palette-smoke" | "--engine-wire-smoke" | "--engine-window-smoke" | "--engine-edit-smoke" | "--engine-benchmark" | "--engine-profile" | "--engine-render-smoke" | "--engine-mesh-smoke" | "--engine-camera" | "--engine-inventory-study" | "--engine-inventory-smoke" | "--engine-seed" | "--engine-blocks" | "--engine-pack-root" => {
+            "--engine-parkour-smoke" | "--engine-parkour-case" | "--engine-lighting-smoke" | "--engine-lighting-case" | "--engine-renderer" | "--engine-bucket-smoke" | "--engine-bucket-case" | "--engine-fluid-smoke" | "--engine-fluid-case" | "--engine-terrain-smoke" | "--engine-terrain-case" | "--engine-player-smoke" | "--engine-player-case" | "--engine-table-smoke" | "--engine-furnace-smoke" | "--engine-ui-smoke" | "--engine-ui-lab-smoke" | "--engine-render-distance" | "--engine-home" | "--engine-load" | "--engine-study" | "--engine-distance-motion-smoke" | "--engine-distance-smoke" | "--engine-distance-settings-smoke" | "--engine-distance-shrink-smoke" | "--engine-features-smoke" | "--engine-settings-smoke" | "--engine-preview-smoke" | "--engine-preview-case" | "--engine-startup-gpu-close-smoke" | "--engine-startup-retry-smoke" | "--engine-startup-smoke" | "--engine-startup-close-smoke" | "--engine-startup-error-smoke" | "--engine-v1-study" | "--engine-v1-smoke" | "--engine-v1-wire-smoke" | "--engine-v1-fly-smoke" | "--engine-v1-noclip-smoke" | "--engine-v1-sneak-smoke" | "--engine-loading-study" | "--engine-loading-smoke" | "--engine-loading-close-smoke" | "--engine-save-study" | "--engine-save-smoke" | "--engine-save-close-smoke" | "--engine-async-smoke" | "--engine-stream-profile" | "--engine-stream-study" | "--engine-stream-smoke" | "--engine-stream-wire-smoke" | "--engine-smoke" | "--engine-palette-smoke" | "--engine-wire-smoke" | "--engine-window-smoke" | "--engine-edit-smoke" | "--engine-benchmark" | "--engine-profile" | "--engine-render-smoke" | "--engine-mesh-smoke" | "--engine-camera" | "--engine-inventory-study" | "--engine-inventory-smoke" | "--engine-seed" | "--engine-blocks" | "--engine-pack-root" => {
                 let flag = &args[i]; i+=1; let value = args.get(i).ok_or("Engine option requires a value")?;
                 match flag.as_str() {
+                    "--engine-parkour-case"=>parkour_case=value.clone(),
                     "--engine-lighting-case"=>lighting_case=value.clone(),
                     "--engine-renderer" => render_method=Some(match value.as_str(){"forward"=>render::methods::Method::Forward,"deferred"=>render::methods::Method::Deferred,"ray_traced"=>render::methods::Method::RayTraced,_=>return Err("Renderer must be forward, deferred or ray_traced".into())}),
                     "--engine-render-distance" => {let distance:i32=value.parse()?;if !(2..=crate::engine_stream::MAX_RADIUS).contains(&distance) {return Err("Render distance must be 2..255 chunks".into());}render_distance=Some(distance);},
@@ -1260,7 +1262,9 @@ pub fn launch(args: &[String]) -> Result<()> {
         app.frame_limit = 4;
     }
     if let Some(out) = &out {
-        if args.iter().any(|a| a == "--engine-lighting-smoke") {
+        if args.iter().any(|a| a == "--engine-parkour-smoke") {
+            crate::verification::parkour::prepare(&mut app, out, &parkour_case)?;
+        } else if args.iter().any(|a| a == "--engine-lighting-smoke") {
             crate::verification::lighting::prepare(&mut app, out, &lighting_case)?;
         } else if args.iter().any(|a| a == "--engine-bucket-smoke") {
             crate::verification::buckets::prepare(&mut app, out, &bucket_case)?;

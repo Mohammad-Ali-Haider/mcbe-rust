@@ -19,3 +19,5 @@ pub(crate) mod fluids;
 pub(crate) mod buckets;
 
 pub(crate) mod lighting;
+
+pub(crate) mod parkour;

@@ -80,6 +80,7 @@ pub fn mode(client: &mut Client, next: Mode) -> Result<()> {
     if next != Mode::Noclip && !clear(client, client.movement.body())? {
         return Err("Move into clear space before disabling noclip".into());
     }
+    client.parkour.reset();
     client.movement.mode = next;
     client.movement.swimming = false;
     client.actor.velocity = Vec3::default();

@@ -458,6 +458,7 @@ impl Scene {
 }
 #[derive(Default, Clone, Copy)]
 pub struct Input {
+    pub grab: bool,
     pub forward: f32,
     pub side: f32,
     pub jump: bool,
@@ -465,6 +466,7 @@ pub struct Input {
     pub sprint: bool,
 }
 pub struct Client {
+    pub parkour: crate::engine::player::locomotion::parkour::State,
     pub view: crate::engine::player::camera::Rig,
     pub appearance: std::sync::Arc<crate::engine::player::appearance::Appearance>,
     pub owned_materials: Option<crate::engine_materials::Owned>,
@@ -529,6 +531,7 @@ impl Client {
                 .ok_or("Source world has no supported persistent cube material")?
         };
         Ok(Self {
+            parkour: Default::default(),
             view: Default::default(),
             appearance: std::sync::Arc::new(
                 crate::engine::player::appearance::Appearance::fallback(),
@@ -559,6 +562,7 @@ impl Client {
         })
     }
     pub fn reset(&mut self) {
+        self.parkour.reset();
         self.actor = Actor::new(self.spawn, Body::PROBE).expect("Validated actor body and spawn");
     }
     pub fn cycle_material(&mut self) {
@@ -615,6 +619,7 @@ impl Client {
         {
             return Err("Spawn body must fit in clear, available saved geometry".into());
         }
+        self.parkour.reset();
         self.spawn = position;
         self.actor = actor;
         Ok(())
