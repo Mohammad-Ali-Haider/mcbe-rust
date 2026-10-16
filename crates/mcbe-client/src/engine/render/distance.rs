@@ -23,7 +23,8 @@ pub const OBJECT: u32 = 0x01000000;
 const TRUNK: u32 = 0x00800000;
 type Edits = Arc<HashMap<[i32; 3], Option<u16>>>;
 type EditCache = (u64, u64, u64, Edits);
-const CORE: i32 = 56;
+// Fallback terrain must cover the center while detailed GPU chunks are pending.
+const CORE: i32 = 0;
 const FINE_END: i32 = 256;
 const FIELD_CORE: i32 = 128;
 const TREES_END: i32 = 1536;
@@ -821,6 +822,10 @@ impl Distant {
                 if previous { 1. } else { t },
             ],
         )
+    }
+    pub fn ranges(&self) -> [f32; 4] {
+        let extent = |k: Option<Key>| k.map_or(0., |k| (k.radius * 16 + 8) as f32);
+        [extent(self.adopted), extent(self.previous_key), 0., 0.]
     }
     fn adopt(&mut self, device: &wgpu::Device, mesh: Mesh, key: Key) {
         self.previous_buffer = self.buffer.take();

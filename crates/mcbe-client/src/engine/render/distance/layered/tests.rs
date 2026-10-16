@@ -7,12 +7,15 @@ fn request(kind: &str, radius: i32) -> Request {
     request_seed(kind, radius, 713)
 }
 fn request_seed(kind: &str, radius: i32, seed: u64) -> Request {
+    request_options(kind, radius, seed, serde_json::json!({}))
+}
+fn request_options(kind: &str, radius: i32, seed: u64, options: serde_json::Value) -> Request {
     let registry = crate::engine_blocks::Registry::built_in();
     let mut terrain = Settings::built_in();
     terrain.version = 2;
     terrain.generator = Some(Box::new(generation::Definition {
         kind: kind.into(),
-        options: serde_json::json!({}),
+        options,
         climate: generation::Climate::default(),
         materials: generation::Materials::default(),
     }));
@@ -102,13 +105,19 @@ fn clipping_and_interval_subtraction_preserve_closed_rims() {
 #[test]
 #[ignore = "Explicit release-mode maximum-range budget proof"]
 fn maximum_range_layered_budget() {
-    for (kind, seed) in [
-        ("cavern", 713),
-        ("islands", 713),
-        ("islands", 714),
-        ("islands", 0xa5672348),
+    for (kind, seed, options) in [
+        ("cavern", 713, serde_json::json!({})),
+        ("islands", 713, serde_json::json!({})),
+        ("islands", 714, serde_json::json!({})),
+        ("islands", 0xa5672348, serde_json::json!({})),
+        (
+            "islands",
+            713,
+            serde_json::json!({"radius":12,"spacing":512}),
+        ),
     ] {
-        let r = request_seed(kind, 255, seed);
+        let small = options.get("radius").is_some();
+        let r = request_options(kind, 255, seed, options);
         let start = Instant::now();
         let mesh = super::super::build(&r, &AtomicU64::new(1))
             .unwrap()
@@ -122,6 +131,34 @@ fn maximum_range_layered_budget() {
         assert!(mesh.vertices.len() + mesh.water.len() <= MAX_VERTICES);
         if kind == "islands" {
             check_closed_far_shell(&r, &mesh);
+            if small {
+                for (x, z) in [(1424., 192.), (1424.25, 192.25)] {
+                    for face in [0, 1] {
+                        assert!(
+                            mesh.vertices.chunks_exact(3).any(|t| {
+                                if (t[0].layer & 0x003fffff) % 6 != face {
+                                    return false;
+                                }
+                                let area = (t[1].position[0] - t[0].position[0])
+                                    * (t[2].position[2] - t[0].position[2])
+                                    - (t[1].position[2] - t[0].position[2])
+                                        * (t[2].position[0] - t[0].position[0]);
+                                if area.abs() < 0.0001 {
+                                    return false;
+                                }
+                                let side = |a: &Vertex, b: &Vertex| {
+                                    (b.position[0] - a.position[0]) * (z - a.position[2])
+                                        - (b.position[2] - a.position[2]) * (x - a.position[0])
+                                };
+                                let v =
+                                    [side(&t[0], &t[1]), side(&t[1], &t[2]), side(&t[2], &t[0])];
+                                v.iter().all(|s| *s >= -0.001) || v.iter().all(|s| *s <= 0.001)
+                            }),
+                            "small island missing mesh face {face} at {x},{z}"
+                        );
+                    }
+                }
+            }
         }
     }
 }
@@ -169,4 +206,48 @@ fn check_closed_far_shell(r: &Request, mesh: &Mesh) {
         open.len(),
         open.iter().take(4).collect::<Vec<_>>()
     );
+}
+
+#[test]
+fn small_far_islands_keep_coverage_and_thickness_as_the_camera_approaches() {
+    let r = request_options(
+        "islands",
+        255,
+        713,
+        serde_json::json!({"radius":12,"spacing":512}),
+    );
+    let terrain = r.generator.terrain.as_ref().unwrap();
+    let (x, z) = (1024..1536)
+        .step_by(4)
+        .flat_map(|x| (0..512).step_by(4).map(move |z| (x, z)))
+        .find(|&(x, z)| terrain.sample(x, z).column.coverage > 0.9)
+        .expect("small island interior");
+    let base = terrain.sample(x, z);
+    let thickness = base.height - base.column.bottom.unwrap();
+    for offset in [0, 96, 128, 192, 256, 512, 1536] {
+        let mut sampler = Sampler {
+            terrain,
+            cache: HashMap::new(),
+            key: Key {
+                center: [(x - offset).div_euclid(16), z.div_euclid(16)],
+                ..r.key
+            },
+        };
+        let c = Cell { x, z, size: 1 };
+        let top = sampler.point(Layer::Floor, c, x as f32, z as f32);
+        let bottom = sampler.point(Layer::Bottom, c, x as f32, z as f32);
+        assert!(
+            top.coverage > 0.,
+            "island ({x},{z}) vanished at offset {offset}: {}",
+            top.coverage
+        );
+        assert!(
+            (top.position[1] - base.height as f32).abs() <= 2.01,
+            "island height moved at offset {offset}"
+        );
+        assert!(
+            (top.position[1] - bottom.position[1] - thickness as f32).abs() < 0.001,
+            "island thickness collapsed at offset {offset}"
+        );
+    }
 }

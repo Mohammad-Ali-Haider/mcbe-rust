@@ -39,6 +39,7 @@ struct Camera {
     lod: [f32; 4],
     lod_old: [f32; 4],
     medium: [f32; 4],
+    lod_range: [f32; 4],
 }
 #[derive(PartialEq, Eq)]
 struct UiKey {
@@ -86,6 +87,8 @@ pub struct Statistics {
     pub distant_crossfades: usize,
     pub distant_previous_vertices: usize,
     pub distant_ready: bool,
+    pub detail_coverage_uploads: usize,
+    pub detail_coverage_dropped: usize,
     pub distant_vertices: usize,
     pub distant_water_vertices: usize,
     pub distant_bytes: usize,
@@ -202,7 +205,8 @@ pub struct Renderer {
     ui_vertices: u32,
     ui_epoch: Instant,
     _instance: wgpu::Instance,
-    surface: wgpu::Surface<'static>,
+    surface: Option<wgpu::Surface<'static>>,
+    offscreen_target: Option<wgpu::Texture>,
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
@@ -215,6 +219,10 @@ pub struct Renderer {
     ui_buffer: wgpu::Buffer,
     atlas: Option<Atlas>,
     meshes: BTreeMap<[i32; 3], Mesh>,
+    published: BTreeSet<[i32; 3]>,
+    coverage: super::coverage::Coverage,
+    coverage_buffer: wgpu::Buffer,
+    coverage_clock: Instant,
     world_instance: u64,
     skin_revision: u64,
     revision: u64,
@@ -222,6 +230,22 @@ pub struct Renderer {
     pub stats: Statistics,
     pub frame_times: Vec<f64>,
     previous: Instant,
+}
+fn offscreen_color(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> wgpu::Texture {
+    device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("window-free world frame"),
+        size: wgpu::Extent3d {
+            width: config.width,
+            height: config.height,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: config.format,
+        usage: config.usage,
+        view_formats: &[],
+    })
 }
 fn depth(device: &wgpu::Device, width: u32, height: u32) -> wgpu::TextureView {
     device
@@ -243,9 +267,14 @@ fn depth(device: &wgpu::Device, width: u32, height: u32) -> wgpu::TextureView {
 }
 impl Renderer {
     pub fn new(window: Arc<Window>) -> Result<Self> {
-        pollster::block_on(Self::initialize(window))
+        let size = window.inner_size();
+        pollster::block_on(Self::initialize(Some(window), [size.width, size.height]))
     }
-    async fn initialize(window: Arc<Window>) -> Result<Self> {
+    #[cfg(test)]
+    pub fn offscreen(width: u32, height: u32) -> Result<Self> {
+        pollster::block_on(Self::initialize(None, [width, height]))
+    }
+    async fn initialize(window: Option<Arc<Window>>, size: [u32; 2]) -> Result<Self> {
         let compiler = super::compiler::select();
         let mut instance_options = wgpu::InstanceDescriptor {
             backends: wgpu::Backends::DX12,
@@ -253,12 +282,12 @@ impl Renderer {
         };
         instance_options.backend_options.dx12.shader_compiler = compiler.compiler;
         let instance = wgpu::Instance::new(&instance_options);
-        let surface = instance.create_surface(window.clone())?;
+        let surface = window.map(|w| instance.create_surface(w)).transpose()?;
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 force_fallback_adapter: false,
-                compatible_surface: Some(&surface),
+                compatible_surface: surface.as_ref(),
             })
             .await?;
         let info = adapter.get_info();
@@ -282,23 +311,39 @@ impl Renderer {
                 trace: wgpu::Trace::Off,
             })
             .await?;
-        let size = window.inner_size();
-        let mut config = surface
-            .get_default_config(&adapter, size.width.max(1), size.height.max(1))
-            .ok_or("No compatible GPU surface")?;
-        let caps = surface.get_capabilities(&adapter);
-        config.format = caps
-            .formats
-            .iter()
-            .copied()
-            .find(|f| f.is_srgb())
-            .unwrap_or(caps.formats[0]);
+        let mut config = if let Some(surface) = &surface {
+            let mut config = surface
+                .get_default_config(&adapter, size[0].max(1), size[1].max(1))
+                .ok_or("No compatible GPU surface")?;
+            let caps = surface.get_capabilities(&adapter);
+            config.format = caps
+                .formats
+                .iter()
+                .copied()
+                .find(|f| f.is_srgb())
+                .unwrap_or(caps.formats[0]);
+            if caps.usages.contains(wgpu::TextureUsages::COPY_SRC) {
+                config.usage |= wgpu::TextureUsages::COPY_SRC;
+            }
+            config
+        } else {
+            wgpu::SurfaceConfiguration {
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+                format: wgpu::TextureFormat::Bgra8UnormSrgb,
+                width: size[0].max(1),
+                height: size[1].max(1),
+                present_mode: wgpu::PresentMode::AutoNoVsync,
+                desired_maximum_frame_latency: 2,
+                alpha_mode: wgpu::CompositeAlphaMode::Auto,
+                view_formats: vec![],
+            }
+        };
         config.present_mode = wgpu::PresentMode::AutoNoVsync;
         config.desired_maximum_frame_latency = 2;
-        if caps.usages.contains(wgpu::TextureUsages::COPY_SRC) {
-            config.usage |= wgpu::TextureUsages::COPY_SRC;
+        if let Some(surface) = &surface {
+            surface.configure(&device, &config);
         }
-        surface.configure(&device, &config);
+        let offscreen_target = surface.is_none().then(|| offscreen_color(&device, &config));
         device.push_error_scope(wgpu::ErrorFilter::Validation);
         let world_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("terrain shader"),
@@ -476,6 +521,8 @@ impl Renderer {
             distant_crossfades: 0,
             distant_previous_vertices: 0,
             distant_ready: true,
+            detail_coverage_uploads: 0,
+            detail_coverage_dropped: 0,
             distant_vertices: 0,
             distant_water_vertices: 0,
             distant_bytes: 0,
@@ -540,6 +587,11 @@ impl Renderer {
             gui_scale: 2.,
             last_frame_ms: 0.,
         };
+        let coverage_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("GPU-ready detail coverage"),
+            contents: bytemuck::cast_slice(&vec![[u32::MAX; 4]; super::coverage::SLOTS]),
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        });
         Ok(Self {
             ray: None,
             ray_requested: false,
@@ -572,6 +624,7 @@ impl Renderer {
             ui_epoch: Instant::now(),
             _instance: instance,
             surface,
+            offscreen_target,
             device,
             queue,
             config,
@@ -584,6 +637,10 @@ impl Renderer {
             ui_buffer,
             atlas: None,
             meshes: BTreeMap::new(),
+            published: BTreeSet::new(),
+            coverage: Default::default(),
+            coverage_buffer,
+            coverage_clock: Instant::now(),
             world_instance: 0,
             skin_revision: 0,
             revision: 0,
@@ -599,7 +656,11 @@ impl Renderer {
         }
         self.config.width = width;
         self.config.height = height;
-        self.surface.configure(&self.device, &self.config);
+        if let Some(surface) = &self.surface {
+            surface.configure(&self.device, &self.config);
+        } else if self.offscreen_target.is_some() {
+            self.offscreen_target = Some(offscreen_color(&self.device, &self.config));
+        }
         self.depth = depth(&self.device, width, height);
         self.stats.width = width;
         self.stats.height = height;
@@ -624,7 +685,11 @@ impl Renderer {
         };
         if self.config.present_mode != mode {
             self.config.present_mode = mode;
-            self.surface.configure(&self.device, &self.config);
+            if let Some(surface) = &self.surface {
+                surface.configure(&self.device, &self.config);
+            } else if self.offscreen_target.is_some() {
+                self.offscreen_target = Some(offscreen_color(&self.device, &self.config));
+            }
             self.stats.present_mode = format!("{:?}", mode);
         }
     }
@@ -861,6 +926,10 @@ impl Renderer {
                     resource: self.uniform.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: self.coverage_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
                     binding: 3,
                     resource: wgpu::BindingResource::TextureView(&pending.skins.create_view(
                         &wgpu::TextureViewDescriptor {
@@ -905,6 +974,7 @@ impl Renderer {
         Ok(true)
     }
     fn upload(&mut self, key: [i32; 3], mesh: engine_mesh::ChunkMesh) {
+        self.published.insert(key);
         self.stats.mesh_rebuilds += 1;
         if self
             .meshes
@@ -1004,12 +1074,17 @@ impl Renderer {
         }
         if remap {
             self.meshes.clear();
+            self.published.clear();
+            self.coverage.clear();
         }
         if all {
             self.mesher.invalidate();
         }
         if let Some(stream) = &state.stream {
-            self.meshes.retain(|k, _| stream.ready_chunk(*k));
+            self.meshes
+                .retain(|k, _| stream.ready_chunk(*k) || self.coverage.live(*k));
+            self.published
+                .retain(|k| stream.ready_chunk(*k) || self.coverage.live(*k));
             self.mesher.retain(|k| stream.ready_chunk(k));
         }
         if all || self.revision != state.revision {
@@ -1058,6 +1133,50 @@ impl Renderer {
         }
         if self.stats.async_meshing {
             self.mesher.submit(state, eye, self.stats.greedy_meshing)?;
+        }
+        let mut ready = self
+            .published
+            .iter()
+            .copied()
+            .filter(|k| state.stream.as_ref().is_none_or(|s| s.ready_chunk(*k)))
+            .collect::<BTreeSet<_>>();
+        if let Some(stream) = &state.stream {
+            if let Some(volume) = &stream.volume {
+                ready.extend(
+                    volume
+                        .residents
+                        .iter()
+                        .copied()
+                        .filter(|k| state.blocks.chunk(*k).is_none_or(|c| c.count == 0)),
+                );
+            } else {
+                for [x, z] in stream.residents.keys() {
+                    for y in 0..4 {
+                        let k = [*x, y, *z];
+                        if state.blocks.chunk(k).is_none_or(|c| c.count == 0) {
+                            ready.insert(k);
+                        }
+                    }
+                }
+            }
+        }
+        if self
+            .coverage
+            .update(self.coverage_clock.elapsed().as_secs_f64(), &ready)
+        {
+            let (table, dropped) = self.coverage.table();
+            self.queue
+                .write_buffer(&self.coverage_buffer, 0, bytemuck::cast_slice(&table));
+            self.stats.detail_coverage_uploads += 1;
+            self.stats.detail_coverage_dropped = dropped;
+        }
+        // Drop geometry on the same frame its readiness reaches zero, avoiding
+        // a one-frame flash through the unknown-entry fallback.
+        if let Some(stream) = &state.stream {
+            self.meshes
+                .retain(|k, _| stream.ready_chunk(*k) || self.coverage.live(*k));
+            self.published
+                .retain(|k| stream.ready_chunk(*k) || self.coverage.live(*k));
         }
         let c = &self.mesher.counters;
         self.stats.mesh_jobs_in_flight = self.mesher.jobs();
@@ -1256,14 +1375,18 @@ impl Renderer {
         {
             return Ok(false);
         }
-        let surface = match self.surface.get_current_texture() {
-            Ok(s) => s,
-            Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                self.surface.configure(&self.device, &self.config);
-                return Ok(false);
-            }
-            Err(wgpu::SurfaceError::Timeout) => return Ok(false),
-            Err(e) => return Err(e.into()),
+        let surface = if let Some(target) = &self.surface {
+            Some(match target.get_current_texture() {
+                Ok(s) => s,
+                Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                    target.configure(&self.device, &self.config);
+                    return Ok(false);
+                }
+                Err(wgpu::SurfaceError::Timeout) => return Ok(false),
+                Err(e) => return Err(e.into()),
+            })
+        } else {
+            None
         };
         let dir = frame.direction;
         let eye = Vec3::from(frame.eye);
@@ -1320,6 +1443,7 @@ impl Renderer {
             },
             lod,
             lod_old,
+            lod_range: self.distant.ranges(),
             matrix: matrix.to_cols_array(),
             eye: [eye.x, eye.y, eye.z, 1.],
             settings: [
@@ -1638,7 +1762,12 @@ impl Renderer {
                 &method.shadow_pipeline.get_bind_group_layout(1),
             );
         }
-        let view = surface.texture.create_view(&Default::default());
+        let color = surface
+            .as_ref()
+            .map(|s| &s.texture)
+            .or(self.offscreen_target.as_ref())
+            .ok_or("Render target missing")?;
+        let view = color.create_view(&Default::default());
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -1889,7 +2018,7 @@ impl Renderer {
             });
             encoder.copy_texture_to_buffer(
                 wgpu::TexelCopyTextureInfo {
-                    texture: &surface.texture,
+                    texture: color,
                     mip_level: 0,
                     origin: wgpu::Origin3d::ZERO,
                     aspect: wgpu::TextureAspect::All,
@@ -1978,7 +2107,9 @@ impl Renderer {
                 )?;
             }
         }
-        surface.present();
+        if let Some(surface) = surface {
+            surface.present();
+        }
         self.stats.frames += 1;
         let now = Instant::now();
         self.stats.last_frame_ms = (now - self.previous).as_secs_f64() * 1000.;
@@ -1992,3 +2123,6 @@ impl Renderer {
         Ok(true)
     }
 }
+
+#[cfg(test)]
+mod offscreen;

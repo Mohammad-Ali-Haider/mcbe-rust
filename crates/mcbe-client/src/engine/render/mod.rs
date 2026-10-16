@@ -1,4 +1,5 @@
 //! Render subsystem.
+pub(crate) mod coverage;
 pub(crate) mod distance;
 pub(crate) mod gpu;
 pub(crate) mod gpu_ui;

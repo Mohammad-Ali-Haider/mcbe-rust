@@ -207,7 +207,7 @@ fn offscreen_vanilla_skins_render_faces_materials_normals_and_shadows() {
         let eye = [0., 2.2, 7.];
         let matrix = Mat4::orthographic_rh(-3.6, 3.6, -1.8, 1.8, 0.1, 40.)
             * Mat4::look_at_rh(Vec3::from(eye), Vec3::new(0., 1., 0.), Vec3::Y);
-        let mut camera = [0f32; 40];
+        let mut camera = [0f32; 44];
         camera[..16].copy_from_slice(&matrix.to_cols_array());
         camera[16..19].copy_from_slice(&eye);
         camera[21] = 100.;
@@ -271,6 +271,14 @@ fn offscreen_vanilla_skins_render_faces_materials_normals_and_shadows() {
                 ..Default::default()
             })
         };
+        let coverage = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: None,
+            contents: bytemuck::cast_slice(&vec![
+                [u32::MAX; 4];
+                crate::engine::render::coverage::SLOTS
+            ]),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
         let world_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
             layout: &layout,
@@ -286,6 +294,10 @@ fn offscreen_vanilla_skins_render_faces_materials_normals_and_shadows() {
                 wgpu::BindGroupEntry {
                     binding: 2,
                     resource: uniform.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: coverage.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,

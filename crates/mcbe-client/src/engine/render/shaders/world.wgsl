@@ -1,8 +1,19 @@
-struct Camera{matrix:mat4x4<f32>,eye:vec4<f32>,settings:vec4<f32>,focus:vec4<f32>,lod:vec4<f32>,lod_old:vec4<f32>,medium:vec4<f32>};
+struct Camera{matrix:mat4x4<f32>,eye:vec4<f32>,settings:vec4<f32>,focus:vec4<f32>,lod:vec4<f32>,lod_old:vec4<f32>,medium:vec4<f32>,lod_range:vec4<f32>};
 @group(0) @binding(0) var terrain:texture_2d_array<f32>;
 @group(0) @binding(1) var terrain_sampler:sampler;
 @group(0) @binding(2) var<uniform> camera:Camera;
 @group(0) @binding(3) var creature_skins:texture_2d_array<f32>;
+@group(0) @binding(4) var<storage,read> detail_coverage:array<vec4<u32>>;
+fn detail_at(k:vec3<i32>)->f32 {
+ let u=bitcast<vec3<u32>>(k);let mask=arrayLength(&detail_coverage)-1u;let h=(u.x*73856093u)^(u.y*19349663u)^(u.z*83492791u);
+ for(var probe=0u;probe<64u;probe++){let s=detail_coverage[(h+probe)&mask];if s.w==0xffffffffu{return -1.;}if all(s.xyz==u){return bitcast<f32>(s.w);}}return -1.;
+}
+fn detail_weight(world:vec3<f32>,normal:vec3<f32>)->f32 {
+ let p=(world-normal*0.001)/16.;let k=vec3<i32>(floor(p));let own=detail_at(k);if own<=0. {return own;}
+ var weight=own;let local=fract(p)*16.;
+ for(var axis=0u;axis<3u;axis++){let low=local[axis]<8.;let d=select(16.-local[axis],local[axis],low);if d<4. {var step=vec3<i32>(0);step[axis]=select(1,-1,low);let neighbour=max(detail_at(k+step),0.);weight=min(weight,mix(neighbour,own,smoothstep(0.,4.,d)));}}
+ return weight;
+}
 struct Out{@builtin(position) position:vec4<f32>,@location(0) uv:vec2<f32>,@location(1) @interpolate(flat) layer:u32,@location(2) shade:f32,@location(3) bary:vec3<f32>,@location(4) world:vec3<f32>,@location(5) relative:vec3<f32>,@location(6) @interpolate(flat) tint:vec3<f32>,@location(7) @interpolate(flat) entity:u32,@location(8) @interpolate(flat) skin:u32};
 @vertex fn vs(@location(0) position:vec3<f32>,@location(1) uv:vec2<f32>,@location(2) layer:u32,@location(3) shade:f32,@location(4) bary:vec3<f32>)->Out{
     var o:Out;o.position=camera.matrix*vec4(position,1.);o.uv=uv;o.layer=layer;o.shade=shade;o.bary=bary;o.world=position;o.relative=position-camera.eye.xyz;o.tint=vec3(1.);o.entity=0u;o.skin=0u;return o;
@@ -22,7 +33,9 @@ fn surface(i:Out,shaded:bool)->vec4<f32>{
     let thickness=max(max(fwidth(i.bary.x),fwidth(i.bary.y)),fwidth(i.bary.z));
     if camera.lod.w>0.5 && i.entity==0u {
         let pixel=vec2<u32>(i.position.xy);
-        let old=camera.lod_old.z>0.5 && noise(pixel,31u)>=camera.lod.z;
+        let in_current=all(abs(i.world.xz-camera.lod.xy)<=vec2(camera.lod_range.x));
+        let in_previous=camera.lod_old.z>0.5 && all(abs(i.world.xz-camera.lod_old.xy)<=vec2(camera.lod_range.y));
+        let old=in_previous && (!in_current || noise(pixel,31u)>=camera.lod.z);
         let is_previous=(i.layer&0x04000000u)!=0u;
         let fine=(i.layer&0x10000000u)!=0u;
         let field=(i.layer&0x08000000u)!=0u;
@@ -32,7 +45,10 @@ fn surface(i:Out,shaded:bool)->vec4<f32>{
         let origin=select(camera.lod.xy,camera.lod_old.xy,old);
         let offset=abs(i.world.xz-origin);
         let d=max(offset.x,offset.y);
-        let a=smoothstep(80.,112.,d)*camera.lod_old.w;
+        let normals=array<vec3<f32>,6>(vec3(0.,1.,0.),vec3(0.,-1.,0.),vec3(0.,0.,-1.),vec3(0.,0.,1.),vec3(1.,0.,0.),vec3(-1.,0.,0.));
+        let readiness=detail_weight(i.world,normals[layer%6u]);
+        // Unknown fallback cells retain near edits if the bounded lookup is full.
+        let a=1.-select(select(1.,0.,far),readiness,readiness>=0.);
         let b=smoothstep(208.,256.,d);
         let value=noise(pixel,7u);
         let glass=(i.layer&0x40000000u)!=0u;

@@ -64,39 +64,30 @@ impl Sampler<'_> {
         let d = self.value(layer, x0 + step, z0 + step);
         (a * (1. - u) + b * u) * (1. - v) + (c * (1. - u) + d * u) * v
     }
-    fn field(&mut self, layer: Option<Layer>, x: f32, z: f32) -> f32 {
-        let [cx, cz] = center(self.key);
-        let d = (x - cx as f32).abs().max((z - cz as f32).abs());
-        let lod = (d / 32.).clamp(1., 64.).log2();
-        let step = 1 << lod.floor() as i32;
-        let t = smooth(lod.fract());
-        let a = self.bilinear(layer, x, z, step);
-        let b = self.bilinear(layer, x, z, (step * 2).min(64));
-        a * (1. - t) + b * t
-    }
     fn point(&mut self, layer: Layer, c: Cell, x: f32, z: f32) -> Point {
         let base = self.sample(c.x, c.z);
         let [cx, cz] = center(self.key);
         let d = (x - cx as f32).abs().max((z - cz as f32).abs());
         let near = smooth(((d - 112.) / 16.).clamp(0., 1.));
-        let far = smooth(((d - 128.) / 128.).clamp(0., 1.));
         let height = |s: &mut Self, l: Layer| {
             let a = l.raw(base).unwrap_or(base.height as f32);
             let b = s.bilinear(Some(l), x, z, 1);
-            let f = s.field(Some(l), x, z);
-            (a * (1. - near) + b * near) * (1. - far) + f * far
+            // Cells already decimate geometry. Resampling height on another coarse
+            // grid flattens thin islands even when the cell found their footprint.
+            a * (1. - near) + b * near
         };
         let y = height(self, layer);
         let other = height(self, layer.opposite());
         let a = if base.column.present { 1. } else { -1. };
         let b = self.bilinear(None, x, z, 1);
-        let f = self.field(None, x, z);
-        let mut coverage = (a * (1. - near) + b * near) * (1. - far) + f * far;
+        // Keep signed footprints independent of the geometry LOD. A small island
+        // can lie entirely between coarse-grid samples, which would erase it.
+        let mut coverage = a * (1. - near) + b * near;
         if layer == Layer::Water {
             let a = if base.water.is_some() { 1. } else { -1. };
             // Water shores follow the same ground field, rather than covering dry land.
             coverage = coverage.min(
-                (y - self.field(Some(Layer::Floor), x, z))
+                (y - self.bilinear(Some(Layer::Floor), x, z, 1))
                     .clamp(-1., 1.)
                     .max(a * (1. - near) - near),
             );
