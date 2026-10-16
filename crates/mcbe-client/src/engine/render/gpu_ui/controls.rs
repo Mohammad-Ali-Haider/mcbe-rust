@@ -19,7 +19,16 @@ impl Atlas {
         let mut row = 0;
         for hint in hints {
             let key = hint.key(device);
-            let cap = self.label_width(key) + 8.;
+            let cap = if device == Device::KeyboardMouse {
+                match key {
+                    "WASD" | "Arrows" => 19.,
+                    "Mouse" | "LMB" | "RMB" | "Wheel" => 12.,
+                    "Alt+RMB" => self.label_width("Alt+") + 14.,
+                    _ => self.label_width(key) + 8.,
+                }
+            } else {
+                self.label_width(key) + 8.
+            };
             let width = cap + self.label_width(hint.label) + 11.;
             if at > x && at + width > x + maximum {
                 at = x;
@@ -30,13 +39,11 @@ impl Atlas {
             }
             let y = y + row as f32 * 15.;
             c.rect([at - 2., y - 2., width, 13.], [0.025, 0.035, 0.05, 0.72]);
-            let style = theme.styles.get(hint.role);
+            let style = theme.styles.get(hint.style_role(device));
             let sprite = style
                 .and_then(|s| s.sprite.as_ref())
                 .and_then(|id| self.custom_ui.get(id));
-            if device == Device::Gamepad
-                && let Some(sprite) = sprite
-            {
+            if let Some(sprite) = sprite {
                 c.quad(*sprite, [at, y, cap, 10.], style.unwrap().fill);
             } else {
                 let fill = style.map_or(
@@ -53,12 +60,98 @@ impl Atlas {
                     },
                     |s| s.fill,
                 );
-                c.rect([at, y, cap, 10.], fill);
-                self.text(c, at + 4., y + 1., key, style.map_or([1.; 4], |s| s.text));
+                if device == Device::KeyboardMouse {
+                    self.keyboard_glyph(
+                        c,
+                        [at, y, cap, 10.],
+                        key,
+                        fill,
+                        style.map_or([1.; 4], |s| s.text),
+                    );
+                } else {
+                    self.keycap(c, [at, y, cap, 10.], fill);
+                    self.text(c, at + 4., y + 1., key, style.map_or([1.; 4], |s| s.text));
+                }
             }
             self.text(c, at + cap + 4., y + 1., hint.label, [0.95, 0.97, 1., 1.]);
             at += width + 5.;
         }
+    }
+    fn keycap(&self, c: &mut Canvas, r: [f32; 4], fill: [f32; 4]) {
+        let [x, y, w, h] = r;
+        c.rect([x + 1., y + 1., w - 2., h], [0.02, 0.03, 0.05, 1.]);
+        c.rect([x, y + 1., w, h - 2.], fill);
+        c.rect([x + 1., y, w - 2., h - 1.], fill);
+        c.rect([x + 1., y, w - 2., 1.], [0.65, 0.73, 0.8, 1.]);
+        c.rect([x + 1., y + h - 2., w - 2., 1.], [0.09, 0.12, 0.17, 1.]);
+    }
+    fn keyboard_glyph(
+        &self,
+        c: &mut Canvas,
+        r: [f32; 4],
+        key: &str,
+        fill: [f32; 4],
+        text: [f32; 4],
+    ) {
+        let [x, y, w, h] = r;
+        if matches!(key, "Mouse" | "LMB" | "RMB" | "Wheel" | "Alt+RMB") {
+            let x = if key == "Alt+RMB" {
+                self.text(c, x, y + 1., "Alt+", text);
+                x + self.label_width("Alt+") + 2.
+            } else {
+                x
+            };
+            c.rect([x + 2., y, 6., 10.], [0.65, 0.73, 0.8, 1.]);
+            c.rect([x + 1., y + 1., 8., 8.], [0.65, 0.73, 0.8, 1.]);
+            c.rect([x + 2., y + 1., 6., 8.], fill);
+            c.rect([x + 4., y + 1., 1., 4.], [0.08, 0.11, 0.15, 1.]);
+            if key == "LMB" {
+                c.rect([x + 2., y + 1., 2., 3.], [0.5, 0.95, 0.72, 1.]);
+            }
+            if key == "RMB" || key == "Alt+RMB" {
+                c.rect([x + 5., y + 1., 3., 3.], [0.5, 0.95, 0.72, 1.]);
+            }
+            c.rect(
+                [x + 4., y + 2., 1., 2.],
+                if key == "Wheel" {
+                    [0.5, 0.95, 0.72, 1.]
+                } else {
+                    [0.9, 0.94, 1., 1.]
+                },
+            );
+            return;
+        }
+        if key == "WASD" || key == "Arrows" {
+            let patterns = if key == "WASD" {
+                [[5, 5, 7], [2, 5, 7], [3, 2, 6], [6, 5, 6]]
+            } else {
+                [[2, 7, 2], [2, 6, 2], [2, 7, 2], [2, 3, 2]]
+            };
+            for (i, (dx, dy)) in [(6., 0.), (0., 5.), (6., 5.), (12., 5.)]
+                .into_iter()
+                .enumerate()
+            {
+                self.keycap(c, [x + dx, y + dy, 5., 5.], fill);
+                for (row, bits) in patterns[i].iter().enumerate() {
+                    for column in 0..3 {
+                        if bits & (1 << (2 - column)) != 0 {
+                            c.rect(
+                                [
+                                    x + dx + 1. + column as f32,
+                                    y + dy + 1. + row as f32,
+                                    1.,
+                                    1.,
+                                ],
+                                text,
+                            );
+                        }
+                    }
+                }
+            }
+            return;
+        }
+        self.keycap(c, [x, y, w, h], fill);
+        self.text(c, x + 4., y + 1., key, text);
     }
     pub(super) fn control_overlay(
         &self,

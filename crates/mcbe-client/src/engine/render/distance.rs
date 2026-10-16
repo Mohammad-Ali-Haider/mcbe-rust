@@ -37,6 +37,12 @@ struct Key {
     radius: i32,
 }
 impl Key {
+    fn same_scene(self, other: Self) -> bool {
+        self.instance == other.instance && self.registry == other.registry
+    }
+    fn compatible_job(self, other: Self) -> bool {
+        self.same_scene(other) && self.radius == other.radius
+    }
     fn same_view(self, other: Self) -> bool {
         self.instance == other.instance
             && self.registry == other.registry
@@ -848,6 +854,31 @@ impl Distant {
         self.adopted = Some(key);
         self.fade_started = Some(Instant::now());
     }
+    fn retarget(&mut self, key: Option<Key>) {
+        if self.wanted == key {
+            return;
+        }
+        // Camera movement coalesces behind the current bounded job. Cancelling
+        // every chunk crossing starves expensive island jobs during flight.
+        let compatible =
+            matches!((self.wanted, key), (Some(old), Some(new)) if old.compatible_job(new));
+        self.wanted = key;
+        if !compatible {
+            self.epoch += 1;
+            if let Some(w) = &self.worker {
+                w.token.store(self.epoch, Ordering::Release);
+            }
+        }
+        let retain = matches!((self.adopted, key), (Some(old), Some(new)) if old.same_scene(new));
+        if retain {
+            self.retained_updates += 1;
+        } else {
+            self.clear();
+        }
+    }
+    fn accepts(&self, epoch: u64, key: Key) -> bool {
+        epoch == self.epoch && self.wanted.is_some_and(|wanted| wanted.compatible_job(key))
+    }
     pub fn update(&mut self, client: &Client, device: &wgpu::Device) -> Result<bool> {
         if self.fraction() >= 1. {
             self.previous_buffer = None;
@@ -868,29 +899,7 @@ impl Distant {
                 center: s.center,
                 radius: s.generator.config.radius,
             });
-        if self.wanted != key {
-            let edit_only = matches!((self.wanted,key),(Some(a),Some(b)) if a.same_view(b));
-            self.wanted = key;
-            if !edit_only {
-                self.epoch += 1;
-                if let Some(w) = &self.worker {
-                    w.token.store(self.epoch, Ordering::Release);
-                }
-                let retain = match (self.adopted, key) {
-                    (Some(old), Some(new)) => {
-                        old.instance == new.instance
-                            && old.registry == new.registry
-                            && (0..2).all(|a| (old.center[a] - new.center[a]).abs() <= 1)
-                    }
-                    _ => false,
-                };
-                if retain {
-                    self.retained_updates += 1;
-                } else {
-                    self.clear();
-                }
-            }
-        }
+        self.retarget(key);
         if let Some(prepared) = client.engine_distant_prepared.borrow_mut().take() {
             if Some(prepared.key) == key {
                 self.adopt(device, prepared.mesh, prepared.key);
@@ -907,9 +916,7 @@ impl Distant {
             match result {
                 Ok(done) => {
                     self.busy = false;
-                    if done.epoch == self.epoch
-                        && self.wanted.is_some_and(|key| done.key.same_view(key))
-                    {
+                    if self.accepts(done.epoch, done.key) {
                         if let Some(mesh) =
                             done.mesh.map_err(|e| format!("Distant terrain: {e}"))?
                         {
@@ -992,6 +999,102 @@ impl Distant {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn moving_view_retains_islands_and_accepts_in_flight_work_without_starvation() {
+        let initial = Key {
+            instance: 1,
+            registry: 2,
+            edits: 0,
+            center: [0, 0],
+            radius: 255,
+        };
+        let mut d = Distant {
+            wanted: Some(initial),
+            adopted: Some(initial),
+            vertices: 123,
+            ..Default::default()
+        };
+        for step in 1..=24 {
+            d.retarget(Some(Key {
+                center: [step, -step],
+                edits: step as u64,
+                ..initial
+            }));
+            assert_eq!(d.adopted, Some(initial));
+            assert_eq!(d.vertices, 123);
+            assert_eq!(d.epoch, 0);
+            assert!(d.accepts(0, initial));
+        }
+        d.retarget(Some(Key {
+            center: [24, -24],
+            radius: 16,
+            ..initial
+        }));
+        assert_eq!(d.vertices, 123);
+        assert!(!d.accepts(0, initial));
+        assert!(d.accepts(d.epoch, d.wanted.unwrap()));
+        d.retarget(Some(Key {
+            instance: 9,
+            ..initial
+        }));
+        assert_eq!(d.vertices, 0);
+        assert_eq!(d.adopted, None);
+        assert!(!d.accepts(d.epoch, initial));
+        d.retarget(None);
+        assert!(!d.accepts(d.epoch, initial));
+    }
+    #[test]
+    fn island_worker_completes_while_the_latest_view_keeps_moving() {
+        let registry = crate::engine_blocks::Registry::built_in();
+        let definitions = crate::engine::world::dimensions::Definitions::built_in();
+        let definition = definitions.get("islands").unwrap();
+        let mut r = request([0, 0]);
+        r.generator = Arc::new(
+            Generator::new(definition.seed(360036), &registry, definition.config(9)).unwrap(),
+        );
+        r.key.radius = 9;
+        let initial = r.key;
+        let worker = Worker::new().unwrap();
+        worker.token.store(1, Ordering::Release);
+        worker.sender.send(Some(r)).unwrap();
+        let mut d = Distant {
+            wanted: Some(initial),
+            adopted: Some(initial),
+            epoch: 1,
+            worker: Some(worker),
+            ..Default::default()
+        };
+        let start = Instant::now();
+        let mut moves = 0;
+        let finished = loop {
+            moves += 1;
+            d.retarget(Some(Key {
+                center: [moves, -moves],
+                ..initial
+            }));
+            match d.worker.as_ref().unwrap().receiver.try_recv() {
+                Ok(done) => break done,
+                Err(mpsc::TryRecvError::Empty) => {
+                    assert!(start.elapsed() < Duration::from_secs(60));
+                    thread::sleep(Duration::from_millis(5));
+                }
+                Err(error) => panic!("Worker disconnected: {error}"),
+            }
+        };
+        assert!(d.accepts(finished.epoch, finished.key));
+        let mesh = finished
+            .mesh
+            .unwrap()
+            .expect("Flight must not cancel the island build");
+        assert!(!mesh.vertices.is_empty());
+        assert_eq!(d.epoch, 1);
+        assert!(moves > 1);
+        eprintln!(
+            "Island worker completed after {moves} moving-view updates, {} vertices, {:.3}s",
+            mesh.vertices.len(),
+            start.elapsed().as_secs_f64()
+        );
+    }
     fn request(center: [i32; 2]) -> Request {
         let r = crate::engine_blocks::Registry::built_in();
         let mut config = engine_stream::Config::new(&r);

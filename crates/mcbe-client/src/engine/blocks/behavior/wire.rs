@@ -38,7 +38,10 @@ impl BlockBehavior for Wire {
             let mut properties = identity.properties.clone();
             properties.insert("power".into(), power.to_string());
             let other = registry.get(registry.resolve_state(&identity.block, &properties)?);
-            if other.behavior != b.behavior || other.signal != b.signal {
+            if other.behavior != b.behavior
+                || other.signal != b.signal
+                || other.connections != b.connections
+            {
                 return Err("Wire variants must share behavior and signal settings".into());
             }
         }
@@ -62,8 +65,19 @@ impl BlockBehavior for Wire {
             return Ok(());
         }
         let power = neighbors(c.position)
-            .filter_map(|p| c.blocks.get(&p))
-            .map(|id| strength(c.registry.get(*id)).saturating_sub(signal.attenuation))
+            .filter_map(|p| c.blocks.get(&p).map(|id| (p, *id)))
+            .filter(|(p, id)| {
+                b.connections.as_ref().is_none_or(|connection| {
+                    let other = c.registry.get(*id);
+                    other.signal.as_ref().is_some_and(|s| s.source > 0)
+                        || (p[1] == c.position[1]
+                            && other
+                                .connections
+                                .as_ref()
+                                .is_some_and(|other| other.channel == connection.channel))
+                })
+            })
+            .map(|(_, id)| strength(c.registry.get(id)).saturating_sub(signal.attenuation))
             .max()
             .unwrap_or(0)
             .max(signal.source);

@@ -78,6 +78,62 @@ pub fn place_hand(
 mod tests {
     use super::*;
     #[test]
+    fn facing_policy_rotates_furnace_front_and_is_reusable_by_other_families() {
+        let mut r = Registry::built_in();
+        let variants = r
+            .blocks
+            .iter()
+            .filter(|b| b.state.as_ref().is_some_and(|s| s.block == "furnace"))
+            .cloned()
+            .collect::<Vec<_>>();
+        for mut b in variants {
+            b.id = b.id.replacen("furnace", "kiln", 1);
+            b.state.as_mut().unwrap().block = "kiln".into();
+            if let Some(crate::engine_blocks::Placement::Facing { states }) = &mut b.placement {
+                for name in states {
+                    *name = name.replacen("furnace", "kiln", 1);
+                }
+            }
+            r.blocks.push(b);
+        }
+        r.validate().unwrap();
+        for family in ["furnace", "kiln"] {
+            for (quarter, dir, face) in [
+                (0, "north", 2),
+                (1, "west", 5),
+                (2, "south", 3),
+                (3, "east", 4),
+            ] {
+                let (_, id) = resolve(
+                    &r,
+                    r.find(family).unwrap(),
+                    &hit(Face::Up, 1.),
+                    quarter as f32 * std::f32::consts::FRAC_PI_2,
+                    None,
+                    None,
+                )
+                .unwrap()
+                .unwrap();
+                let b = r.get(id);
+                assert_eq!(b.state.as_ref().unwrap().properties["facing"], dir);
+                let bindings = b.face_textures.as_ref().unwrap();
+                assert_eq!(bindings[face].face.as_deref(), Some("south"));
+                assert_eq!(
+                    bindings
+                        .iter()
+                        .filter(|v| v.face.as_deref() == Some("south"))
+                        .count(),
+                    1
+                );
+                assert!(
+                    resolve(&r, id, &hit(Face::Up, 1.), 0., None, Some(id))
+                        .unwrap()
+                        .is_none()
+                );
+            }
+        }
+    }
+    #[test]
     fn live_slab_merge_checks_expanded_collision_before_mutating() {
         let mut c = crate::engine::generate(360036).unwrap();
         let r = &c.scene.engine.as_ref().unwrap().registry;

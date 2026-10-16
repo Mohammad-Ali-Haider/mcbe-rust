@@ -43,6 +43,40 @@ impl Registry {
                         == expected.geometry.as_ref().map(|g| &g.boxes)
                 });
                 let index = next.find(&b.id)? as usize;
+                if canonical
+                    && next.blocks[index].behavior == super::components::BehaviorComponent::Passive
+                    && b.behavior == super::components::BehaviorComponent::Stairs
+                {
+                    next.blocks[index].behavior = b.behavior;
+                    if next.blocks[index]
+                        .state
+                        .as_ref()
+                        .is_some_and(|s| s.properties.keys().all(|k| k == "half" || k == "facing"))
+                    {
+                        next.blocks[index].state = b.state.clone();
+                    }
+                    changed = true;
+                }
+                if canonical
+                    && next.blocks[index].placement.is_none()
+                    && matches!(rule, Placement::Facing { .. })
+                {
+                    let actual = &mut next.blocks[index];
+                    if actual
+                        .state
+                        .as_ref()
+                        .is_some_and(|s| s.properties.is_empty())
+                    {
+                        actual.state = b.state.clone();
+                    }
+                    let local_matches = matches!((&actual.minecraft,&b.minecraft),(Some(a),Some(b)) if a.pack==b.pack && a.block==b.block && a.face==b.face);
+                    if local_matches
+                        && actual.face_textures.is_none()
+                        && actual.texture_files.is_none()
+                    {
+                        actual.face_textures = b.face_textures.clone();
+                    }
+                }
                 if canonical && next.blocks[index].placement.is_none() {
                     next.blocks[index].placement = Some(rule.clone());
                     changed = true;
@@ -85,6 +119,9 @@ impl Registry {
         let mut seen = HashSet::new();
         for (index, b) in self.blocks.iter().enumerate() {
             b.material.validate()?;
+            if let Some(connections) = &b.connections {
+                connections.validate()?;
+            }
             if let Some(c) = b.container
                 && (!self.blocks.iter().any(|b| b.fluid == Some(c.kind))
                     || c.capacity == 0
@@ -115,6 +152,9 @@ impl Registry {
             for binding in b.minecraft.iter().chain(b.face_textures.iter().flatten()) {
                 if !["vanilla", "vanilla_1.17.0", "vanilla_1.21.10"]
                     .contains(&binding.pack.as_str())
+                    || binding.face.as_deref().is_some_and(|face| {
+                        !["up", "down", "north", "south", "east", "west"].contains(&face)
+                    })
                     || binding.block.is_empty()
                     || !binding
                         .block
@@ -206,7 +246,7 @@ mod tests {
             b.placement = None;
         }
         let mut upgraded = old.with_new_builtins().unwrap().unwrap();
-        assert_eq!(upgraded.blocks.len(), 41);
+        assert_eq!(upgraded.blocks.len(), Registry::built_in().blocks.len());
         assert!(upgraded.with_new_builtins().unwrap().is_none());
         assert!(
             upgraded
@@ -229,10 +269,39 @@ mod tests {
         assert!(invalid.validate().is_err());
     }
     #[test]
+    fn canonical_legacy_furnaces_gain_facing_without_overwriting_owned_textures() {
+        for owned in [false, true] {
+            let mut old = Registry::built_in();
+            old.blocks.retain(|b| !b.id.starts_with("furnace_"));
+            let id = old.find("furnace").unwrap() as usize;
+            old.blocks[id].placement = None;
+            old.blocks[id].state.as_mut().unwrap().properties.clear();
+            old.blocks[id].face_textures = None;
+            if owned {
+                old.blocks[id].texture_files =
+                    Some(std::array::from_fn(|_| "assets/own.png".into()));
+            }
+            let next = old.with_new_builtins().unwrap().unwrap();
+            let b = next.get(next.find("furnace").unwrap());
+            assert_eq!(b.state.as_ref().unwrap().properties["facing"], "north");
+            assert!(matches!(b.placement, Some(Placement::Facing { .. })));
+            if owned {
+                assert!(b.face_textures.is_none());
+                assert_eq!(b.texture_files.as_ref().unwrap()[0], "assets/own.png");
+            } else {
+                assert_eq!(
+                    b.face_textures.as_ref().unwrap()[2].face.as_deref(),
+                    Some("south")
+                );
+            }
+        }
+    }
+    #[test]
     fn many_owned_blocks_and_strict_definition_validation() {
         let mut r = Registry::built_in();
         for i in 0..100 {
             r.blocks.push(Block {
+                connections: None,
                 material: Default::default(),
                 container: None,
                 texture_tint: None,

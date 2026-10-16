@@ -1,3 +1,9 @@
+// A single mirror ray represents only the narrow specular lobe. Rough
+// materials keep diffuse/direct lighting without a sharp reflected image.
+fn mirror_response(roughness:f32)->f32 {
+ let gloss=clamp(1.-roughness,0.,1.);
+ return gloss*gloss*gloss*gloss;
+}
 // Hybrid primary visibility with real hardware queries against nearby worker geometry.
 struct RayScene {anchor:vec4<f32>,center:vec4<f32>,options:vec4<f32>,limits:vec4<f32>};
 @group(1) @binding(0) var ray_scene:acceleration_structure;
@@ -80,9 +86,10 @@ fn ray_noise(p:vec2<u32>)->f32{var n=p.x*1973u+p.y*9277u+8917u;n=(n^(n>>16u))*22
  }
  let ambient=sky_radiance(n)*base*(1.-material.y*0.65)*ao;
  var reflection=vec3(0.);
- if scene.options.x>0.5 {
+ let mirror=mirror_response(material.x);
+ if scene.options.x>0.5 && mirror>0.002 {
   let fresnel=mix(vec3(0.04),base,material.y)+(vec3(1.)-mix(vec3(0.04),base,material.y))*pow(1.-max(dot(n,view),0.),5.);
-  reflection=reflected_color(p+n*0.035,reflect(-view,n))*fresnel*(1.-material.x*0.8);
+  reflection=reflected_color(p+n*0.035,reflect(-view,n))*fresnel*mirror;
  }
  let hdr=ambient+direct+indirect*base*(1.-material.y)+reflection+base*material.z;let rgb=vec3(1.)-exp(-hdr*frame.parameters.x);
  let sky=frame.medium.xyz;let d=select(distance(p_world,frame.eye.xyz),distance(p_world.xz,frame.eye.xz),frame.fog.z>0.5 && frame.medium.w<0.5);let fog=clamp((d-frame.fog.x)/(frame.fog.y-frame.fog.x),0.,1.);

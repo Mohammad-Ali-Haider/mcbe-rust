@@ -188,8 +188,9 @@ mod tests {
         let mut client = crate::engine::generate(360036).unwrap();
         let plan = Prepared::build(&client).unwrap();
         assert!(plan.matches(&client));
-        assert_eq!(plan.layers, 41 * 6);
-        assert_eq!(plan.steps.len(), 41 * 6 * 6 + 16);
+        let states = client.scene.engine.as_ref().unwrap().registry.blocks.len();
+        assert_eq!(plan.layers, states as u32 * 6);
+        assert_eq!(plan.steps.len(), states * 6 * 6 + 16);
         let mut cursor = 0;
         let mut bytes = 0;
         let mut frames = 0;
@@ -207,7 +208,13 @@ mod tests {
             frames += 1;
         }
         assert_eq!(bytes, plan.layers as usize * 5460 + 1024 * 1024 * 4);
-        assert_eq!(frames, 63); // 41 compiled states plus the UI atlas, within byte/write budgets.
+        // Terrain mip writes hit the write-count budget; each atlas stripe
+        // independently fills the byte budget, for any authored catalog size.
+        assert_eq!(
+            frames,
+            (plan.layers as usize * 6).div_ceil(BATCH_WRITES)
+                + plan.atlas.rgba.len().div_ceil(BATCH_BYTES)
+        );
         let Step::Terrain { rgba: base, .. } = &plan.steps[0] else {
             panic!()
         };

@@ -919,7 +919,7 @@ mod tests {
                     .as_ref()
                     .unwrap()
                     .registry
-                    .find("bucket")
+                    .find("power_source")
                     .unwrap()
             )
         );

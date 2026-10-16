@@ -16,6 +16,181 @@
         "pack": "vanilla",
         "block": "furnace"
       }
+    },
+    "placement": "facing"
+  },
+  "states": [
+    {
+      "id": "furnace",
+      "properties": {
+        "facing": "north"
+      },
+      "hidden": false,
+      "components": {
+        "visual": {
+          "faces": [
+            {
+              "pack": "vanilla",
+              "block": "furnace",
+              "face": "up"
+            },
+            {
+              "pack": "vanilla",
+              "block": "furnace",
+              "face": "up"
+            },
+            {
+              "pack": "vanilla",
+              "block": "furnace",
+              "face": "south"
+            },
+            {
+              "pack": "vanilla",
+              "block": "furnace",
+              "face": "north"
+            },
+            {
+              "pack": "vanilla",
+              "block": "furnace",
+              "face": "north"
+            },
+            {
+              "pack": "vanilla",
+              "block": "furnace",
+              "face": "north"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "furnace_east",
+      "properties": {
+        "facing": "east"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "faces": [
+            {
+              "pack": "vanilla",
+              "block": "furnace",
+              "face": "up"
+            },
+            {
+              "pack": "vanilla",
+              "block": "furnace",
+              "face": "up"
+            },
+            {
+              "pack": "vanilla",
+              "block": "furnace",
+              "face": "north"
+            },
+            {
+              "pack": "vanilla",
+              "block": "furnace",
+              "face": "north"
+            },
+            {
+              "pack": "vanilla",
+              "block": "furnace",
+              "face": "south"
+            },
+            {
+              "pack": "vanilla",
+              "block": "furnace",
+              "face": "north"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "furnace_south",
+      "properties": {
+        "facing": "south"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "faces": [
+            {
+              "pack": "vanilla",
+              "block": "furnace",
+              "face": "up"
+            },
+            {
+              "pack": "vanilla",
+              "block": "furnace",
+              "face": "up"
+            },
+            {
+              "pack": "vanilla",
+              "block": "furnace",
+              "face": "north"
+            },
+            {
+              "pack": "vanilla",
+              "block": "furnace",
+              "face": "south"
+            },
+            {
+              "pack": "vanilla",
+              "block": "furnace",
+              "face": "north"
+            },
+            {
+              "pack": "vanilla",
+              "block": "furnace",
+              "face": "north"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "furnace_west",
+      "properties": {
+        "facing": "west"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "faces": [
+            {
+              "pack": "vanilla",
+              "block": "furnace",
+              "face": "up"
+            },
+            {
+              "pack": "vanilla",
+              "block": "furnace",
+              "face": "up"
+            },
+            {
+              "pack": "vanilla",
+              "block": "furnace",
+              "face": "north"
+            },
+            {
+              "pack": "vanilla",
+              "block": "furnace",
+              "face": "north"
+            },
+            {
+              "pack": "vanilla",
+              "block": "furnace",
+              "face": "north"
+            },
+            {
+              "pack": "vanilla",
+              "block": "furnace",
+              "face": "south"
+            }
+          ]
+        }
+      }
     }
-  }
+  ]
 }

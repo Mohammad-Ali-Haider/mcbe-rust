@@ -53,7 +53,12 @@ pub fn load(registry: &Registry, root: &Path) -> Result<Assets> {
                 }
                 let pack = packs.get_mut(&binding.pack).unwrap();
 
-                let material = mcbe_core::textures::block_material(pack, &binding.block, name, 0)?;
+                let material = mcbe_core::textures::block_material(
+                    pack,
+                    &binding.block,
+                    binding.face.as_deref().unwrap_or(name),
+                    0,
+                )?;
                 if b.render_layer == crate::engine_blocks::RenderLayer::Opaque
                     && binding.block != "grass"
                     && material.texture.rgba.chunks_exact(4).any(|p| p[3] != 255)

@@ -1,5 +1,6 @@
 //! Reusable placement policies, independent of block event behaviors.
 mod context;
+mod facing;
 mod slab;
 mod stairs;
 mod standard;
@@ -27,9 +28,11 @@ pub fn get(registry: &Registry, id: BlockId) -> &'static dyn PlacementBehavior {
     static STANDARD: standard::Standard = standard::Standard;
     static SLAB: slab::Slab = slab::Slab;
     static STAIRS: stairs::Stairs = stairs::Stairs;
+    static FACING: facing::Facing = facing::Facing;
     match registry.get(id).placement {
         Some(Placement::Slab { .. }) => &SLAB,
         Some(Placement::Stairs { .. }) => &STAIRS,
+        Some(Placement::Facing { .. }) => &FACING,
         None => &STANDARD,
     }
 }

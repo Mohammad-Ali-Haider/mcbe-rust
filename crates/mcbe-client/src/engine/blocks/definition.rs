@@ -24,6 +24,9 @@ pub enum Placement {
         lower: [String; 4],
         upper: [String; 4],
     },
+    Facing {
+        states: [String; 4],
+    },
 }
 impl Placement {
     /// Shared reference traversal for validation and legacy-save upgrades.
@@ -34,6 +37,7 @@ impl Placement {
                 upper,
                 double,
             } => vec![lower.as_str(), upper.as_str(), double.as_str()],
+            Self::Facing { states } => states.iter().map(String::as_str).collect(),
             Self::Stairs { lower, upper } => {
                 lower.iter().chain(upper).map(String::as_str).collect()
             }
@@ -52,6 +56,8 @@ pub enum Pattern {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Block {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub connections: Option<super::components::connections::Connections>,
     #[serde(
         default,
         skip_serializing_if = "super::components::material::Material::is_default"
@@ -107,6 +113,8 @@ pub struct Block {
 pub struct Binding {
     pub pack: String,
     pub block: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub face: Option<String>,
 }
 
 use serde_json::Value;

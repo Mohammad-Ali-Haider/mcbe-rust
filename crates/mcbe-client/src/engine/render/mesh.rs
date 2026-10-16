@@ -150,8 +150,12 @@ fn naive(
                 };
                 block_count += 1;
                 for (face, d) in DIRECTIONS.iter().enumerate() {
-                    let visible =
-                        geometry.visible(id, lookup([x + d[0], y + d[1], z + d[2]]), face);
+                    let visible = geometry.visible_connected(
+                        id,
+                        lookup([x + d[0], y + d[1], z + d[2]]),
+                        face,
+                        geometry.connection_mask(id, p, &lookup),
+                    );
                     occluded_faces += visible.hidden;
                     if visible.whole_cube_face {
                         emit(&mut out, p, face, id, [1, 1]);
@@ -216,10 +220,11 @@ fn greedy(
                         if face == 0 {
                             mesh.block_count += 1;
                         }
-                        let visible = geometry.visible(
+                        let visible = geometry.visible_connected(
                             id,
                             lookup(std::array::from_fn(|a| p[a] + normal[a])),
                             face,
+                            geometry.connection_mask(id, p, &lookup),
                         );
                         mesh.occluded_faces += visible.hidden;
                         if visible.whole_cube_face

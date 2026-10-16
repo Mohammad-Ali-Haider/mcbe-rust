@@ -1,5 +1,6 @@
 //! Typed capabilities resolved once when registering a block.
 pub(crate) mod collision;
+pub(crate) mod connections;
 pub(crate) mod interaction;
 pub use interaction::Interaction;
 pub(crate) mod visual;
@@ -15,6 +16,7 @@ pub use signal::SignalComponent;
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BlockComponents {
+    pub connections: Option<connections::ConnectionComponent>,
     #[serde(default)]
     pub material: material::Material,
     pub container: Option<crate::engine::items::FluidContainer>,
@@ -41,10 +43,11 @@ pub enum BehaviorComponent {
     #[default]
     Passive,
     Wire,
+    Stairs,
 }
 impl BehaviorComponent {
     pub fn receives_events(self) -> bool {
-        self == Self::Wire
+        self != Self::Passive
     }
     pub fn passive(&self) -> bool {
         *self == Self::Passive

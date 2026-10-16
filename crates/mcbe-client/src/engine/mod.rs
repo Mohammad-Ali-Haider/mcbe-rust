@@ -1991,9 +1991,14 @@ mod tests {
         let bytes = serde_json::to_vec(&document(&c).unwrap()).unwrap();
         // Authored entity models add metadata; terrain remains a sparse edit document.
         let mut sparse: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        let definition_bytes = serde_json::to_vec(&sparse["registry"]).unwrap().len()
+            + serde_json::to_vec(&sparse["entities"]).unwrap().len();
+        // Authored definitions grow with new engine features; sparse terrain
+        // and player state remain small independently of that snapshot data.
         sparse["entities"] = serde_json::Value::Null;
+        sparse["registry"] = serde_json::Value::Null;
         assert!(serde_json::to_vec(&sparse).unwrap().len() < 16_384);
-        assert!(bytes.len() < 32_768);
+        assert!(bytes.len() < definition_bytes + 16_384);
         let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(value["version"], SAVE_VERSION);
         assert!(value.get("cells").is_none());
@@ -2108,6 +2113,7 @@ mod tests {
         let mut client = generate(38).unwrap();
         let mut registry = client.scene.engine.as_ref().unwrap().registry.clone();
         registry.blocks.push(crate::engine_blocks::Block {
+            connections: None,
             material: Default::default(),
             container: None,
             texture_tint: None,

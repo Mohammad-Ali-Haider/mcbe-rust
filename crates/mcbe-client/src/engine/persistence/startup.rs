@@ -454,6 +454,51 @@ impl Drop for Service {
 mod tests {
     use super::*;
     #[test]
+    #[ignore = "Explicit read-only saved-world startup check; no window or event loop"]
+    fn resume_existing_world_without_window() {
+        let home = PathBuf::from(
+            std::env::var("MCBE_RESUME_TEST_HOME").expect("Set the existing game home"),
+        );
+        let options = Options {
+            home,
+            source: None,
+            definitions: None,
+            original: false,
+            pack_root: crate::engine_assets::DEFAULT_ROOT.into(),
+            resume: true,
+            streamed: true,
+            modern: true,
+            seed: 360036,
+            dimensions: true,
+            dimension: None,
+        };
+        let mut client = options.prepare(&Progress::default()).unwrap();
+        let state = client.scene.engine.as_ref().unwrap();
+        let loaded = state.loaded.clone().expect("Expected a saved world");
+        let bytes = fs::read(&loaded.0).unwrap();
+        assert_eq!(engine::hash(&bytes), loaded.1);
+        let furnace = state.registry.get(state.registry.find("furnace").unwrap());
+        assert_eq!(
+            furnace.state.as_ref().unwrap().properties["facing"],
+            "north"
+        );
+        assert!(state.registry.find("redstone_dust").is_ok());
+        assert!(state.dimensions.is_some());
+        let pose = client.actor.position;
+        client.scene.engine.as_mut().unwrap().entities.natural = true;
+        for _ in 0..100 {
+            client.tick(Default::default()).unwrap();
+        }
+        assert_eq!(fs::read(&loaded.0).unwrap(), bytes);
+        eprintln!(
+            "Read-only saved-world startup passed: {:?}, original pose {:?}, current pose {:?}, states {}",
+            loaded.0,
+            pose,
+            client.actor.position,
+            client.scene.engine.as_ref().unwrap().registry.blocks.len()
+        );
+    }
+    #[test]
     fn failed_startup_retries_after_definition_file_is_repaired() {
         let home = std::env::temp_dir().join(format!(
             "blockwork-startup-{}-{}",

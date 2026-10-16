@@ -1,0 +1,337 @@
+{
+  "id": "redstone_dust",
+  "label": "Redstone Dust",
+  "extends": "templates/solid.json",
+  "components": {
+    "behavior": "wire",
+    "signal": {
+      "source": 0,
+      "attenuation": 1,
+      "delay": 1
+    },
+    "connections": {
+      "channel": "redstone",
+      "models": [
+        "models/dust_0.json",
+        "models/dust_1.json",
+        "models/dust_2.json",
+        "models/dust_3.json",
+        "models/dust_4.json",
+        "models/dust_5.json",
+        "models/dust_6.json",
+        "models/dust_7.json",
+        "models/dust_8.json",
+        "models/dust_9.json",
+        "models/dust_10.json",
+        "models/dust_11.json",
+        "models/dust_12.json",
+        "models/dust_13.json",
+        "models/dust_14.json",
+        "models/dust_15.json"
+      ]
+    },
+    "visual": {
+      "model": "models/dust_0.json",
+      "pattern": "solid",
+      "color": [
+        80,
+        10,
+        10
+      ]
+    },
+    "collision": {
+      "shape": "none"
+    },
+    "occlusion": {
+      "layer": "opaque",
+      "cull_group": "redstone"
+    },
+    "selection": {
+      "shape": "cuboids",
+      "boxes": [
+        [
+          0,
+          0,
+          0,
+          1,
+          0.0625,
+          1
+        ]
+      ]
+    }
+  },
+  "states": [
+    {
+      "id": "redstone_dust",
+      "properties": {
+        "power": "0"
+      },
+      "hidden": false,
+      "components": {
+        "visual": {
+          "color": [
+            80,
+            10,
+            10
+          ],
+          "model": "models/dust_0.json"
+        }
+      }
+    },
+    {
+      "id": "redstone_dust_1",
+      "properties": {
+        "power": "1"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "color": [
+            91,
+            12,
+            10
+          ],
+          "model": "models/dust_0.json"
+        }
+      }
+    },
+    {
+      "id": "redstone_dust_2",
+      "properties": {
+        "power": "2"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "color": [
+            102,
+            14,
+            10
+          ],
+          "model": "models/dust_0.json"
+        }
+      }
+    },
+    {
+      "id": "redstone_dust_3",
+      "properties": {
+        "power": "3"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "color": [
+            113,
+            16,
+            10
+          ],
+          "model": "models/dust_0.json"
+        }
+      }
+    },
+    {
+      "id": "redstone_dust_4",
+      "properties": {
+        "power": "4"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "color": [
+            124,
+            18,
+            10
+          ],
+          "model": "models/dust_0.json"
+        }
+      }
+    },
+    {
+      "id": "redstone_dust_5",
+      "properties": {
+        "power": "5"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "color": [
+            135,
+            20,
+            10
+          ],
+          "model": "models/dust_0.json"
+        }
+      }
+    },
+    {
+      "id": "redstone_dust_6",
+      "properties": {
+        "power": "6"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "color": [
+            146,
+            22,
+            10
+          ],
+          "model": "models/dust_0.json"
+        }
+      }
+    },
+    {
+      "id": "redstone_dust_7",
+      "properties": {
+        "power": "7"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "color": [
+            157,
+            24,
+            10
+          ],
+          "model": "models/dust_0.json"
+        }
+      }
+    },
+    {
+      "id": "redstone_dust_8",
+      "properties": {
+        "power": "8"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "color": [
+            168,
+            26,
+            10
+          ],
+          "model": "models/dust_0.json"
+        }
+      }
+    },
+    {
+      "id": "redstone_dust_9",
+      "properties": {
+        "power": "9"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "color": [
+            179,
+            28,
+            10
+          ],
+          "model": "models/dust_0.json"
+        }
+      }
+    },
+    {
+      "id": "redstone_dust_10",
+      "properties": {
+        "power": "10"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "color": [
+            190,
+            30,
+            10
+          ],
+          "model": "models/dust_0.json"
+        }
+      }
+    },
+    {
+      "id": "redstone_dust_11",
+      "properties": {
+        "power": "11"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "color": [
+            201,
+            32,
+            10
+          ],
+          "model": "models/dust_0.json"
+        }
+      }
+    },
+    {
+      "id": "redstone_dust_12",
+      "properties": {
+        "power": "12"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "color": [
+            212,
+            34,
+            10
+          ],
+          "model": "models/dust_0.json"
+        }
+      }
+    },
+    {
+      "id": "redstone_dust_13",
+      "properties": {
+        "power": "13"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "color": [
+            223,
+            36,
+            10
+          ],
+          "model": "models/dust_0.json"
+        }
+      }
+    },
+    {
+      "id": "redstone_dust_14",
+      "properties": {
+        "power": "14"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "color": [
+            234,
+            38,
+            10
+          ],
+          "model": "models/dust_0.json"
+        }
+      }
+    },
+    {
+      "id": "redstone_dust_15",
+      "properties": {
+        "power": "15"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "color": [
+            245,
+            40,
+            10
+          ],
+          "model": "models/dust_0.json"
+        }
+      }
+    }
+  ]
+}

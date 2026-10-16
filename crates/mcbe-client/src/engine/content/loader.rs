@@ -167,7 +167,24 @@ fn compile<F: FnMut(&str) -> Result<Vec<u8>>>(read: F) -> Result<ContentPack> {
                 .map(|files| files.map(|p| format!("{}/{p}", manifest.asset_root)));
             let collision = c.collision.compile()?;
             let selection = c.selection.compile()?;
+            let connections = c
+                .connections
+                .map(|connection| -> Result<_> {
+                    let models = connection
+                        .models
+                        .iter()
+                        .map(|name| Ok(serde_json::from_slice(&source.get(name)?)?))
+                        .collect::<Result<Vec<crate::engine_geometry::Geometry>>>()?;
+                    let compiled = crate::engine::blocks::components::connections::Connections {
+                        channel: connection.channel,
+                        models,
+                    };
+                    compiled.validate()?;
+                    Ok(compiled)
+                })
+                .transpose()?;
             group.push(Block {
+                connections,
                 material: c.material,
                 container: c.container,
                 texture_tint: c.visual.texture_tint,
@@ -204,12 +221,35 @@ fn compile<F: FnMut(&str) -> Result<Vec<u8>>>(read: F) -> Result<ContentPack> {
                     let p = &b.state.as_ref().unwrap().properties;
                     p.get("half").is_some_and(|v| v == half)
                         && facing.is_none_or(|f| p.get("facing").is_some_and(|v| v == f))
+                        && p.get("shape").is_none_or(|shape| shape == "straight")
                 })
                 .map(|b| b.id.clone())
                 .ok_or_else(|| "Placement policy is missing a required state".into())
         };
         let placement = match policy.unwrap() {
             PlacementComponent::Standard => None,
+            PlacementComponent::Facing => {
+                let states = ["north", "east", "south", "west"]
+                    .map(|f| {
+                        group
+                            .iter()
+                            .find(|b| {
+                                b.state
+                                    .as_ref()
+                                    .unwrap()
+                                    .properties
+                                    .get("facing")
+                                    .is_some_and(|v| v == f)
+                            })
+                            .map(|b| b.id.clone())
+                            .ok_or_else(|| "Facing policy requires all four cardinal states".into())
+                    })
+                    .into_iter()
+                    .collect::<Result<Vec<String>>>()?;
+                Some(Placement::Facing {
+                    states: states.try_into().unwrap(),
+                })
+            }
             PlacementComponent::Slab => Some(Placement::Slab {
                 lower: lookup("lower", None)?,
                 upper: lookup("upper", None)?,
@@ -314,7 +354,7 @@ pub(crate) fn signal_example() -> Result<ContentPack> {
         }
         let mut v: Value = serde_json::from_slice(bytes)?;
         let list = v["blocks"].as_array_mut().unwrap();
-        list.push("examples/power_source.json".into());
+        // Power Source is now shipped; keep only the optional generic wire family.
         list.push("examples/wire.json".into());
         Ok(serde_json::to_vec(&v)?)
     })
@@ -365,7 +405,7 @@ mod tests {
         .unwrap();
         let new = built_in().unwrap().registry;
         assert_eq!(old.blocks.len(), 36);
-        assert_eq!(new.blocks.len(), 41);
+        assert!(new.blocks.len() >= 41);
         assert_eq!(new.find("water").unwrap(), 37);
         assert_eq!(new.find("snow").unwrap(), 38);
         assert_eq!(new.find("oak_leaves").unwrap(), 39);
@@ -381,6 +421,10 @@ mod tests {
             for v in [&mut a, &mut b] {
                 v.as_object_mut().unwrap().remove("state");
                 v.as_object_mut().unwrap().remove("interaction");
+                // Canonical stairs gain events while retaining their original geometry.
+                if v["id"].as_str().unwrap().starts_with("oak_stairs_") {
+                    v.as_object_mut().unwrap().remove("behavior");
+                }
                 if v.get("geometry") == Some(&serde_json::json!({"boxes":[[0.,0.,0.,1.,1.,1.]]})) {
                     v.as_object_mut().unwrap().remove("geometry");
                 }

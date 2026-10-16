@@ -15,7 +15,8 @@
         "pack": "vanilla",
         "block": "planks"
       }
-    }
+    },
+    "behavior": "stairs"
   },
   "states": [
     {
@@ -23,7 +24,8 @@
       "label": "Oak Stairs North",
       "properties": {
         "half": "lower",
-        "facing": "north"
+        "facing": "north",
+        "shape": "straight"
       },
       "hidden": false,
       "components": {
@@ -47,7 +49,8 @@
       "label": "Oak Stairs East",
       "properties": {
         "half": "lower",
-        "facing": "east"
+        "facing": "east",
+        "shape": "straight"
       },
       "hidden": true,
       "components": {
@@ -71,7 +74,8 @@
       "label": "Oak Stairs South",
       "properties": {
         "half": "lower",
-        "facing": "south"
+        "facing": "south",
+        "shape": "straight"
       },
       "hidden": true,
       "components": {
@@ -95,7 +99,8 @@
       "label": "Oak Stairs West",
       "properties": {
         "half": "lower",
-        "facing": "west"
+        "facing": "west",
+        "shape": "straight"
       },
       "hidden": true,
       "components": {
@@ -119,7 +124,8 @@
       "label": "Oak Stairs North Upper",
       "properties": {
         "half": "upper",
-        "facing": "north"
+        "facing": "north",
+        "shape": "straight"
       },
       "hidden": true,
       "components": {
@@ -143,7 +149,8 @@
       "label": "Oak Stairs East Upper",
       "properties": {
         "half": "upper",
-        "facing": "east"
+        "facing": "east",
+        "shape": "straight"
       },
       "hidden": true,
       "components": {
@@ -167,7 +174,8 @@
       "label": "Oak Stairs South Upper",
       "properties": {
         "half": "upper",
-        "facing": "south"
+        "facing": "south",
+        "shape": "straight"
       },
       "hidden": true,
       "components": {
@@ -191,7 +199,8 @@
       "label": "Oak Stairs West Upper",
       "properties": {
         "half": "upper",
-        "facing": "west"
+        "facing": "west",
+        "shape": "straight"
       },
       "hidden": true,
       "components": {
@@ -207,6 +216,486 @@
             "pack": "vanilla",
             "block": "planks"
           }
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_north_inner_left",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "lower",
+        "facing": "north",
+        "shape": "inner_left"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_north_inner_left.json"
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_north_inner_right",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "lower",
+        "facing": "north",
+        "shape": "inner_right"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_north_inner_right.json"
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_north_outer_left",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "lower",
+        "facing": "north",
+        "shape": "outer_left"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_north_outer_left.json"
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_north_outer_right",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "lower",
+        "facing": "north",
+        "shape": "outer_right"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_north_outer_right.json"
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_east_inner_left",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "lower",
+        "facing": "east",
+        "shape": "inner_left"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_east_inner_left.json"
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_east_inner_right",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "lower",
+        "facing": "east",
+        "shape": "inner_right"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_east_inner_right.json"
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_east_outer_left",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "lower",
+        "facing": "east",
+        "shape": "outer_left"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_east_outer_left.json"
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_east_outer_right",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "lower",
+        "facing": "east",
+        "shape": "outer_right"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_east_outer_right.json"
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_south_inner_left",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "lower",
+        "facing": "south",
+        "shape": "inner_left"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_south_inner_left.json"
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_south_inner_right",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "lower",
+        "facing": "south",
+        "shape": "inner_right"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_south_inner_right.json"
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_south_outer_left",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "lower",
+        "facing": "south",
+        "shape": "outer_left"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_south_outer_left.json"
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_south_outer_right",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "lower",
+        "facing": "south",
+        "shape": "outer_right"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_south_outer_right.json"
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_west_inner_left",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "lower",
+        "facing": "west",
+        "shape": "inner_left"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_west_inner_left.json"
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_west_inner_right",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "lower",
+        "facing": "west",
+        "shape": "inner_right"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_west_inner_right.json"
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_west_outer_left",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "lower",
+        "facing": "west",
+        "shape": "outer_left"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_west_outer_left.json"
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_west_outer_right",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "lower",
+        "facing": "west",
+        "shape": "outer_right"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_west_outer_right.json"
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_north_upper_inner_left",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "upper",
+        "facing": "north",
+        "shape": "inner_left"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_north_upper_inner_left.json"
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_north_upper_inner_right",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "upper",
+        "facing": "north",
+        "shape": "inner_right"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_north_upper_inner_right.json"
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_north_upper_outer_left",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "upper",
+        "facing": "north",
+        "shape": "outer_left"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_north_upper_outer_left.json"
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_north_upper_outer_right",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "upper",
+        "facing": "north",
+        "shape": "outer_right"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_north_upper_outer_right.json"
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_east_upper_inner_left",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "upper",
+        "facing": "east",
+        "shape": "inner_left"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_east_upper_inner_left.json"
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_east_upper_inner_right",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "upper",
+        "facing": "east",
+        "shape": "inner_right"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_east_upper_inner_right.json"
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_east_upper_outer_left",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "upper",
+        "facing": "east",
+        "shape": "outer_left"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_east_upper_outer_left.json"
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_east_upper_outer_right",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "upper",
+        "facing": "east",
+        "shape": "outer_right"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_east_upper_outer_right.json"
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_south_upper_inner_left",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "upper",
+        "facing": "south",
+        "shape": "inner_left"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_south_upper_inner_left.json"
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_south_upper_inner_right",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "upper",
+        "facing": "south",
+        "shape": "inner_right"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_south_upper_inner_right.json"
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_south_upper_outer_left",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "upper",
+        "facing": "south",
+        "shape": "outer_left"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_south_upper_outer_left.json"
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_south_upper_outer_right",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "upper",
+        "facing": "south",
+        "shape": "outer_right"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_south_upper_outer_right.json"
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_west_upper_inner_left",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "upper",
+        "facing": "west",
+        "shape": "inner_left"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_west_upper_inner_left.json"
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_west_upper_inner_right",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "upper",
+        "facing": "west",
+        "shape": "inner_right"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_west_upper_inner_right.json"
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_west_upper_outer_left",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "upper",
+        "facing": "west",
+        "shape": "outer_left"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_west_upper_outer_left.json"
+        }
+      }
+    },
+    {
+      "id": "oak_stairs_west_upper_outer_right",
+      "label": "Oak Stairs North",
+      "properties": {
+        "half": "upper",
+        "facing": "west",
+        "shape": "outer_right"
+      },
+      "hidden": true,
+      "components": {
+        "visual": {
+          "model": "models/oak_stairs_west_upper_outer_right.json"
         }
       }
     }

@@ -14,3 +14,6 @@ pub fn shader() -> String {
         include_str!("../../shaders/ray_lighting.wgsl")
     )
 }
+
+#[cfg(test)]
+mod tests;

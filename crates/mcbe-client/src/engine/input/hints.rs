@@ -171,6 +171,21 @@ pub fn rows(
     (left, right)
 }
 impl Hint {
+    pub fn style_role(self, device: Device) -> &'static str {
+        if device == Device::Gamepad {
+            return self.role;
+        }
+        match self.keyboard {
+            "WASD" => "key_wasd",
+            "Arrows" => "key_arrows",
+            "Mouse" => "mouse_look",
+            "LMB" => "mouse_left",
+            "RMB" => "mouse_right",
+            "Wheel" => "mouse_wheel",
+            "Alt+RMB" => "mouse_offhand",
+            _ => "keycap",
+        }
+    }
     pub fn key(self, device: Device) -> &'static str {
         if device == Device::Gamepad {
             self.pad

@@ -4,7 +4,7 @@ use crate::{
     scene::Result,
 };
 use serde::{Deserialize, Serialize};
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Geometry {
     pub boxes: Vec<[f32; 6]>,
@@ -25,6 +25,9 @@ pub struct Model {
     faces: [Vec<Surface>; 6],
 }
 pub struct Library {
+    connected: Vec<Option<[usize; 16]>>,
+    channels: Vec<Option<u16>>,
+    sources: Vec<bool>,
     collision: Vec<Vec<[f32; 6]>>,
     fluids: Vec<bool>,
     layers: Vec<crate::engine_blocks::RenderLayer>,
@@ -161,24 +164,39 @@ impl Model {
     }
 }
 impl Library {
+    fn intern(models: &mut Vec<Model>, boxes: Vec<[f32; 6]>) -> Result<usize> {
+        if let Some(index) = models.iter().position(|m| m.boxes == boxes) {
+            return Ok(index);
+        }
+        if models.len() >= 128 {
+            return Err("At most 128 distinct cuboid models may be compiled".into());
+        }
+        models.push(Model::compile(boxes)?);
+        Ok(models.len() - 1)
+    }
     pub fn compile(registry: &Registry) -> Result<Self> {
         let mut models: Vec<Model> = Vec::new();
         let mut by_block = Vec::new();
+        let mut connected = Vec::new();
         for block in &registry.blocks {
             let boxes = block
                 .geometry
                 .as_ref()
                 .map_or_else(|| vec![UNIT], |g| g.boxes.clone());
-            let model = if let Some(i) = models.iter().position(|m| m.boxes == boxes) {
-                i
-            } else {
-                if models.len() >= 32 {
-                    return Err("Version 1 supports at most 32 distinct cuboid models; textures may share models".into());
-                }
-                models.push(Model::compile(boxes)?);
-                models.len() - 1
-            };
-            by_block.push(model);
+            by_block.push(Self::intern(&mut models, boxes)?);
+            connected.push(
+                block
+                    .connections
+                    .as_ref()
+                    .map(|c| {
+                        c.models
+                            .iter()
+                            .map(|m| Self::intern(&mut models, m.boxes.clone()))
+                            .collect::<Result<Vec<_>>>()
+                            .map(|v| v.try_into().unwrap())
+                    })
+                    .transpose()?,
+            );
         }
         let mut visibility = Vec::new();
         let mut total = 0;
@@ -225,7 +243,33 @@ impl Library {
                 }
             }
         }
+        let mut channel_ids = std::collections::BTreeMap::new();
+        for connection in registry
+            .blocks
+            .iter()
+            .filter_map(|b| b.connections.as_ref())
+        {
+            let next = channel_ids.len() as u16;
+            channel_ids
+                .entry(connection.channel.as_str())
+                .or_insert(next);
+        }
         Ok(Self {
+            connected,
+            channels: registry
+                .blocks
+                .iter()
+                .map(|b| {
+                    b.connections
+                        .as_ref()
+                        .map(|c| channel_ids[c.channel.as_str()])
+                })
+                .collect(),
+            sources: registry
+                .blocks
+                .iter()
+                .map(|b| b.signal.as_ref().is_some_and(|s| s.source > 0))
+                .collect(),
             collision: registry
                 .blocks
                 .iter()
@@ -272,8 +316,39 @@ impl Library {
             crate::engine_blocks::RenderLayer::Translucent => 0x40000000,
         }
     }
+    pub fn connection_mask(
+        &self,
+        id: BlockId,
+        p: [i32; 3],
+        lookup: &impl Fn([i32; 3]) -> Option<BlockId>,
+    ) -> usize {
+        let Some(channel) = &self.channels[id as usize] else {
+            return 0;
+        };
+        [[0, 0, -1], [1, 0, 0], [0, 0, 1], [-1, 0, 0]]
+            .iter()
+            .enumerate()
+            .fold(0, |mask, (bit, d)| {
+                let connected = lookup(std::array::from_fn(|a| p[a] + d[a])).is_some_and(|other| {
+                    self.channels[other as usize].as_ref() == Some(channel)
+                        || self.sources[other as usize]
+                });
+                mask | (usize::from(connected) << bit)
+            })
+    }
     pub fn visible(&self, id: BlockId, neighbor: Option<BlockId>, face: usize) -> &Visible {
-        let shape = self.by_block[usize::from(id)];
+        self.visible_connected(id, neighbor, face, 0)
+    }
+    pub fn visible_connected(
+        &self,
+        id: BlockId,
+        neighbor: Option<BlockId>,
+        face: usize,
+        mask: usize,
+    ) -> &Visible {
+        let shape = self.connected[id as usize]
+            .as_ref()
+            .map_or(self.by_block[id as usize], |states| states[mask & 15]);
         let neighbor = neighbor.filter(|n| {
             self.layer(*n) == crate::engine_blocks::RenderLayer::Opaque
                 || (self.layer(id) != crate::engine_blocks::RenderLayer::Opaque
@@ -288,6 +363,53 @@ impl Library {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn cached_dust_connections_cover_all_masks_and_disconnect_across_chunk_boundaries() {
+        let r = Registry::built_in();
+        let geometry = Library::compile(&r).unwrap();
+        let dust = r.find("redstone_dust").unwrap();
+        let source = r.find("power_source").unwrap();
+        let p = [15, 20, 0];
+        let dirs = [[0, 0, -1], [1, 0, 0], [0, 0, 1], [-1, 0, 0]];
+        for mask in 0..16 {
+            let mut blocks = crate::engine::world::storage::Store::from([(p, dust)]);
+            for (bit, d) in dirs.iter().enumerate() {
+                if mask & (1 << bit) != 0 {
+                    blocks.insert(
+                        std::array::from_fn(|a| p[a] + d[a]),
+                        if bit == 0 { source } else { dust },
+                    );
+                }
+            }
+            assert_eq!(
+                geometry.connection_mask(dust, p, &|q| blocks.get(&q).copied()),
+                mask
+            );
+            let faces = geometry.visible_connected(dust, None, 0, mask);
+            assert!(!faces.surfaces.is_empty());
+        }
+        let mut c = crate::engine::generate(37).unwrap();
+        let q = [16, 20, 0];
+        c.scene.change_engine(p, Some(dust)).unwrap();
+        c.scene.change_engine(q, Some(dust)).unwrap();
+        let s = c.scene.engine.as_ref().unwrap();
+        let joined =
+            crate::engine_mesh::Snapshot::capture(s, crate::engine_mesh::chunk(p)).build(true);
+        let max_x = |mesh: &crate::engine_mesh::ChunkMesh| {
+            mesh.vertices
+                .iter()
+                .filter(|v| ((v.layer & 0x003fffff) / 6) == u32::from(dust))
+                .map(|v| v.position[0])
+                .fold(f32::NEG_INFINITY, f32::max)
+        };
+        assert_eq!(max_x(&joined), 16.);
+        c.scene.change_engine(q, None).unwrap();
+        let s = c.scene.engine.as_ref().unwrap();
+        assert!(s.dirty_chunks.contains_key(&crate::engine_mesh::chunk(p)));
+        let separate =
+            crate::engine_mesh::Snapshot::capture(s, crate::engine_mesh::chunk(p)).build(true);
+        assert_eq!(max_x(&separate), 15.625);
+    }
     #[test]
     fn transparent_neighbors_do_not_hide_opaque_blocks_and_collision_is_independent() {
         let mut r = Registry::built_in();

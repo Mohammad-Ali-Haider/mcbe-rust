@@ -1012,3 +1012,6 @@ impl Atlas {
 mod controls;
 
 mod chat;
+
+#[cfg(test)]
+mod tests;

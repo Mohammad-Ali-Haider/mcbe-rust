@@ -209,11 +209,39 @@ pub fn tick(client: &mut Client) -> Result<()> {
         } = command
         {
             let world = client.scene.engine.as_ref().unwrap();
-            if client.scene.inside(position)
-                && world.blocks.get(&position) == Some(&expected)
-                && !super::collision::intersects_actor(&world.geometry, id, position, &client.actor)
-            {
-                client.scene.change_engine(position, Some(id))?;
+            if client.scene.inside(position) && world.blocks.get(&position) == Some(&expected) {
+                let blocked = super::collision::intersects_actor(
+                    &world.geometry,
+                    id,
+                    position,
+                    &client.actor,
+                ) || world.entities.records.values().any(|entity| {
+                    entity
+                        .physics
+                        .as_ref()
+                        .and_then(|p| p.actor(entity.transform.position).ok())
+                        .is_some_and(|actor| {
+                            super::collision::intersects_actor(
+                                &world.geometry,
+                                id,
+                                position,
+                                &actor,
+                            )
+                        })
+                });
+                if blocked {
+                    // A neighbor may expand a shape. Retry after bodies move out;
+                    // do not embed them or permanently lose the pending update.
+                    client
+                        .scene
+                        .engine
+                        .as_mut()
+                        .unwrap()
+                        .simulation
+                        .schedule(position, expected, 2);
+                } else {
+                    client.scene.change_engine(position, Some(id))?;
+                }
             }
         }
     }
@@ -238,6 +266,42 @@ mod tests {
             }
         }
         count
+    }
+    #[test]
+    fn shipped_dust_branches_propagate_and_decay_through_the_shared_scheduler() {
+        let r = Registry::built_in();
+        let source = r.find("power_source").unwrap();
+        let dust = r.find("redstone_dust").unwrap();
+        let mut blocks = Store::from([
+            ([0, 20, 0], source),
+            ([1, 20, 0], dust),
+            ([2, 20, 0], dust),
+            ([2, 20, 1], dust),
+            ([2, 20, -1], dust),
+        ]);
+        let mut sim = Simulation::new(&r);
+        sim.hydrate(&r, blocks.iter().map(|(p, id)| (p, *id)));
+        for _ in 0..20 {
+            apply(&mut sim, &r, &mut blocks);
+        }
+        for (p, power) in [
+            ([1, 20, 0], 14),
+            ([2, 20, 0], 13),
+            ([2, 20, 1], 12),
+            ([2, 20, -1], 12),
+        ] {
+            assert_eq!(behavior::wire::strength(r.get(blocks[&p])), power);
+        }
+        blocks.remove(&[0, 20, 0]);
+        sim.changed(&r, [0, 20, 0], None);
+        for _ in 0..40 {
+            apply(&mut sim, &r, &mut blocks);
+        }
+        assert!(
+            blocks
+                .values()
+                .all(|id| behavior::wire::strength(r.get(*id)) == 0)
+        );
     }
     #[test]
     fn signal_propagates_decays_and_rehydrates_without_recursion() {

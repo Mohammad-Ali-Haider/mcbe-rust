@@ -32,7 +32,9 @@
     "blocks/water.json",
     "blocks/snow.json",
     "blocks/oak_leaves.json",
-    "blocks/bucket.json"
+    "blocks/bucket.json",
+    "blocks/redstone_dust.json",
+    "blocks/power_source.json"
   ],
   "recipes": "recipes/crafting.json",
   "state_order": [
@@ -75,6 +77,7 @@
     "furnace",
     "water",
     "snow",
-    "oak_leaves"
+    "oak_leaves",
+    "bucket"
   ]
 }

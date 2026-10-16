@@ -6,4 +6,5 @@ pub enum PlacementComponent {
     Standard,
     Slab,
     Stairs,
+    Facing,
 }
