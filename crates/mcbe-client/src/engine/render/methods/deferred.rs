@@ -144,6 +144,7 @@ impl Targets {
     }
 }
 pub struct Renderer {
+    ray_pipeline: Option<wgpu::RenderPipeline>,
     pub geometry: wgpu::RenderPipeline,
     pub previous: wgpu::RenderPipeline,
     pub shadow_pipeline: wgpu::RenderPipeline,
@@ -323,6 +324,7 @@ impl Renderer {
             return Err(format!("Deferred renderer validation: {e}").into());
         }
         Ok(Self {
+            ray_pipeline: None,
             geometry,
             previous,
             shadow_pipeline,
@@ -437,7 +439,72 @@ impl Renderer {
             occlusion_query_set: None,
         })
     }
-    pub fn light(&self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
+    pub fn configure_ray(
+        &mut self,
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+        world_layout: &wgpu::BindGroupLayout,
+        scene: Option<&super::ray::scene::Scene>,
+    ) -> Result<()> {
+        let Some(scene) = scene else {
+            self.ray_pipeline = None;
+            return Ok(());
+        };
+        if self.ray_pipeline.is_some() {
+            return Ok(());
+        }
+        device.push_error_scope(wgpu::ErrorFilter::Validation);
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("hardware ray-query lighting"),
+            source: wgpu::ShaderSource::Wgsl(super::ray::shader().into()),
+        });
+        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("ray G-buffer scene and terrain inputs"),
+            bind_group_layouts: &[
+                &self.lighting.get_bind_group_layout(0),
+                &scene.layout,
+                world_layout,
+            ],
+            push_constant_ranges: &[],
+        });
+        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("hardware secondary-ray lighting"),
+            layout: Some(&layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs"),
+                compilation_options: Default::default(),
+                buffers: &[],
+            },
+            primitive: Default::default(),
+            depth_stencil: None,
+            multisample: Default::default(),
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_ray"),
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            multiview: None,
+            cache: None,
+        });
+        if let Some(e) = pollster::block_on(device.pop_error_scope()) {
+            return Err(format!("Hardware ray lighting validation: {e}").into());
+        }
+        self.ray_pipeline = Some(pipeline);
+        Ok(())
+    }
+    pub fn light(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        scene: Option<&super::ray::scene::Scene>,
+        world_bind: &wgpu::BindGroup,
+    ) {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("deferred lighting and ambient occlusion"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -452,7 +519,13 @@ impl Renderer {
             timestamp_writes: None,
             occlusion_query_set: None,
         });
-        pass.set_pipeline(&self.lighting);
+        if let (Some(pipeline), Some(scene)) = (&self.ray_pipeline, scene) {
+            pass.set_pipeline(pipeline);
+            pass.set_bind_group(1, &scene.bind, &[]);
+            pass.set_bind_group(2, world_bind, &[]);
+        } else {
+            pass.set_pipeline(&self.lighting);
+        }
         pass.set_bind_group(0, &self.bind, &[]);
         pass.draw(0..3, 0..1);
     }

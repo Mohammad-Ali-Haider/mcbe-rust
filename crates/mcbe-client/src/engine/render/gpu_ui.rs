@@ -50,6 +50,7 @@ pub struct Atlas {
     icons: Vec<Sprite>,
 }
 pub struct Context<'a> {
+    pub ray_status: u8,
     pub menu: &'a crate::engine_settings::Menu,
     pub settings: &'a crate::engine_settings::Settings,
     pub fullscreen: bool,
@@ -464,7 +465,7 @@ impl Atlas {
                     c.rect([left + 28. + 280. * value, y + 14., 4., 4.], [1.; 4]);
                 }
                 if ctx.menu.page == Page::Settings && i < 6
-                    || ctx.menu.page == Page::Graphics && i < 5
+                    || ctx.menu.page == Page::Graphics && i < 7
                 {
                     self.text(&mut c, left + 6., y + 6., "-", [1.; 4]);
                     self.text(&mut c, left + 328., y + 6., "+", [1.; 4]);
@@ -480,8 +481,18 @@ impl Atlas {
             self.text(
                 &mut c,
                 left + 3.,
-                top + 262.,
-                "F: fly  Ctrl: sprint  Space / Shift: up / down",
+                top + 57. + ctx.menu.count() as f32 * 23.,
+                if ctx.menu.page == Page::Graphics {
+                    match ctx.ray_status {
+                        1 => "Ray queries unavailable - Deferred fallback",
+                        2 => "Building nearby hardware ray geometry...",
+                        3 => "Hardware ray queries active",
+                        4 => "Ray budget exceeded - Deferred fallback",
+                        _ => "Ray controls apply to Ray-traced lighting",
+                    }
+                } else {
+                    "F: fly  Ctrl: sprint  Space / Shift: up / down"
+                },
                 [0.65, 0.8, 0.65, 1.],
             );
             return Composition {

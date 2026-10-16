@@ -35,8 +35,18 @@ pub struct Live {
     out: std::path::PathBuf,
     trace: Vec<serde_json::Value>,
     since: usize,
+    ray: bool,
 }
 pub fn prepare(app: &mut App, out: &Path, case: &str) -> Result<()> {
+    let requested_case = case.to_owned();
+    let ray = case.starts_with("ray_");
+    let flavor = case.strip_prefix("ray_").unwrap_or(case);
+    let case = match flavor {
+        "sun" => "lit",
+        "mirror" | "no_reflections" => "metal",
+        "indirect" | "no_indirect" => "emissive",
+        _ => flavor,
+    };
     require(!out.exists(), "Fresh lighting proof directory required")?;
     require(
         matches!(
@@ -80,6 +90,11 @@ pub fn prepare(app: &mut App, out: &Path, case: &str) -> Result<()> {
         r.blocks[i].material.roughness = 0.18;
     }
     if case == "emissive" {
+        let i = r.find("ember")? as usize;
+        r.blocks[i].material.emission = 4.;
+    }
+    let mirror = ray && matches!(flavor, "mirror" | "no_reflections");
+    if mirror {
         let i = r.find("ember")? as usize;
         r.blocks[i].material.emission = 4.;
     }
@@ -143,6 +158,20 @@ pub fn prepare(app: &mut App, out: &Path, case: &str) -> Result<()> {
             }
         }
     }
+    if mirror {
+        // A mirror facing an emissive wall behind the camera. The wall is outside
+        // primary visibility, so a screen-space reflection cannot produce it.
+        for x in -8..=8 {
+            for y in 4..=12 {
+                cells.insert([x, y, 14], metal);
+            }
+        }
+        for x in -20..=20 {
+            for y in 4..=25 {
+                cells.insert([x, y, -18], emissive);
+            }
+        }
+    }
     let boxes=cells.iter().filter(|(p,_)|p[1]>3).map(|(p,id)|serde_json::json!({"position":p,"id":id,"layer":r.get(*id).render_layer,"boxes":r.get(*id).geometry.as_ref().map_or_else(||vec![[0.,0.,0.,1.,1.,1.]],|g|g.boxes.clone())})).collect::<Vec<_>>();
     let state = engine::WorldState::new(92, r, stone, None);
     let appearance = app.client.appearance.clone();
@@ -169,11 +198,20 @@ pub fn prepare(app: &mut App, out: &Path, case: &str) -> Result<()> {
     app.frame_limit = 90;
     app.settings.rendering.method = if matches!(case, "forward" | "menu" | "toggle") {
         Method::Forward
+    } else if ray {
+        Method::RayTraced
     } else {
         Method::Deferred
     };
     app.settings.rendering.shadows = case != "unshadowed";
-    app.settings.rendering.ambient_occlusion = case != "noao";
+    app.settings.rendering.ray_reflections = flavor != "no_reflections";
+    app.settings.rendering.ray_indirect = flavor != "no_indirect";
+    if ray && matches!(flavor, "sun" | "unshadowed") {
+        app.settings.rendering.ray_reflections = false;
+        app.settings.rendering.ray_indirect = false;
+    }
+    app.settings.rendering.ambient_occlusion =
+        case != "noao" && !(ray && matches!(flavor, "sun" | "unshadowed"));
     app.settings.rendering.quality = match case {
         "low" => Quality::Low,
         "high" => Quality::High,
@@ -185,8 +223,16 @@ pub fn prepare(app: &mut App, out: &Path, case: &str) -> Result<()> {
     if case == "menu" {
         open_graphics(app)?;
         app.engine_key(KeyCode::Enter)?;
+        if ray {
+            app.engine_key(KeyCode::Enter)?;
+        }
         require(
-            app.settings.rendering.method == Method::Deferred,
+            app.settings.rendering.method
+                == if ray {
+                    Method::RayTraced
+                } else {
+                    Method::Deferred
+                },
             "Renderer menu did not switch",
         )?;
     }
@@ -197,6 +243,7 @@ pub fn prepare(app: &mut App, out: &Path, case: &str) -> Result<()> {
             out: out.to_path_buf(),
             trace: Vec::new(),
             since: 0,
+            ray,
         });
     }
     if case == "resize" {
@@ -219,7 +266,7 @@ pub fn prepare(app: &mut App, out: &Path, case: &str) -> Result<()> {
     std::fs::write(
         out.join("lighting-scene.json"),
         serde_json::to_vec_pretty(
-            &serde_json::json!({"complete":true,"case":case,"settings_persisted":true,"materials_saved":true,"saved_world":save,"floor_id":stone,"floor_height":4.,"occluders":boxes,"scope":"Controlled opaque/partial/cutout geometry, lighting controls, material storage and native renderer transitions."}),
+            &serde_json::json!({"complete":true,"case":requested_case,"ray":ray,"mirror_offscreen_wall":mirror,"settings_persisted":true,"materials_saved":true,"saved_world":save,"floor_id":stone,"floor_height":4.,"occluders":boxes,"scope":"Controlled opaque/partial/cutout geometry, lighting controls, material storage and native renderer transitions."}),
         )?,
     )?;
     Ok(())
@@ -235,6 +282,13 @@ pub fn advance(app: &mut App) -> Result<()> {
     if !g.stats.meshes_ready || g.stats.texture_uploads != 1 || app.frames < live.since + 10 {
         app.lighting_live = Some(live);
         return Ok(());
+    }
+    if g.stats.render_method == Method::RayTraced {
+        let observation = g.rendering_observation();
+        if observation["ray_scene"]["ready"] != true || observation["ray_scene"]["pending"] != 0 {
+            app.lighting_live = Some(live);
+            return Ok(());
+        }
     }
     match live.stage {
         0 => {
@@ -258,9 +312,45 @@ pub fn advance(app: &mut App) -> Result<()> {
             live.trace
                 .push(serde_json::json!({"stage":"deferred","renderer":g.rendering_observation()}));
             open_graphics(app)?;
-            app.engine_key(KeyCode::Enter)?;
+            app.engine_key(if live.ray {
+                KeyCode::Enter
+            } else {
+                KeyCode::ArrowLeft
+            })?;
             close_graphics(app)?;
             live.stage = 2;
+            live.since = app.frames;
+        }
+        2 if live.ray => {
+            require(
+                g.rendering_observation()["genuine_ray_tracing"] == true,
+                "Ray renderer did not become ready",
+            )?;
+            live.trace.push(
+                serde_json::json!({"stage":"ray_traced","renderer":g.rendering_observation()}),
+            );
+            open_graphics(app)?;
+            for _ in 0..4 {
+                app.engine_key(KeyCode::ArrowDown)?;
+            }
+            app.engine_key(KeyCode::Enter)?;
+            close_graphics(app)?;
+            live.stage = 3;
+            live.since = app.frames;
+        }
+        3 if live.ray => {
+            require(
+                app.settings.rendering.quality == Quality::High
+                    && g.rendering_observation()["ray_scene"]["parameters"]["options"][2] == 4.,
+                "Live ray quality change was not applied",
+            )?;
+            live.trace.push(
+                serde_json::json!({"stage":"ray_quality","renderer":g.rendering_observation()}),
+            );
+            open_graphics(app)?;
+            app.engine_key(KeyCode::Enter)?;
+            close_graphics(app)?;
+            live.stage = 4;
             live.since = app.frames;
         }
         _ => {

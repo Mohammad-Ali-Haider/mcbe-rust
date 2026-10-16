@@ -12,3 +12,5 @@ pub(crate) mod character;
 pub(crate) mod fluid_mesh;
 
 pub(crate) mod methods;
+
+pub(crate) mod compiler;

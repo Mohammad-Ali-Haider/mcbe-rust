@@ -117,7 +117,7 @@ impl Menu {
     pub fn count(&self) -> usize {
         match self.page {
             Page::Pause => 3,
-            Page::Graphics => 6,
+            Page::Graphics => 8,
             _ => 10,
         }
     }
@@ -154,6 +154,22 @@ impl Menu {
                 ),
                 format!("Exposure: {}%", s.rendering.exposure),
                 format!("Lighting Quality: {}", s.rendering.quality.label()),
+                format!(
+                    "Ray Reflections: {}",
+                    if s.rendering.ray_reflections {
+                        "On"
+                    } else {
+                        "Off"
+                    }
+                ),
+                format!(
+                    "Ray Indirect Light: {}",
+                    if s.rendering.ray_indirect {
+                        "On"
+                    } else {
+                        "Off"
+                    }
+                ),
                 "Back".into(),
             ];
         }
@@ -198,15 +214,8 @@ impl Menu {
             };
         }
         if self.page == Page::Graphics {
-            use crate::engine::render::methods::Method;
             match self.selected {
-                0 => {
-                    s.rendering.method = if s.rendering.method == Method::Forward {
-                        Method::Deferred
-                    } else {
-                        Method::Forward
-                    }
-                }
+                0 => s.rendering.method = s.rendering.method.cycle(delta),
                 1 => s.rendering.shadows = !s.rendering.shadows,
                 2 => s.rendering.ambient_occlusion = !s.rendering.ambient_occlusion,
                 3 => {
@@ -214,6 +223,8 @@ impl Menu {
                         (s.rendering.exposure as i32 + delta * 10).clamp(50, 200) as u32
                 }
                 4 => s.rendering.quality = s.rendering.quality.cycle(delta),
+                5 => s.rendering.ray_reflections = !s.rendering.ray_reflections,
+                6 => s.rendering.ray_indirect = !s.rendering.ray_indirect,
                 _ => {
                     self.page = Page::Settings;
                     self.selected = 7;

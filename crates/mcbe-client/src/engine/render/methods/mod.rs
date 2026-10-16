@@ -7,12 +7,23 @@ pub enum Method {
     #[default]
     Forward,
     Deferred,
+    RayTraced,
 }
 impl Method {
+    pub fn cycle(self, delta: i32) -> Self {
+        let index = match self {
+            Self::Forward => 0,
+            Self::Deferred => 1,
+            Self::RayTraced => 2,
+        };
+        [Self::Forward, Self::Deferred, Self::RayTraced][(index + delta).rem_euclid(3) as usize]
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             Self::Forward => "Forward (fast)",
             Self::Deferred => "Deferred",
+            Self::RayTraced => "Ray-traced lighting",
         }
     }
 }
@@ -48,6 +59,9 @@ impl Quality {
             Self::High => "High",
         }
     }
+    pub fn ray_samples(self) -> u32 {
+        [1, 2, 4][self.index() as usize]
+    }
     pub fn cycle(self, delta: i32) -> Self {
         [Self::Low, Self::Balanced, Self::High]
             [(self.index() as i32 + delta).rem_euclid(3) as usize]
@@ -56,6 +70,8 @@ impl Quality {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Rendering {
+    pub ray_reflections: bool,
+    pub ray_indirect: bool,
     pub method: Method,
     pub shadows: bool,
     pub ambient_occlusion: bool,
@@ -65,6 +81,8 @@ pub struct Rendering {
 impl Default for Rendering {
     fn default() -> Self {
         Self {
+            ray_reflections: true,
+            ray_indirect: true,
             method: Method::Forward,
             shadows: true,
             ambient_occlusion: true,
@@ -84,3 +102,5 @@ impl Rendering {
 
 #[cfg(test)]
 mod tests;
+
+pub(crate) mod ray;

@@ -17,6 +17,8 @@ use std::{
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 struct Mesh {
+    generation: u64,
+    ray_hashes: Option<[[u8; 32]; 2]>,
     back_faces: usize,
     opaque_vertices: u32,
     transparent: Vec<Vertex>,
@@ -40,6 +42,7 @@ struct Camera {
 }
 #[derive(PartialEq, Eq)]
 struct UiKey {
+    ray_status: u8,
     camera_mode: crate::engine::player::camera::Mode,
     startup: bool,
     menu_revision: u64,
@@ -63,6 +66,8 @@ struct UiKey {
 }
 #[derive(Serialize)]
 pub struct Statistics {
+    pub hardware_ray_tracing: bool,
+    pub shader_compiler: String,
     pub render_method: super::methods::Method,
     pub graphics_bytes: u64,
     pub shadow_draws: usize,
@@ -161,6 +166,8 @@ struct Upload {
     staged: bool,
 }
 pub struct Renderer {
+    ray: Option<super::methods::ray::scene::Scene>,
+    ray_requested: bool,
     deferred: Option<super::methods::deferred::Renderer>,
     character: super::character::Renderer,
     distant: crate::engine_distance::Distant,
@@ -227,10 +234,13 @@ impl Renderer {
         pollster::block_on(Self::initialize(window))
     }
     async fn initialize(window: Arc<Window>) -> Result<Self> {
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+        let compiler = super::compiler::select();
+        let mut instance_options = wgpu::InstanceDescriptor {
             backends: wgpu::Backends::DX12,
             ..Default::default()
-        });
+        };
+        instance_options.backend_options.dx12.shader_compiler = compiler.compiler;
+        let instance = wgpu::Instance::new(&instance_options);
         let surface = instance.create_surface(window.clone())?;
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
@@ -240,6 +250,9 @@ impl Renderer {
             })
             .await?;
         let info = adapter.get_info();
+        let ray_features = wgpu::Features::EXPERIMENTAL_RAY_QUERY
+            | wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE;
+        let ray_supported = adapter.features().contains(ray_features);
         let limits = wgpu::Limits {
             max_texture_array_layers: adapter.limits().max_texture_array_layers.min(1536),
             ..Default::default()
@@ -247,7 +260,11 @@ impl Renderer {
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("Blockwork GPU"),
-                required_features: wgpu::Features::empty(),
+                required_features: if ray_supported {
+                    ray_features
+                } else {
+                    wgpu::Features::empty()
+                },
                 required_limits: limits,
                 memory_hints: wgpu::MemoryHints::Performance,
                 trace: wgpu::Trace::Off,
@@ -426,6 +443,15 @@ impl Renderer {
         });
         let depth = depth(&device, config.width, config.height);
         let stats = Statistics {
+            hardware_ray_tracing: ray_supported,
+            shader_compiler: format!(
+                "{}{}",
+                compiler.name,
+                compiler
+                    .directory
+                    .as_ref()
+                    .map_or(String::new(), |p| format!(" ({})", p.display()))
+            ),
             render_method: super::methods::Method::Forward,
             graphics_bytes: 0,
             shadow_draws: 0,
@@ -503,6 +529,8 @@ impl Renderer {
             last_frame_ms: 0.,
         };
         Ok(Self {
+            ray: None,
+            ray_requested: false,
             deferred: None,
             character,
             distant: Default::default(),
@@ -846,12 +874,20 @@ impl Renderer {
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("exposed chunk faces"),
                     contents: bytemuck::cast_slice(&opaque),
-                    usage: wgpu::BufferUsages::VERTEX,
+                    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_SRC,
                 })
+        });
+        let ray_hashes = self.ray_requested.then(|| {
+            [
+                Sha256::digest(bytemuck::cast_slice(&opaque)).into(),
+                Sha256::digest(bytemuck::cast_slice(&transparent)).into(),
+            ]
         });
         self.meshes.insert(
             key,
             Mesh {
+                generation: self.stats.mesh_rebuilds as u64,
+                ray_hashes,
                 back_faces: mesh
                     .vertices
                     .iter()
@@ -1034,20 +1070,75 @@ impl Renderer {
         }
     }
     pub fn rendering_observation(&self) -> serde_json::Value {
-        self.deferred.as_ref().map_or_else(
+        let mut value = self.deferred.as_ref().map_or_else(
             || serde_json::json!({"method":"forward","extra_bytes":0,"genuine_ray_tracing":false}),
             |m| m.observation(),
-        )
+        );
+        value["requested_method"] = serde_json::json!(self.stats.render_method);
+        value["hardware_ray_tracing"] = serde_json::json!(self.stats.hardware_ray_tracing);
+        if let Some(scene) = &self.ray {
+            value["method"] = serde_json::json!(if scene.ready {
+                "ray_traced"
+            } else {
+                "deferred"
+            });
+            if scene.effective_range < 8. {
+                value["fallback"] = serde_json::json!(
+                    "Nearby geometry exceeds the selected ray budget; using deferred lighting"
+                );
+            }
+            value["genuine_ray_tracing"] = serde_json::json!(scene.ready);
+            value["ray_scene"] = scene.observation();
+        } else if self.stats.render_method == super::methods::Method::RayTraced {
+            value["fallback"] =
+                serde_json::json!("DX12 ray queries unavailable; using deferred lighting");
+        }
+        value
     }
     pub fn has_mesh(&self, key: [i32; 3]) -> bool {
         self.meshes.contains_key(&key)
     }
     pub fn draw(&mut self, client: &Client, palette: &Palette, frame: Frame<'_>) -> Result<bool> {
+        self.ray_requested = frame.settings.rendering.method == super::methods::Method::RayTraced
+            && self.stats.hardware_ray_tracing;
         self.sync(client, frame.eye)?;
+        if self.ray_requested && self.world_bind.is_some() {
+            use super::methods::ray::scene::{Scene, Source};
+            if self.ray.as_ref().is_none_or(|s| {
+                s.capacity() != Scene::capacity_for(frame.settings.rendering.quality)
+            }) {
+                self.ray = Some(Scene::new(&self.device, frame.settings.rendering.quality)?);
+            }
+            let sources = self
+                .meshes
+                .iter()
+                .map(|(k, m)| Source {
+                    key: *k,
+                    opaque: m.buffer.as_ref(),
+                    opaque_count: m.opaque_vertices,
+                    transparent: &m.transparent,
+                    generation: m.generation,
+                    hashes: m.ray_hashes,
+                })
+                .collect::<Vec<_>>();
+            self.ray.as_mut().unwrap().update(
+                &self.device,
+                &self.queue,
+                &sources,
+                frame.eye,
+                &frame.settings.rendering,
+                (self.world_instance, self.registry_revision),
+            )?;
+        } else {
+            self.ray = None;
+        }
+
         // A requested verification capture waits for complete, current geometry.
         // No surface is presented or counted while this final capture is pending.
         if frame.capture.is_some()
-            && (!self.stats.meshes_ready || !self.stats.distant_ready)
+            && (!self.stats.meshes_ready
+                || !self.stats.distant_ready
+                || self.ray.as_ref().is_some_and(|s| s.pending != 0))
             && !frame.startup
         {
             return Ok(false);
@@ -1130,7 +1221,7 @@ impl Renderer {
             .write_buffer(&self.uniform, 0, bytemuck::bytes_of(&uniform));
         self.stats.render_method = frame.settings.rendering.method;
         self.stats.shadow_draws = 0;
-        if frame.settings.rendering.method == super::methods::Method::Deferred {
+        if frame.settings.rendering.method != super::methods::Method::Forward {
             if self.deferred.is_none() {
                 self.deferred = Some(super::methods::deferred::Renderer::new(
                     &self.device,
@@ -1164,7 +1255,17 @@ impl Renderer {
                 parameters,
                 state,
             );
-            self.stats.graphics_bytes = method.bytes();
+            method.configure_ray(
+                &self.device,
+                self.config.format,
+                &self.world_pipeline.get_bind_group_layout(0),
+                self.ray.as_ref(),
+            )?;
+            self.stats.graphics_bytes = method.bytes()
+                + self
+                    .ray
+                    .as_ref()
+                    .map_or(0, |s| u64::from(s.capacity()) * 40);
         } else {
             self.deferred = None;
             self.stats.graphics_bytes = 0;
@@ -1212,7 +1313,19 @@ impl Renderer {
         self.stats.blended_sorts = self.transparency.sorts;
         self.stats.blended_bytes = self.transparency.bytes;
         let state = client.scene.engine.as_ref().unwrap();
+        let ray_status = if self.stats.render_method != super::methods::Method::RayTraced {
+            0
+        } else if !self.stats.hardware_ray_tracing {
+            1
+        } else if self.ray.as_ref().is_some_and(|s| s.ready) {
+            3
+        } else if self.ray.as_ref().is_some_and(|s| s.effective_range < 8.) {
+            4
+        } else {
+            2
+        };
         let key = UiKey {
+            ray_status,
             camera_mode: client.view.mode,
             startup: frame.startup,
             menu_revision: frame.menu.revision,
@@ -1277,6 +1390,7 @@ impl Renderer {
                 client,
                 palette,
                 Context {
+                    ray_status,
                     menu: frame.menu,
                     settings: frame.settings,
                     fullscreen: frame.fullscreen,
@@ -1385,7 +1499,12 @@ impl Renderer {
                 let mut pass = method.begin_geometry(&mut encoder);
                 self.draw_opaque(&mut pass, keys, &method.geometry, &method.previous);
             }
-            method.light(&mut encoder, &view);
+            method.light(
+                &mut encoder,
+                &view,
+                self.ray.as_ref(),
+                self.world_bind.as_ref().unwrap(),
+            );
             self.stats.deferred_passes += 2 + usize::from(frame.settings.rendering.shadows);
         }
         {
@@ -1644,6 +1763,29 @@ impl Renderer {
             )?;
             drop(bytes);
             buffer.unmap();
+            if let Some(scene) = &self.ray
+                && scene.ready
+            {
+                use super::methods::ray::scene::Source;
+                let sources = self
+                    .meshes
+                    .iter()
+                    .map(|(k, m)| Source {
+                        key: *k,
+                        opaque: m.buffer.as_ref(),
+                        opaque_count: m.opaque_vertices,
+                        transparent: &m.transparent,
+                        generation: m.generation,
+                        hashes: m.ray_hashes,
+                    })
+                    .collect::<Vec<_>>();
+                scene.capture_geometry(
+                    &self.device,
+                    &self.queue,
+                    &sources,
+                    path.parent().ok_or("Capture directory missing")?,
+                )?;
+            }
             if let Some(method) = &self.deferred {
                 method.capture(
                     &self.device,

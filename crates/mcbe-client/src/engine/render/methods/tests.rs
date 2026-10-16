@@ -97,7 +97,7 @@ fn old_preferences_load_and_graphics_controls_persist_with_strict_limits() {
     assert_eq!(m.page, Page::Settings);
     assert_eq!(m.selected, 7);
     let mut invalid = serde_json::to_value(&s).unwrap();
-    invalid["rendering"]["method"] = serde_json::json!("ray_traced");
+    invalid["rendering"]["method"] = serde_json::json!("unknown_renderer");
     assert!(serde_json::from_value::<Settings>(invalid).is_err());
     s.rendering.exposure = 201;
     assert!(s.validate().is_err());
@@ -155,4 +155,61 @@ fn authored_materials_validate_roundtrip_and_reject_old_schema_payloads() {
     let mut old = serde_json::to_value(crate::engine::document(&plain).unwrap()).unwrap();
     old["version"] = serde_json::json!(9);
     assert!(crate::engine::decode(&serde_json::to_vec(&old).unwrap(), None).is_ok());
+}
+
+#[test]
+fn hardware_ray_shaders_validate() {
+    for (name, code) in [
+        ("ray lighting", ray::shader()),
+        (
+            "ray localize",
+            include_str!("../shaders/ray_localize.wgsl").to_owned(),
+        ),
+    ] {
+        let module = wgpu::naga::front::wgsl::parse_str(&code)
+            .unwrap_or_else(|e| panic!("{name}: {}", e.emit_to_string(&code)));
+        wgpu::naga::valid::Validator::new(
+            wgpu::naga::valid::ValidationFlags::all(),
+            wgpu::naga::valid::Capabilities::all(),
+        )
+        .validate(&module)
+        .unwrap_or_else(|e| panic!("{name}: {e:?}"));
+    }
+}
+
+#[test]
+fn ray_settings_cycle_both_ways_and_preserve_legacy_defaults() {
+    use crate::engine_settings::{Action, Menu, Page, Settings};
+    use winit::keyboard::KeyCode;
+    assert_eq!(Method::Forward.cycle(-1), Method::RayTraced);
+    assert_eq!(Method::RayTraced.cycle(1), Method::Forward);
+    let mut settings = Settings::default();
+    let mut menu = Menu {
+        page: Page::Graphics,
+        ..Default::default()
+    };
+    menu.key(&mut settings, KeyCode::ArrowLeft);
+    assert_eq!(settings.rendering.method, Method::RayTraced);
+    for i in [5, 6] {
+        menu.selected = i;
+        assert_eq!(menu.key(&mut settings, KeyCode::Enter), Action::Changed);
+    }
+    assert!(!settings.rendering.ray_reflections && !settings.rendering.ray_indirect);
+    menu.selected = 7;
+    menu.key(&mut settings, KeyCode::Enter);
+    assert_eq!(menu.page, Page::Settings);
+    let mut old = serde_json::to_value(Settings::default()).unwrap();
+    for field in ["ray_reflections", "ray_indirect"] {
+        old["rendering"].as_object_mut().unwrap().remove(field);
+    }
+    assert_eq!(
+        serde_json::from_value::<Settings>(old).unwrap(),
+        Settings::default()
+    );
+    assert_eq!(std::mem::size_of::<ray::scene::Parameters>(), 64);
+    assert_eq!(std::mem::size_of::<crate::engine_mesh::Vertex>(), 40);
+    for q in [Quality::Low, Quality::Balanced, Quality::High] {
+        assert!(ray::scene::Scene::capacity_for(q) <= 2097024);
+        assert!(q.ray_samples() <= 4);
+    }
 }

@@ -72,6 +72,6 @@ def main():
     assert checks['lit']['pixels']['ambient_darkened']>50 and checks['lit']['pixels']['shadow_darkened']>50
     assert np.max(abs(images['lit'].astype(int)-images['forward'].astype(int)))>20
     for case in ['unshadowed','noao','metal','emissive']:assert int((np.max(abs(images[case].astype(int)-images['lit'].astype(int)),axis=2)>3).sum())>100
-    assert sha(binary)==bh and all(sha(root/n)==h for n,h in sources.items());result=dict(complete=True,binary_sha256=bh,source_hashes=sources,checks=checks,scope='Actual two-target G-buffer/depth lighting, independent BRDF/AO/PCF/exposure/fog pixels, analytic solid/partial geometry sun rays, registered materials, settings/menu switches, GPU allocation release and native resize. Transparency/players use the existing forward composition. Ray tracing remains unimplemented.')
+    assert sha(binary)==bh and all(sha(root/n)==h for n,h in sources.items());result=dict(complete=True,binary_sha256=bh,source_hashes=sources,checks=checks,scope='Actual two-target G-buffer/depth lighting, independent BRDF/AO/PCF/exposure/fog pixels, analytic solid/partial geometry sun rays, registered materials, settings/menu switches, GPU allocation release and native resize. Transparency/players use the existing forward composition. Hardware ray-query lighting is verified separately by verify_engine_rays.py.')
     (out/'summary.json').write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8');print(json.dumps(dict(complete=True,cases=len(checks))),flush=True)
 if __name__=='__main__':main()

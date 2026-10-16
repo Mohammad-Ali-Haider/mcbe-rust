@@ -1151,7 +1151,7 @@ pub fn launch(args: &[String]) -> Result<()> {
                 let flag = &args[i]; i+=1; let value = args.get(i).ok_or("Engine option requires a value")?;
                 match flag.as_str() {
                     "--engine-lighting-case"=>lighting_case=value.clone(),
-                    "--engine-renderer" => render_method=Some(match value.as_str(){"forward"=>render::methods::Method::Forward,"deferred"=>render::methods::Method::Deferred,_=>return Err("Renderer must be forward or deferred".into())}),
+                    "--engine-renderer" => render_method=Some(match value.as_str(){"forward"=>render::methods::Method::Forward,"deferred"=>render::methods::Method::Deferred,"ray_traced"=>render::methods::Method::RayTraced,_=>return Err("Renderer must be forward, deferred or ray_traced".into())}),
                     "--engine-render-distance" => {let distance:i32=value.parse()?;if !(2..=crate::engine_stream::MAX_RADIUS).contains(&distance) {return Err("Render distance must be 2..255 chunks".into());}render_distance=Some(distance);},
                     "--engine-home" => home=PathBuf::from(value),
                     "--engine-blocks" => definitions=Some(PathBuf::from(value)),
