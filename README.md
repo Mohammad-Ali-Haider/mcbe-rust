@@ -5,8 +5,8 @@ active project; development versions now live in Git history.
 
 ## Open and run manually
 
-Open `D:\Recontruction Projects\Minecraft Rust Edition` with VS Code Ã¢â€ â€™ File Ã¢â€ â€™ Open Folder.
-Open Terminal Ã¢â€ â€™ New Terminal, then run:
+Open `D:\Recontruction Projects\Minecraft Rust Edition` with VS Code → File → Open Folder.
+Open Terminal → New Terminal, then run:
 
 ```powershell
 cargo run --release
@@ -18,7 +18,7 @@ save, it creates a generated world. The window opens maximized; F11 toggles
 borderless fullscreen. Close the game before compiling another build.
 
 Plain `cargo run` also starts the game, using a slower debug build. Both commands
-use this folderÃ¢â‚¬â„¢s assets and continue the latest save. No launcher script is needed.
+use this folder’s assets and continue the latest save. No launcher script is needed.
 
 The complete explicit command is:
 
@@ -68,7 +68,7 @@ slab/stair states, glass, unified component packs, optional signal behaviors,
 crafting tables, persistent furnaces, F5 perspectives/free camera, personal skins,
 first-person hands/held geometry, climate biomes/caves/ravines/oceans/rivers,
 dynamic vertical chunks, conservative water flow/currents/swimming and measured buckets, settings, own PNG materials, background saves/loading
-and 2Ã¢â‚¬â€œ255 chunk views are implemented. Nearby blocks retain full collision and
+and 2–255 chunk views are implemented. Nearby blocks retain full collision and
 detail within 8 chunks. Distant hills/trees use stitched, progressively blended
 geometry. Caves, transparent buildings and edits to distant generated trees are
 not fully represented by that surface approximation. Maximum-range LOD uses
