@@ -144,6 +144,17 @@ pub fn rows(
             h("Esc", "Menu", "pad_menu", "Pause"),
         ]
     };
+    let mut right = right;
+    if !client.view.is_free()
+        && client
+            .scene
+            .engine
+            .as_ref()
+            .is_some_and(|s| s.player.offhand.is_some())
+    {
+        right.insert(2, h("Alt+RMB", "RS+LT", "pad_lt", "Use offhand"));
+        right.insert(3, h("V", "RS+X", "pad_rs", "Swap hands"));
+    }
     (left, right)
 }
 impl Hint {

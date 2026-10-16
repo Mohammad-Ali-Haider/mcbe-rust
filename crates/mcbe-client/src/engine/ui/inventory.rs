@@ -383,6 +383,7 @@ impl Palette {
         let [x, y] = Self::origin(viewport);
         let right = x + 150.;
         match slot {
+            Slot::Offhand => [x + 229., y + 61., 18., 18.],
             Slot::Player(i) if i < 9 => [right + 7. + i as f32 * 18., y + 143., 18., 18.],
             Slot::Player(i) => [
                 right + 7. + ((i - 9) % 9) as f32 * 18.,
@@ -409,6 +410,7 @@ impl Palette {
         let document = self.document(client, viewport).ok()?;
         match document.hit(position)? {
             Hit::Search => Some(Target::Search),
+            Hit::Slot(Binding::Offhand) => Some(Target::Slot(Slot::Offhand)),
             Hit::Slot(Binding::Player(i)) => Some(Target::Slot(Slot::Player(i))),
             Hit::Slot(Binding::Craft(i)) => Some(Target::Slot(Slot::Craft(i))),
             Hit::Slot(Binding::Machine(i)) => Some(Target::Machine(i)),
@@ -768,7 +770,11 @@ pub fn draw(client: &Client, palette: &Palette, p: &mut [u32], w: usize, h: usiz
             icon(client, p, w, h, *id as BlockId, [x + 1, y + 1, 16]);
         }
     }
-    for slot in (0..36).map(Slot::Player).chain((0..4).map(Slot::Craft)) {
+    for slot in (0..36)
+        .map(Slot::Player)
+        .chain((0..4).map(Slot::Craft))
+        .chain([Slot::Offhand])
+    {
         let r = Palette::slot_rect(slot, viewport);
         rect(p, w, h, r.map(|v| v as i32), 0x777777);
         if let Ok(Some(stack)) = state.player.get(slot) {

@@ -1,5 +1,6 @@
 //! Bounded reusable player geometry with shared skin UVs and held union models.
 use crate::engine::player::camera::Mode;
+use crate::engine_inventory::Hand;
 use crate::{
     engine_mesh::Vertex as ItemVertex,
     engine_preview::{Cube, Vertex as SkinVertex},
@@ -16,9 +17,16 @@ fn root(position: [f32; 3], yaw: f32, crouched: bool) -> Mat4 {
         * Mat4::from_rotation_y(std::f32::consts::PI + yaw)
         * Mat4::from_scale(Vec3::splat(1.8 / 32.))
 }
-fn right_arm(client: &Client) -> f32 {
-    -client.view.gait.sin() * client.view.walk * 0.55
-        - (client.view.swing * std::f32::consts::PI).sin() * 0.8
+fn swing(client: &Client, hand: Hand) -> f32 {
+    if client.view.swing_hand == hand {
+        (client.view.swing * std::f32::consts::PI).sin()
+    } else {
+        0.
+    }
+}
+fn arm(client: &Client, hand: Hand) -> f32 {
+    let sign = if hand == Hand::Main { -1. } else { 1. };
+    sign * client.view.gait.sin() * client.view.walk * 0.55 - swing(client, hand) * 0.8
 }
 pub fn body(client: &Client, position: [f32; 3], skin: [f32; 4]) -> Vec<SkinVertex> {
     let mut out = Vec::with_capacity(12 * 36);
@@ -27,9 +35,10 @@ pub fn body(client: &Client, position: [f32; 3], skin: [f32; 4]) -> Vec<SkinVert
     for c in &client.appearance.model.cubes {
         let angle = match c.bone.as_str() {
             "head" | "hat" => client.pitch,
-            "rightLeg" | "rightPants" | "leftArm" | "leftSleeve" => swing,
+            "rightLeg" | "rightPants" => swing,
+            "leftArm" | "leftSleeve" => arm(client, Hand::Off),
             "leftLeg" | "leftPants" => -swing,
-            "rightArm" | "rightSleeve" => right_arm(client),
+            "rightArm" | "rightSleeve" => arm(client, Hand::Main),
             _ => 0.,
         };
         c.emit(&mut out, base * pivot(c, angle), skin);
@@ -37,49 +46,78 @@ pub fn body(client: &Client, position: [f32; 3], skin: [f32; 4]) -> Vec<SkinVert
     out
 }
 pub fn hand(client: &Client, skin: [f32; 4]) -> Vec<SkinVertex> {
+    let mut out = hand_geometry(client, skin, Hand::Main);
+    if client
+        .scene
+        .engine
+        .as_ref()
+        .is_some_and(|s| s.player.offhand.is_some())
+    {
+        out.extend(hand_geometry(client, skin, Hand::Off));
+    }
+    out
+}
+fn hand_geometry(client: &Client, skin: [f32; 4], hand: Hand) -> Vec<SkinVertex> {
+    let sign = if hand == Hand::Main { 1. } else { -1. };
+    let (bone, sleeve) = if hand == Hand::Main {
+        ("rightArm", "rightSleeve")
+    } else {
+        ("leftArm", "leftSleeve")
+    };
     let mut out = Vec::with_capacity(72);
     let center = client
         .appearance
         .model
         .cubes
         .iter()
-        .find(|c| c.bone == "rightArm")
-        .map_or(Vec3::new(-6., 18., 0.), |c| {
+        .find(|c| c.bone == bone)
+        .map_or(Vec3::new(-6. * sign, 18., 0.), |c| {
             Vec3::from(c.origin) + Vec3::from(c.size) * 0.5
         });
-    let swing = (client.view.swing * std::f32::consts::PI).sin();
+    let swing = swing(client, hand);
     let bob = client.view.gait.sin() * client.view.walk * 0.012;
     let base = Mat4::from_translation(Vec3::new(
-        0.55 - swing * 0.12,
+        sign * (0.55 - swing * 0.12),
         -0.40 + bob,
         -0.72 + swing * 0.12,
     )) * Mat4::from_rotation_x(-0.9 - swing * 0.4)
-        * Mat4::from_rotation_y(0.2)
+        * Mat4::from_rotation_y(sign * 0.2)
         * Mat4::from_scale(Vec3::splat(1.8 / 32. * 0.9))
         * Mat4::from_translation(-center);
     for c in &client.appearance.model.cubes {
-        if matches!(c.bone.as_str(), "rightArm" | "rightSleeve") {
+        if c.bone == bone || c.bone == sleeve {
             c.emit(&mut out, base, skin);
         }
     }
     out
 }
 pub fn item(client: &Client, position: [f32; 3], first: bool) -> Vec<ItemVertex> {
+    let mut out = item_hand(client, position, first, Hand::Main);
+    out.extend(item_hand(client, position, first, Hand::Off));
+    out
+}
+pub fn item_hand(client: &Client, position: [f32; 3], first: bool, hand: Hand) -> Vec<ItemVertex> {
+    let sign = if hand == Hand::Main { 1. } else { -1. };
+    let bone = if hand == Hand::Main {
+        "rightArm"
+    } else {
+        "leftArm"
+    };
     let state = client.scene.engine.as_ref().unwrap();
-    let Some(stack) = state.player.slots[state.player.active] else {
+    let Some(stack) = state.player.hand(hand) else {
         return Vec::new();
     };
     let mut out = crate::engine::items::mesh(state, stack);
-    let swing = (client.view.swing * std::f32::consts::PI).sin();
+    let swing = swing(client, hand);
     let bob = client.view.gait.sin() * client.view.walk * 0.012;
     let container = state.registry.get(stack.id).container.is_some();
     let transform = if first {
         Mat4::from_translation(Vec3::new(
-            (if container { 0.32 } else { 0.43 }) - swing * 0.1,
+            sign * ((if container { 0.32 } else { 0.43 }) - swing * 0.1),
             (if container { -0.28 } else { -0.25 }) + bob,
             (if container { -0.85 } else { -0.75 }) + swing * 0.15,
         )) * Mat4::from_rotation_x((if container { 0.7 } else { 0.3 }) - swing * 0.4)
-            * Mat4::from_rotation_y(-0.55)
+            * Mat4::from_rotation_y(sign * -0.55)
             * Mat4::from_scale(Vec3::splat(0.30))
     } else {
         root(position, client.yaw, client.movement.crouched)
@@ -88,9 +126,9 @@ pub fn item(client: &Client, position: [f32; 3], first: bool) -> Vec<ItemVertex>
                 .model
                 .cubes
                 .iter()
-                .find(|c| c.bone == "rightArm")
-                .map_or(Mat4::IDENTITY, |c| pivot(c, right_arm(client)))
-            * Mat4::from_translation(Vec3::new(-6., 10., -3.))
+                .find(|c| c.bone == bone)
+                .map_or(Mat4::IDENTITY, |c| pivot(c, arm(client, hand)))
+            * Mat4::from_translation(Vec3::new(-6. * sign, 10., -3.))
             * Mat4::from_scale(Vec3::splat(5.))
     };
     for v in &mut out {
@@ -110,6 +148,8 @@ pub struct Frame {
 #[derive(PartialEq, Eq)]
 struct Key {
     pose: [u32; 12],
+    swing_hand: Hand,
+    offhand: Option<crate::engine_inventory::Stack>,
     mode: Mode,
     hidden: bool,
     crouched: bool,
@@ -266,7 +306,7 @@ impl Renderer {
             ),
             item_buffer: buffer(
                 "held union model",
-                (256 * 6 * std::mem::size_of::<ItemVertex>()) as u64,
+                (2 * (256 + 6) * 6 * std::mem::size_of::<ItemVertex>()) as u64,
             ),
             key: None,
             body: Vec::new(),
@@ -313,6 +353,8 @@ impl Renderer {
         ];
         let key = Key {
             pose: values.map(f32::to_bits),
+            swing_hand: client.view.swing_hand,
+            offhand: state.player.offhand,
             mode: client.view.mode,
             hidden,
             crouched: client.movement.crouched,
@@ -388,7 +430,7 @@ impl Renderer {
         }
     }
     pub fn observation(&self, client: &Client) -> serde_json::Value {
-        serde_json::json!({"mode":client.view.mode,"skin":client.appearance.provenance,"body_vertices":self.body.len(),"hand_vertices":self.hand.len(),"item_vertices":self.item.len(),"selected":client.scene.engine.as_ref().and_then(|s|s.player.selected().map(|id|s.registry.get(id).id.clone())),"mesh_uploads":self.uploads,"draws":self.draws,"item_geometry":self.item.iter().map(|v|serde_json::json!({"position":v.position,"uv":v.uv,"layer":v.layer,"shade":v.shade})).collect::<Vec<_>>(),"item_data":client.scene.engine.as_ref().and_then(|s|s.player.slots[s.player.active].and_then(|s|s.data)),"hand_geometry":self.hand,"body_geometry":self.body,"shared_skin_uvs":true,"world_depth_test":true,"separate_first_person_depth":true})
+        serde_json::json!({"offhand_data":client.scene.engine.as_ref().and_then(|s|s.player.offhand.and_then(|v|v.data)),"main_item_vertices":item_hand(client,[0.;3],self.first,Hand::Main).len(),"offhand_item_vertices":item_hand(client,[0.;3],self.first,Hand::Off).len(),"offhand":client.scene.engine.as_ref().and_then(|s|s.player.offhand.map(|v|s.registry.get(v.id).id.clone())),"swing_hand":client.view.swing_hand,"mode":client.view.mode,"skin":client.appearance.provenance,"body_vertices":self.body.len(),"hand_vertices":self.hand.len(),"item_vertices":self.item.len(),"selected":client.scene.engine.as_ref().and_then(|s|s.player.selected().map(|id|s.registry.get(id).id.clone())),"mesh_uploads":self.uploads,"draws":self.draws,"item_geometry":self.item.iter().map(|v|serde_json::json!({"position":v.position,"uv":v.uv,"layer":v.layer,"shade":v.shade})).collect::<Vec<_>>(),"item_data":client.scene.engine.as_ref().and_then(|s|s.player.slots[s.player.active].and_then(|s|s.data)),"hand_geometry":self.hand,"body_geometry":self.body,"shared_skin_uvs":true,"world_depth_test":true,"separate_first_person_depth":true})
     }
 }
 

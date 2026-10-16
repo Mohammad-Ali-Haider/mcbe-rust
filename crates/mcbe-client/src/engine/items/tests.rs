@@ -49,6 +49,7 @@ fn mass(c: &Client) -> u64 {
             .chain(&s.player.crafting)
             .chain(&s.player.table)
             .chain(std::iter::once(&s.player.cursor))
+            .chain(std::iter::once(&s.player.offhand))
             .flatten()
             .map(|s| u64::from(amount(*s)))
             .sum::<u64>()
@@ -184,6 +185,7 @@ fn container_moves_never_merge_or_drop_contents() {
                 .iter()
                 .chain(&s.player.crafting)
                 .chain(std::iter::once(&s.player.cursor))
+                .chain(std::iter::once(&s.player.offhand))
                 .flatten()
                 .map(|v| u64::from(amount(*v)))
                 .sum::<u64>(),
@@ -251,7 +253,7 @@ fn save_reload_and_registry_reorder_preserve_all_item_data() {
     std::fs::create_dir_all(&dir).unwrap();
     let saved = crate::engine::save(&mut c, &dir).unwrap();
     let d: serde_json::Value = serde_json::from_slice(&std::fs::read(&saved).unwrap()).unwrap();
-    assert_eq!(d["version"], 11);
+    assert_eq!(d["version"], crate::engine::SAVE_VERSION);
     let mut loaded = crate::engine::load(&saved).unwrap();
     let p = &loaded.scene.engine.as_ref().unwrap().player;
     assert_eq!(p.changed_slots(&c.scene.engine.as_ref().unwrap().player), 0);

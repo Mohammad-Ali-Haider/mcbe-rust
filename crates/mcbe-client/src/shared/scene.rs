@@ -814,21 +814,25 @@ impl Client {
         self.scene.target(self.eye(), self.direction())
     }
     pub fn edit(&mut self, place: bool) -> Result<bool> {
+        self.edit_hand(place, crate::engine_inventory::Hand::Main)
+    }
+    pub fn edit_hand(&mut self, place: bool, hand: crate::engine_inventory::Hand) -> Result<bool> {
         if self.view.is_free() {
             return Ok(false);
         }
         self.view.swing = 1.;
+        self.view.swing_hand = hand;
         if !place && crate::engine::entities::interaction::attack_target(self)? {
             return Ok(true);
         }
-        if place && let Some(result) = crate::engine::items::bucket::use_selected(self, false)? {
+        if place && let Some(result) = crate::engine::items::bucket::use_hand(self, false, hand)? {
             return Ok(result);
         }
         let Some(hit) = self.target()? else {
             return Ok(false);
         };
         if place && self.scene.engine.is_some() {
-            return crate::engine_placement::place(self, &hit);
+            return crate::engine_placement::place_hand(self, &hit, hand);
         }
         let mut p = [hit.position.x, hit.position.y, hit.position.z];
         if place {

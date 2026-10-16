@@ -59,7 +59,7 @@ def main():
     for case in cases:
         target=out/case;run=subprocess.run([str(binary),'--engine-lighting-smoke',str(target),'--engine-lighting-case',case,'--engine-home',str(root),'--engine-original'],cwd=root,capture_output=True,text=True,timeout=180);(out/(case+'.stdout.txt')).write_text(run.stdout,encoding='utf-8');(out/(case+'.stderr.txt')).write_text(run.stderr,encoding='utf-8')
         if run.returncode:raise ValueError(case+': '+run.stderr)
-        g=read(target/'gpu.json');w=read(target/'window.json');s=g['statistics'];scene=read(target/'lighting-scene.json');assert g['complete'] and s['meshes_ready'] and s['native_resolution'] and s['mesh_peak_jobs']<=2 and s['texture_uploads']==1 and w['maximized'] and not w['fullscreen'];assert scene['complete'] and scene['settings_persisted'] and scene['materials_saved'];save=read(Path(scene['saved_world']));assert save['version']==11
+        g=read(target/'gpu.json');w=read(target/'window.json');s=g['statistics'];scene=read(target/'lighting-scene.json');assert g['complete'] and s['meshes_ready'] and s['native_resolution'] and s['mesh_peak_jobs']<=2 and s['texture_uploads']==1 and w['maximized'] and not w['fullscreen'];assert scene['complete'] and scene['settings_persisted'] and scene['materials_saved'];save=read(Path(scene['saved_world']));assert save['version']==12
         check=dict(statistics=s,renderer=g['renderer'],image_sha256=sha(target/'gpu.png'));images[case]=np.array(Image.open(target/'gpu.png').convert('RGB'))
         if case in ['forward','toggle']:assert s['graphics_bytes']==0 and g['renderer']['method']=='forward'
         else:

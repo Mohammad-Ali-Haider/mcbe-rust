@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "source", content = "index", rename_all = "snake_case")]
 pub enum Binding {
+    Offhand,
     Player(usize),
     Craft(usize),
     Table(usize),

@@ -29,7 +29,7 @@ def main():
         if native=='ravine': assert report['sample']['ravine']
         if native in ('high','deep'):
             marker=report['marker']; assert marker[1]==(10000 if native=='high' else -10000)
-            save=read(Path(report['saved_world']));assert save['version']==11 and save['generator']['version']==2 and save['generator']['terrain']['version']==1
+            save=read(Path(report['saved_world']));assert save['version']==12 and save['generator']['version']==2 and save['generator']['terrain']['version']==1
             assert any(e['position']==marker and e['material']=='slate' for e in save['edits'])
         if int(distance)>8:
             assert s['distant_ready'] and s['distant_water_vertices']>0 and 0<s['distant_vertices']<=3145728 and s['distant_bytes']<=3145728*40

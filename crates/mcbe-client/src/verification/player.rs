@@ -22,13 +22,13 @@ pub fn prepare(app: &mut App, out: &Path, case: &str) -> Result<()> {
         .unwrap()
         .registry
         .find(match case {
-            "slab" => "oak_slab",
+            "slab" | "offhand" | "offhand-back" | "offhand-front" | "offhand-only" => "oak_slab",
             "glass" => "blue_glass",
             _ => "oak_planks",
         })?;
     {
         let s = app.client.scene.engine.as_mut().unwrap();
-        s.player.slots[s.player.active] = if case == "empty" {
+        s.player.slots[s.player.active] = if case == "empty" || case == "offhand-only" {
             None
         } else {
             Some(Stack {
@@ -38,11 +38,27 @@ pub fn prepare(app: &mut App, out: &Path, case: &str) -> Result<()> {
             })
         };
     }
+    if case.starts_with("offhand") {
+        let s = app.client.scene.engine.as_mut().unwrap();
+        let off = if case == "offhand-bucket" {
+            "bucket"
+        } else {
+            "blue_glass"
+        };
+        let mut stack = s.registry.catalog_stack(s.registry.find(off)?);
+        if off == "bucket" {
+            stack.data = Some(crate::engine::items::ItemData::Fluid {
+                kind: crate::engine::blocks::components::FluidKind::Water,
+                amount: 731,
+            });
+        }
+        s.player.offhand = Some(stack);
+    }
     let count = match case {
-        "back" | "blocked" => 1,
-        "front" => 2,
+        "back" | "blocked" | "offhand-back" => 1,
+        "front" | "offhand-front" => 2,
         "free" | "occluded" => 3,
-        "first" | "empty" | "slab" | "glass" => 0,
+        "first" | "empty" | "slab" | "glass" | "offhand" | "offhand-only" | "offhand-bucket" => 0,
         _ => return Err("Unknown player verification case".into()),
     };
     for _ in 0..count {
@@ -50,6 +66,25 @@ pub fn prepare(app: &mut App, out: &Path, case: &str) -> Result<()> {
     }
     if app.saver.is_some() {
         return Err("F5 unexpectedly requested a save".into());
+    }
+    if case.starts_with("offhand") {
+        app.modifiers = winit::keyboard::ModifiersState::CONTROL;
+        app.engine_key(KeyCode::KeyS)?;
+        app.modifiers = winit::keyboard::ModifiersState::empty();
+        app.finish_work()?;
+        let saved =
+            crate::engine::load(app.client.last_save.as_ref().ok_or("Offhand save absent")?)?;
+        if saved
+            .scene
+            .engine
+            .as_ref()
+            .unwrap()
+            .player
+            .changed_slots(&app.client.scene.engine.as_ref().unwrap().player)
+            != 0
+        {
+            return Err("Offhand native save roundtrip differs".into());
+        }
     }
     if case == "blocked" {
         let basalt = app

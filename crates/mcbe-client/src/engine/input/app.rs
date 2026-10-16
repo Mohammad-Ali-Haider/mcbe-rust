@@ -73,15 +73,27 @@ impl App {
         Ok(())
     }
     pub(crate) fn world_use(&mut self, shift: bool) -> Result<()> {
+        self.world_use_hand(shift, false)
+    }
+    pub(crate) fn world_use_hand(&mut self, shift: bool, force_offhand: bool) -> Result<()> {
         if self.client.view.is_free() {
             return Ok(());
         }
-        if !shift && engine::entities::interaction::use_target(&mut self.client)? {
+        let hand = self
+            .client
+            .scene
+            .engine
+            .as_ref()
+            .unwrap()
+            .player
+            .use_hand(force_offhand);
+        if !force_offhand && !shift && engine::entities::interaction::use_target(&mut self.client)?
+        {
             return Ok(());
         }
-        if engine::items::bucket::selected(&self.client) {
-            engine::items::bucket::use_selected(&mut self.client, shift)?;
-        } else if !shift && self.palette.open_target(&mut self.client)? {
+        if engine::items::bucket::selected_hand(&self.client, hand) {
+            engine::items::bucket::use_hand(&mut self.client, shift, hand)?;
+        } else if !force_offhand && !shift && self.palette.open_target(&mut self.client)? {
             self.keys.clear();
             self.capture(false);
             self.accumulator = 0.;
@@ -89,7 +101,7 @@ impl App {
                 self.controller_focus_panel()?;
             }
         } else {
-            self.client.edit(true)?;
+            self.client.edit_hand(true, hand)?;
         }
         Ok(())
     }
@@ -270,7 +282,11 @@ impl App {
             return Ok(());
         }
         if frame.pressed(B::West) {
-            self.engine_key(K::F5)?;
+            self.engine_key(if frame.down(B::RightStick) {
+                K::KeyV
+            } else {
+                K::F5
+            })?;
             return Ok(());
         }
         if frame.pressed(B::Up) && !frame.down(B::Down) {
@@ -315,7 +331,7 @@ impl App {
             self.client.edit(false)?;
         }
         if frame.pressed(B::LeftTrigger) {
-            self.world_use(frame.down(B::East))?;
+            self.world_use_hand(frame.down(B::East), frame.down(B::RightStick))?;
         }
         Ok(())
     }

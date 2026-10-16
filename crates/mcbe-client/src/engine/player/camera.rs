@@ -29,6 +29,7 @@ pub struct Rig {
     pub walk: f32,
     pub gait: f32,
     pub swing: f32,
+    pub swing_hand: crate::engine_inventory::Hand,
 }
 impl Rig {
     pub fn is_free(&self) -> bool {

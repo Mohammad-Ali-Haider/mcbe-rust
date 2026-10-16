@@ -1,5 +1,6 @@
 //! Bounded six-block shape ray and conservative world/container transactions.
 use super::ItemData;
+use crate::engine_inventory::Hand;
 use crate::{
     engine::fluids,
     engine_blocks::BlockId,
@@ -136,14 +137,23 @@ pub fn target(c: &Client) -> Result<Option<Target>> {
     Ok(None)
 }
 pub fn selected(c: &Client) -> bool {
+    c.scene
+        .engine
+        .as_ref()
+        .is_some_and(|s| selected_hand(c, s.player.use_hand(false)))
+}
+pub fn selected_hand(c: &Client, hand: Hand) -> bool {
     c.scene.engine.as_ref().is_some_and(|s| {
         s.player
-            .selected()
-            .is_some_and(|id| s.registry.get(id).container.is_some())
+            .hand(hand)
+            .is_some_and(|stack| s.registry.get(stack.id).container.is_some())
     })
 }
 pub fn use_selected(c: &mut Client, force_pour: bool) -> Result<Option<bool>> {
-    if !selected(c) {
+    use_hand(c, force_pour, Hand::Main)
+}
+pub fn use_hand(c: &mut Client, force_pour: bool, hand: Hand) -> Result<Option<bool>> {
+    if !selected_hand(c, hand) {
         return Ok(None);
     }
     if c.view.is_free() {
@@ -152,12 +162,16 @@ pub fn use_selected(c: &mut Client, force_pour: bool) -> Result<Option<bool>> {
     let Some(target) = target(c)? else {
         return Ok(Some(false));
     };
-    apply(c, &target, force_pour).map(Some)
+    apply_hand(c, &target, force_pour, hand).map(Some)
 }
+#[cfg(test)]
 pub fn apply(c: &mut Client, target: &Target, force_pour: bool) -> Result<bool> {
+    apply_hand(c, target, force_pour, Hand::Main)
+}
+pub fn apply_hand(c: &mut Client, target: &Target, force_pour: bool, hand: Hand) -> Result<bool> {
     let s = c.scene.engine.as_ref().ok_or("Item world missing")?;
-    let active = s.player.active;
-    let Some(mut stack) = s.player.slots[active] else {
+    let slot = s.player.hand_slot(hand);
+    let Some(mut stack) = s.player.get(slot)? else {
         return Ok(false);
     };
     stack.validate_item(&s.registry)?;
@@ -225,9 +239,10 @@ pub fn apply(c: &mut Client, target: &Target, force_pour: bool) -> Result<bool> 
     c.scene.set_fluid(p, water, next)?;
     stack.data = Some(ItemData::Fluid { kind, amount: held });
     let s = c.scene.engine.as_mut().unwrap();
-    s.player.slots[active] = Some(stack);
+    s.player.set(slot, Some(stack))?;
     s.player.revision = s.player.revision.wrapping_add(1);
     c.changed += 1;
     c.view.swing = 1.;
+    c.view.swing_hand = hand;
     Ok(true)
 }

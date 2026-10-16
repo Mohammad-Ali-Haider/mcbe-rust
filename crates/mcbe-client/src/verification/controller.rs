@@ -76,6 +76,126 @@ fn slot(app: &mut App, binding: Binding) -> Result<()> {
 fn run(app: &mut App, case: &str) -> Result<()> {
     neutral(app)?;
     match case {
+        "offhand-panel" => {
+            run(app, "offhand")?;
+            tap(app, B::North)?;
+            slot(app, Binding::Offhand)?;
+        }
+        "offhand" => {
+            use crate::engine_inventory::{Hand, Slot};
+            let s = app.client.scene.engine.as_mut().unwrap();
+            let block = s.registry.catalog_stack(s.registry.find("blue_glass")?);
+            let mut vessel = s.registry.catalog_stack(s.registry.find("bucket")?);
+            vessel.data = Some(engine::items::ItemData::Fluid {
+                kind: engine::blocks::components::FluidKind::Water,
+                amount: 731,
+            });
+            s.player = Inventory::empty();
+            s.player.slots[0] = Some(block);
+            s.player.offhand = Some(vessel);
+            let mode = app.client.view.mode;
+            sample(
+                app,
+                Some(Pad {
+                    buttons: B::RightStick.bit() | B::West.bit(),
+                    ..Default::default()
+                }),
+            )?;
+            neutral(app)?;
+            let s = app.client.scene.engine.as_ref().unwrap();
+            require(
+                s.player.hand(Hand::Main) == Some(vessel)
+                    && s.player.offhand == Some(block)
+                    && s.player.active == 0,
+                "Controller hand swap lost items/changed hotbar",
+            )?;
+            require(app.client.view.mode == mode, "Hand swap changed camera")?;
+            sample(
+                app,
+                Some(Pad {
+                    buttons: B::RightStick.bit() | B::West.bit(),
+                    ..Default::default()
+                }),
+            )?;
+            neutral(app)?;
+            tap(app, B::North)?;
+            slot(app, Binding::Offhand)?;
+            tap(app, B::South)?;
+            require(
+                app.client.scene.engine.as_ref().unwrap().player.cursor == Some(vessel),
+                "Cannot pick offhand with controller",
+            )?;
+            slot(app, Binding::Player(9))?;
+            tap(app, B::West)?;
+            require(
+                app.client.scene.engine.as_ref().unwrap().player.slots[9] == Some(vessel),
+                "Controller transfer lost bucket data",
+            )?;
+            tap(app, B::South)?;
+            slot(app, Binding::Offhand)?;
+            tap(app, B::South)?;
+            require(
+                app.client
+                    .scene
+                    .engine
+                    .as_ref()
+                    .unwrap()
+                    .player
+                    .get(Slot::Offhand)?
+                    == Some(vessel),
+                "Cannot equip offhand with controller",
+            )?;
+            tap(app, B::East)?;
+            require(!app.palette.open, "Offhand inventory did not close")?;
+            // Keyboard and pad modifiers use the same hand-aware action path.
+            let s = app.client.scene.engine.as_mut().unwrap();
+            s.player.offhand = Some(block);
+            s.player.slots[s.player.active] = Some(vessel);
+            let stone = s.registry.find("slate")?;
+            app.client
+                .set_spawn(mcbe_core::motion::Vec3::new(0.5, 4., -10.5))?;
+            app.client.yaw = 0.;
+            app.client.pitch = 0.;
+            app.client.scene.change_engine([0, 5, -7], None)?;
+            app.client.scene.change_engine([0, 5, -6], Some(stone))?;
+            let hit = app
+                .client
+                .target()?
+                .ok_or("Offhand proof ray target absent")?;
+            let target = engine::blocks::behavior::placement::neighbor(&hit);
+            sample(
+                app,
+                Some(Pad {
+                    buttons: B::RightStick.bit(),
+                    triggers: [1., 0.],
+                    ..Default::default()
+                }),
+            )?;
+            neutral(app)?;
+            require(
+                app.client
+                    .scene
+                    .engine
+                    .as_ref()
+                    .unwrap()
+                    .blocks
+                    .get(&target)
+                    .copied()
+                    == Some(block.id),
+                "Controller forced offhand placement failed",
+            )?;
+            require(
+                app.client
+                    .scene
+                    .engine
+                    .as_ref()
+                    .unwrap()
+                    .player
+                    .hand(Hand::Main)
+                    == Some(vessel),
+                "Offhand action changed main stack",
+            )?;
+        }
         "motion" => {
             let yaw = app.client.yaw;
             let pitch = app.client.pitch;
@@ -476,6 +596,8 @@ mod tests {
     #[test]
     fn raw_states_drive_gameplay_shared_ui_stations_and_safe_transitions() {
         for case in [
+            "offhand-panel",
+            "offhand",
             "motion",
             "inventory",
             "keyboard",

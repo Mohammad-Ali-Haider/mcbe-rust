@@ -96,5 +96,9 @@ and search. Contextual bottom-corner hints switch with the active input device.
 See [Controllers](docs/CONTROLLERS.md) for controls and UI glyph customization.
 
 Data-authored mobs now wander, flee, follow and approach players, with shared
-mouse/controller interaction, collision, instanced rendering and schema-11 saves.
+mouse/controller interaction, collision, instanced rendering and persistent saves.
 See [Entities and mob AI](docs/ENTITIES.md) to register models and behaviors.
+
+Offhand: equip the slot beside the inventory preview, V swaps hands, and Alt+RMB
+uses the offhand (Xbox: RS click + X / LT). Both items render in F5 views.
+Schema-12 saves preserve offhand contents and migrate older worlds.

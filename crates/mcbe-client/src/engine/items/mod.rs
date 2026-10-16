@@ -68,6 +68,7 @@ impl crate::engine_inventory::Inventory {
             .chain(&self.crafting)
             .chain(&self.table)
             .chain(std::iter::once(&self.cursor))
+            .chain(std::iter::once(&self.offhand))
             .flatten()
         {
             s.validate_item(r)?;
@@ -117,5 +118,7 @@ pub fn mesh(s: &crate::engine::WorldState, stack: Stack) -> Vec<crate::engine_me
     out
 }
 
+#[cfg(test)]
+mod offhand_tests;
 #[cfg(test)]
 mod tests;

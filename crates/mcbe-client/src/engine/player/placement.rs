@@ -27,11 +27,20 @@ pub fn resolve(
         adjacent,
     })
 }
+#[cfg(test)]
 pub fn place(client: &mut Client, hit: &Hit) -> Result<bool> {
+    place_hand(client, hit, crate::engine_inventory::Hand::Main)
+}
+pub fn place_hand(
+    client: &mut Client,
+    hit: &Hit,
+    hand: crate::engine_inventory::Hand,
+) -> Result<bool> {
     let state = client.scene.engine.as_ref().unwrap();
-    let Some(selected) = state.player.selected() else {
+    let Some(stack) = state.player.hand(hand) else {
         return Ok(false);
     };
+    let selected = stack.id;
     if state.registry.get(selected).container.is_some() {
         return Ok(false);
     }

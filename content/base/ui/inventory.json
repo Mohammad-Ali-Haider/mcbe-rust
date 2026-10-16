@@ -306,22 +306,10 @@
             18
           ]
         },
-        "kind": "panel"
-      },
-      {
-        "id": "offhand",
-        "layout": {
-          "offset": [
-            230,
-            62
-          ],
-          "size": [
-            16,
-            16
-          ]
-        },
-        "kind": "image",
-        "sprite": "shield"
+        "kind": "slot",
+        "binding": {
+          "source": "offhand"
+        }
       },
       {
         "id": "craft_0",

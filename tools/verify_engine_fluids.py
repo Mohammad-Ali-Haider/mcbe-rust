@@ -33,7 +33,7 @@ def main():
             r=read(target/'fluids.json');reports[name]=r;assert r['complete'] and r['eviction_reload'] and r['world_updates_with_ui_open'] and r['pending_after_reload']==0 and r['transport']['counters']['processed']>0
             if case!='underwater':assert r['transport']['counters']['transfers']>0
             assert r['transport']['counters']['peak_queue']<=65536 and r['transport']['counters']['last_processed']<=256
-            save=read(Path(r['saved_world']));assert save['version']==11 and all(0<e['amount']<1024 for e in save['fluids'])
+            save=read(Path(r['saved_world']));assert save['version']==12 and all(0<e['amount']<1024 for e in save['fluids'])
             checks[name]['report']=r
         print(json.dumps(dict(case=name,complete=True)),flush=True);return g
     for case in ['flow','underwater','pressure','lod']:launch(case,case)

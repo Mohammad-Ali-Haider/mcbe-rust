@@ -8,6 +8,7 @@ pub struct Stack {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Slot {
+    Offhand,
     Player(usize),
     Craft(usize),
     Table(usize),
@@ -17,9 +18,17 @@ pub enum Button {
     Left,
     Right,
 }
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Hand {
+    #[default]
+    Main,
+    Off,
+}
 #[derive(Clone, Debug)]
 pub struct Inventory {
     pub slots: [Option<Stack>; 36],
+    pub offhand: Option<Stack>,
     pub crafting: [Option<Stack>; 4],
     pub table: [Option<Stack>; 9],
     pub cursor: Option<Stack>,
@@ -30,6 +39,7 @@ impl Inventory {
     pub fn empty() -> Self {
         Self {
             slots: [None; 36],
+            offhand: None,
             crafting: [None; 4],
             table: [None; 9],
             cursor: None,
@@ -57,6 +67,36 @@ impl Inventory {
         }
         p
     }
+    pub fn hand(&self, hand: Hand) -> Option<Stack> {
+        match hand {
+            Hand::Main => self.slots.get(self.active).copied().flatten(),
+            Hand::Off => self.offhand,
+        }
+    }
+    pub fn hand_slot(&self, hand: Hand) -> Slot {
+        match hand {
+            Hand::Main => Slot::Player(self.active),
+            Hand::Off => Slot::Offhand,
+        }
+    }
+    pub fn use_hand(&self, force_offhand: bool) -> Hand {
+        if force_offhand || self.hand(Hand::Main).is_none() {
+            Hand::Off
+        } else {
+            Hand::Main
+        }
+    }
+    pub fn swap_hands(&mut self) -> Result<bool> {
+        if self.active >= 9 {
+            return Err("Hotbar index must be 0..8".into());
+        }
+        if self.slots[self.active] == self.offhand {
+            return Ok(false);
+        }
+        std::mem::swap(&mut self.slots[self.active], &mut self.offhand);
+        self.revision = self.revision.wrapping_add(1);
+        Ok(true)
+    }
     pub fn selected(&self) -> Option<BlockId> {
         self.slots[self.active].map(|s| s.id)
     }
@@ -68,6 +108,7 @@ impl Inventory {
                 .chain(&self.crafting)
                 .chain(&self.table)
                 .chain(std::iter::once(&self.cursor))
+                .chain(std::iter::once(&self.offhand))
                 .flatten()
                 .any(|s| s.count == 0 || s.count > s.limit() || usize::from(s.id) >= definitions)
         {
@@ -94,6 +135,7 @@ impl Inventory {
                 .filter(|(a, b)| a != b)
                 .count()
             + usize::from(self.cursor != base.cursor)
+            + usize::from(self.offhand != base.offhand)
     }
     pub fn total(&self) -> usize {
         self.slots
@@ -101,12 +143,14 @@ impl Inventory {
             .chain(&self.crafting)
             .chain(&self.table)
             .chain(std::iter::once(&self.cursor))
+            .chain(std::iter::once(&self.offhand))
             .flatten()
             .map(|s| usize::from(s.count))
             .sum()
     }
     pub fn get(&self, slot: Slot) -> Result<Option<Stack>> {
         match slot {
+            Slot::Offhand => Some(&self.offhand),
             Slot::Player(i) => self.slots.get(i),
             Slot::Craft(i) => self.crafting.get(i),
             Slot::Table(i) => self.table.get(i),
@@ -114,8 +158,9 @@ impl Inventory {
         .copied()
         .ok_or_else(|| "Invalid inventory slot".into())
     }
-    fn set(&mut self, slot: Slot, value: Option<Stack>) -> Result<()> {
+    pub(crate) fn set(&mut self, slot: Slot, value: Option<Stack>) -> Result<()> {
         let destination = match slot {
+            Slot::Offhand => Some(&mut self.offhand),
             Slot::Player(i) => self.slots.get_mut(i),
             Slot::Craft(i) => self.crafting.get_mut(i),
             Slot::Table(i) => self.table.get_mut(i),
@@ -193,7 +238,7 @@ impl Inventory {
         let order: Vec<_> = match slot {
             Slot::Player(i) if i < 9 => (9..36).collect(),
             Slot::Player(_) => (0..9).collect(),
-            Slot::Craft(_) | Slot::Table(_) => (0..36).collect(),
+            Slot::Offhand | Slot::Craft(_) | Slot::Table(_) => (0..36).collect(),
         };
         let mut next = self.clone();
         next.set(slot, None)?;

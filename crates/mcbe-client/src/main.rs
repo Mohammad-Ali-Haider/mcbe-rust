@@ -475,6 +475,18 @@ impl App {
         {
             return Ok(true);
         }
+        if code == KeyCode::KeyV && !self.palette.open {
+            if !self.client.view.is_free() {
+                self.client
+                    .scene
+                    .engine
+                    .as_mut()
+                    .unwrap()
+                    .player
+                    .swap_hands()?;
+            }
+            return Ok(true);
+        }
         if matches!(code, KeyCode::KeyF | KeyCode::KeyN) && !self.palette.open {
             if self.client.view.is_free() {
                 return Ok(true);
@@ -1942,7 +1954,7 @@ impl ApplicationHandler for App {
                     && matches!(button, MouseButton::Left | MouseButton::Right)
                 {
                     let result = if button == MouseButton::Right {
-                        self.world_use(self.modifiers.shift_key())
+                        self.world_use_hand(self.modifiers.shift_key(), self.modifiers.alt_key())
                     } else {
                         self.client.edit(false).map(|_| ())
                     };

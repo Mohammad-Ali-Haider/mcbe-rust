@@ -31,7 +31,7 @@ use std::{
 };
 
 pub const CHECKPOINT: u32 = 48;
-pub const SAVE_VERSION: u32 = 11;
+pub const SAVE_VERSION: u32 = 12;
 pub const BOUNDS: Bounds = Bounds {
     min: [-40, 0, -40],
     max: [40, 40, 40],
@@ -198,6 +198,8 @@ struct SavedStack {
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct SavedInventory {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    offhand: Option<SavedStack>,
     slots: Vec<Option<SavedStack>>,
     crafting: Vec<Option<SavedStack>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -215,6 +217,7 @@ impl SavedInventory {
             })
         };
         Self {
+            offhand: convert(p.offhand),
             slots: p.slots.iter().copied().map(convert).collect(),
             crafting: p.crafting.iter().copied().map(convert).collect(),
             table: p.table.iter().copied().map(convert).collect(),
@@ -249,6 +252,7 @@ impl SavedInventory {
         for (i, s) in self.table.into_iter().enumerate() {
             p.table[i] = convert(s)?;
         }
+        p.offhand = convert(self.offhand)?;
         p.cursor = convert(self.cursor)?;
         p.active = self.active;
         p.validate_items(r)?;
@@ -675,13 +679,16 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
     }
     let d: Document = serde_json::from_slice(bytes)?;
     if d.format != "blockwork-world"
-        || !(1..=11).contains(&d.version)
+        || !(1..=12).contains(&d.version)
         || d.cells.len() > BOUNDS.volume()?
         || !d.yaw.is_finite()
         || !d.pitch.is_finite()
         || !(-1.5..=1.5).contains(&d.pitch)
     {
         return Err("Unsupported or invalid engine save".into());
+    }
+    if d.version < 12 && d.inventory.as_ref().is_some_and(|p| p.offhand.is_some()) {
+        return Err("Offhand contents require save version 12".into());
     }
     if d.version < 9 {
         let player_data = d.inventory.as_ref().is_some_and(|p| {
@@ -690,6 +697,7 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
                 .chain(&p.crafting)
                 .chain(&p.table)
                 .chain(std::iter::once(&p.cursor))
+                .chain(std::iter::once(&p.offhand))
                 .flatten()
                 .any(|s| s.data.is_some())
         });
@@ -707,14 +715,14 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
             r.blocks.truncate(8);
             r
         }
-        (2..=11, Some(r)) => {
+        (2..=12, Some(r)) => {
             r.validate()?;
             r
         }
         _ => return Err("Save registry/version mismatch".into()),
     };
     let entities = match (d.version, d.entities) {
-        (11, Some(saved)) => entities::World::restore(saved, &registry)?,
+        (11..=12, Some(saved)) => entities::World::restore(saved, &registry)?,
         (1..=10, None) => {
             let mut world = entities::World::new(&registry);
             world.random ^= d.seed;
@@ -730,7 +738,7 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
             registry.blocks.len(),
             registry.find(&d.selected)?,
         ),
-        (3..=11, Some(p)) => p.restore(&registry)?,
+        (3..=12, Some(p)) => p.restore(&registry)?,
         _ => return Err("Save inventory/version mismatch".into()),
     };
     if d.version >= 3
@@ -743,14 +751,14 @@ fn decode(bytes: &[u8], loaded: Option<(PathBuf, String)>) -> Result<Client> {
     }
     let recipes = match (d.version, d.recipes) {
         (1 | 2, None) => crate::engine_crafting::Recipes::built_in().available(&registry),
-        (3..=11, Some(r)) => {
+        (3..=12, Some(r)) => {
             r.validate_registry(&registry)?;
             r
         }
         _ => return Err("Save recipe/version mismatch".into()),
     };
     let movement = match (d.version, d.movement) {
-        (5..=11, Some(m)) => m,
+        (5..=12, Some(m)) => m,
         (1..=4, None) => Default::default(),
         _ => return Err("Save movement/version mismatch".into()),
     };
@@ -999,6 +1007,7 @@ fn apply_registry_entities(
                 .chain(&mut next.crafting)
                 .chain(&mut next.table)
                 .chain(std::iter::once(&mut next.cursor))
+                .chain(std::iter::once(&mut next.offhand))
                 .flatten()
             {
                 stack.id = registry.find(&state.registry.get(stack.id).id)?;
@@ -1780,7 +1789,7 @@ mod tests {
         }
         let bytes = serde_json::to_vec(&document(&c).unwrap()).unwrap();
         let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-        assert_eq!(value["version"], 11);
+        assert_eq!(value["version"], SAVE_VERSION);
         assert_eq!(value["generator"]["version"], 2);
         assert!(value.get("cells").is_none());
         assert_eq!(value["edits"].as_array().unwrap().len(), 3);
@@ -1906,7 +1915,7 @@ mod tests {
         assert!(serde_json::to_vec(&sparse).unwrap().len() < 16_384);
         assert!(bytes.len() < 32_768);
         let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-        assert_eq!(value["version"], 11);
+        assert_eq!(value["version"], SAVE_VERSION);
         assert!(value.get("cells").is_none());
         assert_eq!(value["edits"].as_array().unwrap().len(), 3);
         let mut copy = decode(&bytes, None).unwrap();

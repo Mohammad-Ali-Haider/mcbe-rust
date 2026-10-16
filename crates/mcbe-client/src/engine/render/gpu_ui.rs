@@ -537,6 +537,20 @@ impl Atlas {
                 );
             }
         }
+        if let Some(stack) = player.offhand {
+            let r = [x - 26., y, 22., 22.];
+            if let Some(sprite) = self.cell {
+                c.quad(sprite, r, [1.; 4]);
+            } else {
+                c.rect(r, [0.25, 0.25, 0.25, 0.8]);
+            }
+            self.stack(
+                &mut c,
+                stack,
+                [r[0] + 3., y + 3., 16., 16.],
+                &state.registry,
+            );
+        }
         if let Some(s) = self.selected {
             c.quad(
                 s,
@@ -836,6 +850,9 @@ impl Atlas {
                             }
                             Kind::Slot { binding } => {
                                 let (stack, target) = match binding {
+                                    Binding::Offhand => {
+                                        (player.offhand, Target::Slot(Slot::Offhand))
+                                    }
                                     Binding::Player(i) => (
                                         player.get(Slot::Player(*i)).ok().flatten(),
                                         Target::Slot(Slot::Player(*i)),

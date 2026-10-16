@@ -115,7 +115,7 @@ fn authored_materials_validate_roundtrip_and_reject_old_schema_payloads() {
     };
     crate::engine::apply_registry(&mut c, r).unwrap();
     let doc = serde_json::to_value(crate::engine::document(&c).unwrap()).unwrap();
-    assert_eq!(doc["version"], 11);
+    assert_eq!(doc["version"], crate::engine::SAVE_VERSION);
     let restored = crate::engine::decode(&serde_json::to_vec(&doc).unwrap(), None).unwrap();
     assert_eq!(
         restored

@@ -3,7 +3,7 @@ import argparse,hashlib,json,subprocess
 from pathlib import Path
 import numpy as np
 from PIL import Image
-CASES=['motion','inventory','keyboard','menu','lab','table','furnace','disconnect','takeover','keyboard-ray','inventory-custom']
+CASES=['offhand','offhand-panel','offhand-custom','motion','inventory','keyboard','menu','lab','table','furnace','disconnect','takeover','keyboard-ray','inventory-custom']
 def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def read(p):return json.loads(p.read_bytes())
 def main():
@@ -16,6 +16,7 @@ def main():
  layout=read(root/'content/base/ui/inventory.json')
  def move(node):
   if node['id']=='craft_0':node['layout']['offset']=[230,18]
+  if node['id']=='offhand_slot':node['layout']['offset']=[280,60]
   for child in node.get('children',[]):move(child)
  move(layout['root']);(ui/'inventory.json').write_text(json.dumps(layout),encoding='utf-8')
  for case in CASES:
