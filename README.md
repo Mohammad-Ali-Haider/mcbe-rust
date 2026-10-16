@@ -94,3 +94,7 @@ Space to jump away or pull onto a ledge, and Shift to drop.
 Xbox/XInput controllers support gameplay, settings, inventory, station transfers
 and search. Contextual bottom-corner hints switch with the active input device.
 See [Controllers](docs/CONTROLLERS.md) for controls and UI glyph customization.
+
+Data-authored mobs now wander, flee, follow and approach players, with shared
+mouse/controller interaction, collision, instanced rendering and schema-11 saves.
+See [Entities and mob AI](docs/ENTITIES.md) to register models and behaviors.
