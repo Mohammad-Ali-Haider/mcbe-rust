@@ -11,3 +11,5 @@ pub(crate) mod stations;
 pub(crate) mod navigation;
 
 pub(crate) mod controller_keyboard;
+
+pub(crate) mod chat;

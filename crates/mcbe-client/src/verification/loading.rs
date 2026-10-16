@@ -76,13 +76,13 @@ pub fn verify(app: &mut App, out: &Path) -> Result<()> {
         "Cancelled preparation moved the player",
     )?;
     app.client.scene.change_engine([20, 13, 0], Some(oak))?;
-    app.engine_key(KeyCode::KeyT)?;
+    app.engine_key(KeyCode::KeyO)?;
     require(
         app.finish_work().is_err() && app.client.actor.position == before,
         "Obstructed travel was partially applied",
     )?;
     app.client.scene.change_engine([20, 13, 0], None)?;
-    app.engine_key(KeyCode::KeyT)?;
+    app.engine_key(KeyCode::KeyO)?;
     app.finish_work()?;
     require(
         app.client.actor.position.x == 20.5 && app.client.actor.position.y == 13.,

@@ -41,7 +41,10 @@ pub fn body(client: &Client, position: [f32; 3], skin: [f32; 4]) -> Vec<SkinVert
             "rightArm" | "rightSleeve" => arm(client, Hand::Main),
             _ => 0.,
         };
-        c.emit(&mut out, base * pivot(c, angle), skin);
+        // Imported cuboid X positions oppose the avatar's anatomical right axis.
+        // Move bounds across the center without reflecting the skin UVs.
+        let side = Mat4::from_translation(Vec3::new(-2. * c.origin[0] - c.size[0], 0., 0.));
+        c.emit(&mut out, base * side * pivot(c, angle), skin);
     }
     out
 }
@@ -120,6 +123,19 @@ pub fn item_hand(client: &Client, position: [f32; 3], first: bool, hand: Hand) -
             * Mat4::from_rotation_y(sign * -0.55)
             * Mat4::from_scale(Vec3::splat(0.30))
     } else {
+        let anchor = client
+            .appearance
+            .model
+            .cubes
+            .iter()
+            .find(|c| c.bone == bone)
+            .map_or(Vec3::new(6. * sign, 10., -3.), |c| {
+                Vec3::new(
+                    -c.origin[0] - c.size[0] * 0.5,
+                    c.origin[1] - 2.,
+                    c.origin[2] - 1.,
+                )
+            });
         root(position, client.yaw, client.movement.crouched)
             * client
                 .appearance
@@ -128,7 +144,7 @@ pub fn item_hand(client: &Client, position: [f32; 3], first: bool, hand: Hand) -
                 .iter()
                 .find(|c| c.bone == bone)
                 .map_or(Mat4::IDENTITY, |c| pivot(c, arm(client, hand)))
-            * Mat4::from_translation(Vec3::new(-6. * sign, 10., -3.))
+            * Mat4::from_translation(anchor)
             * Mat4::from_scale(Vec3::splat(5.))
     };
     for v in &mut out {
@@ -437,6 +453,40 @@ impl Renderer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn anatomical_arms_and_items_follow_camera_right_in_rear_view() {
+        let mut c = crate::engine::generate(37).unwrap();
+        let state = c.scene.engine.as_mut().unwrap();
+        state.player.offhand = Some(
+            state
+                .registry
+                .catalog_stack(state.registry.find("blue_glass").unwrap()),
+        );
+        for yaw in [0., 0.7, 2.5] {
+            c.yaw = yaw;
+            let right = Vec3::new(-yaw.cos(), 0., yaw.sin());
+            let vertices = body(&c, [0.; 3], [0., 0., 64., 64.]);
+            for (cube, mesh) in c
+                .appearance
+                .model
+                .cubes
+                .iter()
+                .zip(vertices.chunks_exact(36))
+            {
+                if matches!(cube.bone.as_str(), "rightArm" | "leftArm") {
+                    let center = mesh.iter().map(|v| Vec3::from(v.position)).sum::<Vec3>() / 36.;
+                    let expected = if cube.bone == "rightArm" { 1. } else { -1. };
+                    assert!(center.dot(right) * expected > 0.25);
+                }
+            }
+            for (hand, sign) in [(Hand::Main, 1.), (Hand::Off, -1.)] {
+                let mesh = item_hand(&c, [0.; 3], false, hand);
+                let center =
+                    mesh.iter().map(|v| Vec3::from(v.position)).sum::<Vec3>() / mesh.len() as f32;
+                assert!(center.dot(right) * sign > 0.25);
+            }
+        }
+    }
     #[test]
     fn shared_skin_mesh_and_partial_items_are_bounded_and_selected_by_owned_id() {
         let mut c = crate::engine::generate(37).unwrap();

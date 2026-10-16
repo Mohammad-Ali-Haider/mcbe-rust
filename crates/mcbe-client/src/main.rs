@@ -59,6 +59,9 @@ use winit::{
 };
 
 struct App {
+    chat_live: Option<verification::chat::Live>,
+    chat: engine::ui::chat::Chat,
+    commands: engine::commands::Registry,
     controls: engine::input::runtime::Runtime,
     show_character: bool,
     flight_tap: engine_player::FlightTap,
@@ -162,6 +165,9 @@ impl App {
     fn new(client: Client, root: PathBuf, inventory_start: bool, smoke: bool) -> Result<Self> {
         let palette = engine_ui::Palette::recover(&client);
         Ok(Self {
+            chat_live: None,
+            chat: Default::default(),
+            commands: engine::commands::Registry::built_in(),
             controls: Default::default(),
             show_character: !smoke,
             preview_test: None,
@@ -428,6 +434,9 @@ impl App {
         Ok(true)
     }
     fn engine_key(&mut self, code: KeyCode) -> Result<bool> {
+        if self.chat.open {
+            return self.chat_event(code, true, false, None);
+        }
         if self.startup_blocked()
             && !matches!(code, KeyCode::F3 | KeyCode::F4 | KeyCode::F7 | KeyCode::F11)
         {
@@ -451,6 +460,10 @@ impl App {
         }
         if code == KeyCode::Escape && self.load_busy() {
             self.loader.as_mut().unwrap().cancel();
+            self.chat.push(
+                engine::ui::chat::Kind::System,
+                "Preparation cancelled; current world retained",
+            );
             self.deferred = None;
             self.capture(false);
             self.notice = Some("Preparation cancelled; current world retained".into());
@@ -473,16 +486,15 @@ impl App {
             self.settings_action(action)?;
             return Ok(true);
         }
-        if matches!(code, KeyCode::KeyR | KeyCode::KeyT)
+        if matches!(code, KeyCode::KeyR | KeyCode::KeyO)
             && !self.palette.open
             && self.client.scene.engine.as_ref().unwrap().stream.is_some()
         {
-            let destination = if code == KeyCode::KeyR {
-                engine_loading::Destination::Exhibit(0)
-            } else {
+            self.request_travel(if code == KeyCode::KeyO {
                 engine_loading::Destination::Overlook
-            };
-            self.request_travel(destination)?;
+            } else {
+                engine_loading::Destination::Exhibit(0)
+            })?;
             return Ok(true);
         }
         if self.load_busy()
@@ -499,6 +511,10 @@ impl App {
                     | KeyCode::F11
             )
         {
+            return Ok(true);
+        }
+        if matches!(code, KeyCode::KeyT | KeyCode::Slash) && !self.palette.open {
+            self.open_chat(code == KeyCode::Slash);
             return Ok(true);
         }
         if code == KeyCode::KeyU && !self.palette.open {
@@ -773,14 +789,7 @@ impl App {
     }
     pub(crate) fn ui_commands(&mut self) -> Result<()> {
         if let Some(id) = self.palette.pending_dimension.take() {
-            if self.startup_blocked() || self.load_busy() || self.close_after_save {
-                return Err("Wait for world preparation before dimension travel".into());
-            }
-            self.ensure_loader()?;
-            self.loader.as_mut().unwrap().dimension(&self.client, &id)?;
-            self.flight_tap.reset();
-            self.world_accumulator = 0.;
-            self.begin_loading("Preparing dimension... | Escape cancels");
+            self.request_dimension(&id)?;
         }
         Ok(())
     }
@@ -818,6 +827,12 @@ impl App {
         };
         if let Some(event) = event {
             if let Some(error) = &event.error {
+                if event.dimension.is_some() {
+                    self.chat.push(
+                        engine::ui::chat::Kind::Error,
+                        format!("Travel failed: {error}"),
+                    );
+                }
                 self.load_error = Some(error.clone());
                 self.notice = Some(format!("Preparation failed: {error}"));
                 self.deferred = None;
@@ -826,6 +841,10 @@ impl App {
                 self.accumulator = 0.;
                 self.previous = Instant::now();
                 if let Some(id) = &event.dimension {
+                    self.chat.push(
+                        engine::ui::chat::Kind::System,
+                        format!("Loaded dimension {id}"),
+                    );
                     self.dimension_graphics = self.gpu.as_ref().map(|_| self.frames);
                     self.palette = engine_ui::Palette::recover(&self.client);
                     self.flight_tap.reset();
@@ -1327,6 +1346,8 @@ impl App {
         verification::controller::advance(self)?;
         verification::entities::advance(self)?;
         verification::dimensions::advance(self)?;
+        verification::chat::advance(self)?;
+        self.chat.tick(Instant::now());
         let now = Instant::now();
         let dt = (now - self.previous).as_secs_f32().min(0.25);
         self.previous = now;
@@ -1339,6 +1360,7 @@ impl App {
             && !self.smoke
             && !self.startup_blocked()
             && !self.inventory_open
+            && !self.chat.open
             && !self.palette.open
             && !self.menu.open()
             && !self.close_after_save
@@ -1529,7 +1551,11 @@ impl App {
             };
             let actor_position = [eye[0], eye[1] - self.client.movement.eye_height(), eye[2]];
             let mut pose = engine_camera::pose(&self.client, eye)?;
-            if self.client.view.is_free() && !self.smoke && !self.menu.open() && !self.palette.open
+            if self.client.view.is_free()
+                && !self.smoke
+                && !self.chat.open
+                && !self.menu.open()
+                && !self.palette.open
             {
                 let alpha = (self.accumulator / 0.05).clamp(0., 1.);
                 let rig = &self.client.view;
@@ -1541,6 +1567,7 @@ impl App {
                 &self.client,
                 &self.palette,
                 engine_gpu::Frame {
+                    chat: &self.chat,
                     controls: &self.controls,
                     entity_blend: if self.smoke {
                         1.
@@ -1821,10 +1848,38 @@ impl ApplicationHandler for App {
             }
             WindowEvent::MouseInput { .. } | WindowEvent::MouseWheel { .. } if self.load_busy() => {
             }
+            WindowEvent::Ime(winit::event::Ime::Commit(text)) if self.chat.open => {
+                self.chat.composing = false;
+                self.chat.text(&text);
+            }
+            WindowEvent::Ime(winit::event::Ime::Preedit(text, _)) if self.chat.open => {
+                self.chat.composing = !text.is_empty();
+            }
+            WindowEvent::MouseWheel { delta, .. } if self.chat.open => {
+                let y = match delta {
+                    winit::event::MouseScrollDelta::LineDelta(_, y) => y,
+                    winit::event::MouseScrollDelta::PixelDelta(p) => p.y as f32,
+                };
+                self.chat.scroll(if y > 0. { 3 } else { -3 });
+            }
+            WindowEvent::MouseInput { .. } if self.chat.open => {}
             WindowEvent::KeyboardInput { event, .. } => {
                 if let PhysicalKey::Code(code) = event.physical_key {
                     if event.state == ElementState::Pressed && !event.repeat {
                         self.keyboard_activity();
+                    }
+                    match self.chat_event(
+                        code,
+                        event.state == ElementState::Pressed,
+                        event.repeat,
+                        event.text.as_deref(),
+                    ) {
+                        Ok(true) => return,
+                        Ok(false) => {}
+                        Err(e) => {
+                            self.chat.push(engine::ui::chat::Kind::Error, e.to_string());
+                            return;
+                        }
                     }
                     if code == KeyCode::Space
                         && let Err(e) = self.jump_event(
@@ -2295,6 +2350,7 @@ impl ApplicationHandler for App {
         if !self.smoke
             && !self.startup_blocked()
             && self.captured
+            && !self.chat.open
             && !self.menu.open()
             && let DeviceEvent::MouseMotion { delta: (x, y) } = event
         {
@@ -2419,7 +2475,7 @@ fn present(
         vec![
             "MINECRAFT RUST EDITION".to_owned(),
             "WASD move  |  Space jump  |  Mouse / arrows look  |  Click to capture  |  Esc release".into(),
-            "Left remove  |  Right build  |  1-8 / G material  |  Ctrl+S save  |  F9 reload  |  R reset  |  T overlook".into(),
+            "Left remove  |  Right build  |  1-8 / G material  |  Ctrl+S save  |  F9 reload  |  R reset  |  O overlook  |  T chat".into(),
             format!("{}  |  {} blocks  |  {} unsaved edits  |  {:.1}, {:.1}, {:.1}", engine::material(client).map_or("Empty hand",|b|b.label.as_str()), client.scene.cells.len(),client.pending_edits(),p.x,p.y,p.z),
             error.unwrap_or("Build something in the court. Saves are .blockworld files in the saves folder.").into(),
         ]
@@ -2843,6 +2899,9 @@ fn main() -> Result<()> {
     }
     let inventory_start = inventory_start || mode.as_deref() == Some("--inventory-smoke");
     let app = App {
+        chat_live: None,
+        chat: Default::default(),
+        commands: engine::commands::Registry::built_in(),
         controls: Default::default(),
         show_character: false,
         preview_test: None,
@@ -3032,7 +3091,7 @@ fn run_window(mut app: App, out: Option<PathBuf>) -> Result<()> {
             std::fs::write(
                 out.join("gpu.json"),
                 serde_json::to_vec_pretty(
-                    &serde_json::json!({"complete":app.close_completed||app.frames>=app.frame_limit,"statistics":gpu.stats,"renderer":gpu.rendering_observation(),"menu":format!("{:?}",app.menu.page),"settings":app.settings,"settings_trace":app.settings_trace,"lod_motion_trace":app.lod_motion_trace,"player_position":app.client.actor.position,"player_preview":gpu.preview_observation(),"character":gpu.character_observation(&app.client),"camera":engine_camera::pose(&app.client,app.client.eye().map(|v|v as f32))?,"preview_case":app.preview_test,"preview_trace":app.preview_trace,"saving":app.saving_observation(),"loading":app.loading_observation(),"timing":timing,"entities":gpu.entities_observation(&app.client),"input":app.controls.observation(),"wireframe":app.wireframe,"palette_open":app.palette.open,"ui":app.palette.observation(&app.client),"window_transitions":app.window_transitions,"live_edit_test":app.edit_test,"pending_edits":app.client.pending_edits(),"inventory_save_mesh_check":app.inventory_mesh_check,"mesh_toggle_trace":app.mesh_toggle_trace,"fluids":engine::fluids::observation(&app.client),"streaming":engine_stream::observation(&app.client),"stream_trace":app.stream_trace,"profile_seconds":app.profile_seconds,"profile_elapsed_seconds":app.profile_started.map(|t|t.elapsed().as_secs_f32()),"target":app.client.target()?.map(|h|[h.position.x,h.position.y,h.position.z]),"uncapped_event_loop":true,"back_face_culling":true,"frustum_culling":true,"internal_faces_removed":true,"depth_testing":true,"dirty_chunk_rebuilds":true}),
+                    &serde_json::json!({"complete":app.close_completed||app.frames>=app.frame_limit,"statistics":gpu.stats,"renderer":gpu.rendering_observation(),"menu":format!("{:?}",app.menu.page),"settings":app.settings,"settings_trace":app.settings_trace,"lod_motion_trace":app.lod_motion_trace,"player_position":app.client.actor.position,"player_preview":gpu.preview_observation(),"character":gpu.character_observation(&app.client),"camera":engine_camera::pose(&app.client,app.client.eye().map(|v|v as f32))?,"preview_case":app.preview_test,"preview_trace":app.preview_trace,"saving":app.saving_observation(),"loading":app.loading_observation(),"timing":timing,"entities":gpu.entities_observation(&app.client),"chat":app.chat.observation(),"input":app.controls.observation(),"wireframe":app.wireframe,"palette_open":app.palette.open,"ui":app.palette.observation(&app.client),"window_transitions":app.window_transitions,"live_edit_test":app.edit_test,"pending_edits":app.client.pending_edits(),"inventory_save_mesh_check":app.inventory_mesh_check,"mesh_toggle_trace":app.mesh_toggle_trace,"fluids":engine::fluids::observation(&app.client),"streaming":engine_stream::observation(&app.client),"stream_trace":app.stream_trace,"profile_seconds":app.profile_seconds,"profile_elapsed_seconds":app.profile_started.map(|t|t.elapsed().as_secs_f32()),"target":app.client.target()?.map(|h|[h.position.x,h.position.y,h.position.z]),"uncapped_event_loop":true,"back_face_culling":true,"frustum_culling":true,"internal_faces_removed":true,"depth_testing":true,"dirty_chunk_rebuilds":true}),
                 )?,
             )?;
         }

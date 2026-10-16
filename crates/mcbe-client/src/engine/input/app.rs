@@ -44,7 +44,7 @@ impl App {
             || (!self.smoke && self.window.as_ref().is_none_or(|w| !w.has_focus()))
         {
             Context::Blocked
-        } else if self.load_busy() {
+        } else if self.load_busy() || self.chat.open {
             Context::Busy
         } else if self.controls.keyboard.open {
             Context::Keyboard

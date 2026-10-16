@@ -42,6 +42,7 @@ struct Camera {
 }
 #[derive(PartialEq, Eq)]
 struct UiKey {
+    chat_revision: u64,
     entity: Option<(crate::engine::entities::components::Id, u16, u16, bool)>,
     controls_revision: u64,
     keyboard_revision: u64,
@@ -150,6 +151,7 @@ pub struct Statistics {
     pub last_frame_ms: f64,
 }
 pub struct Frame<'a> {
+    pub chat: &'a crate::engine::ui::chat::Chat,
     pub controls: &'a crate::engine::input::runtime::Runtime,
     pub entity_blend: f32,
     pub fullscreen: bool,
@@ -1413,6 +1415,7 @@ impl Renderer {
             super::super::input::hints::Use::Place
         };
         let key = UiKey {
+            chat_revision: frame.chat.revision,
             entity: entity_target
                 .as_ref()
                 .map(|t| (t.id, t.current, t.maximum, t.following)),
@@ -1487,6 +1490,7 @@ impl Renderer {
                 client,
                 palette,
                 Context {
+                    chat: frame.chat,
                     controls: frame.controls,
                     entity_target: entity_target.as_ref(),
                     use_kind,

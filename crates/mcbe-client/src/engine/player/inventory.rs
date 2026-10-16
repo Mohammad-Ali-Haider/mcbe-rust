@@ -97,6 +97,25 @@ impl Inventory {
         self.revision = self.revision.wrapping_add(1);
         Ok(true)
     }
+    /// All-or-nothing merge into player slots, respecting each item's stack limit.
+    pub fn receive(&mut self, stack: Stack, count: u16) -> Result<()> {
+        if !(1..=2304).contains(&count) {
+            return Err("Count must be from 1 to 2304".into());
+        }
+        let mut next = self.clone();
+        let order: Vec<_> = (0..36).collect();
+        let mut remaining = count;
+        while remaining > 0 {
+            let n = remaining.min(u16::from(stack.limit())) as u8;
+            if next.add(Stack { count: n, ..stack }, &order).is_some() {
+                return Err("Not enough inventory space; no items were added".into());
+            }
+            remaining -= u16::from(n);
+        }
+        next.revision = next.revision.wrapping_add(1);
+        *self = next;
+        Ok(())
+    }
     pub fn selected(&self) -> Option<BlockId> {
         self.slots[self.active].map(|s| s.id)
     }

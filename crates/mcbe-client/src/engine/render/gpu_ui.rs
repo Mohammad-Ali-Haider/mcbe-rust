@@ -50,6 +50,7 @@ pub struct Atlas {
     icons: Vec<Sprite>,
 }
 pub struct Context<'a> {
+    pub chat: &'a crate::engine::ui::chat::Chat,
     pub entity_target: Option<&'a crate::engine::entities::interaction::TargetInfo>,
     pub controls: &'a crate::engine::input::runtime::Runtime,
     pub use_kind: crate::engine::input::hints::Use,
@@ -558,11 +559,13 @@ impl Atlas {
                 [1.; 4],
             );
         }
-        if matches!(
-            client.view.mode,
-            crate::engine::player::camera::Mode::FirstPerson
-                | crate::engine::player::camera::Mode::ThirdBack
-        ) && let Some(sprite) = self.cross
+        if !ctx.chat.open
+            && matches!(
+                client.view.mode,
+                crate::engine::player::camera::Mode::FirstPerson
+                    | crate::engine::player::camera::Mode::ThirdBack
+            )
+            && let Some(sprite) = self.cross
         {
             c.quad(
                 sprite,
@@ -570,7 +573,7 @@ impl Atlas {
                 [1.; 4],
             );
         }
-        if client.view.is_free() && !palette.open {
+        if client.view.is_free() && !palette.open && !ctx.chat.open {
             self.text(
                 &mut c,
                 6.,
@@ -992,7 +995,13 @@ impl Atlas {
                 );
             }
         }
-        self.control_overlay(&mut c, client, palette, &ctx, viewport);
+        if !ctx.chat.open {
+            self.control_overlay(&mut c, client, palette, &ctx, viewport);
+        }
+        if !palette.open {
+            self.chat_overlay(&mut c, ctx.chat, viewport);
+        }
+
         Composition {
             vertices: c.vertices,
             preview_at: c.preview_at,
@@ -1001,3 +1010,5 @@ impl Atlas {
 }
 
 mod controls;
+
+mod chat;

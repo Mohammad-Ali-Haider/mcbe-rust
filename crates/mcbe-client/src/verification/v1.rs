@@ -145,7 +145,7 @@ pub fn verify(app: &mut App, out: &Path) -> Result<()> {
     app.palette.search = true;
     app.palette.text("stairs");
     let movement = app.client.movement;
-    for key in [KeyCode::KeyF, KeyCode::KeyN, KeyCode::KeyR, KeyCode::KeyT] {
+    for key in [KeyCode::KeyF, KeyCode::KeyN, KeyCode::KeyR, KeyCode::KeyO] {
         app.engine_key(key)?;
     }
     require(

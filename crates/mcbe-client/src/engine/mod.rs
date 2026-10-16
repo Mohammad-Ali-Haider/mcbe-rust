@@ -1,6 +1,7 @@
 //! Engine terrain, player inventory, recipes and versioned saves.
 //! Optional installed Minecraft texture bindings are handled in engine_assets.
 pub(crate) mod blocks;
+pub(crate) mod commands;
 pub(crate) mod content;
 pub(crate) mod entities;
 pub(crate) mod fluids;
@@ -1255,6 +1256,7 @@ pub fn launch(args: &[String]) -> Result<()> {
     };
     let mut source = None;
     let mut dimension = None;
+    let mut chat_case = String::from("open");
     let mut dimension_case = String::from("showcase");
     let mut definitions = None;
     let mut render_method = None;
@@ -1283,9 +1285,10 @@ pub fn launch(args: &[String]) -> Result<()> {
             "--engine-naive" => {},
             "--engine-stream" | "--engine-finite" | "--engine-sync-mesh" => {},
             "--engine-continue" => resume = true,
-            "--engine-dimensions-smoke" | "--engine-dimensions-case" | "--engine-dimension" | "--engine-entity-smoke" | "--engine-entity-case" | "--engine-controller-smoke" | "--engine-controller-case" | "--engine-parkour-smoke" | "--engine-parkour-case" | "--engine-lighting-smoke" | "--engine-lighting-case" | "--engine-renderer" | "--engine-bucket-smoke" | "--engine-bucket-case" | "--engine-fluid-smoke" | "--engine-fluid-case" | "--engine-terrain-smoke" | "--engine-terrain-case" | "--engine-player-smoke" | "--engine-player-case" | "--engine-table-smoke" | "--engine-furnace-smoke" | "--engine-ui-smoke" | "--engine-ui-lab-smoke" | "--engine-render-distance" | "--engine-home" | "--engine-load" | "--engine-study" | "--engine-distance-motion-smoke" | "--engine-distance-smoke" | "--engine-distance-settings-smoke" | "--engine-distance-shrink-smoke" | "--engine-features-smoke" | "--engine-settings-smoke" | "--engine-preview-smoke" | "--engine-preview-case" | "--engine-startup-gpu-close-smoke" | "--engine-startup-retry-smoke" | "--engine-startup-smoke" | "--engine-startup-close-smoke" | "--engine-startup-error-smoke" | "--engine-v1-study" | "--engine-v1-smoke" | "--engine-v1-wire-smoke" | "--engine-v1-fly-smoke" | "--engine-v1-noclip-smoke" | "--engine-v1-sneak-smoke" | "--engine-loading-study" | "--engine-loading-smoke" | "--engine-loading-close-smoke" | "--engine-save-study" | "--engine-save-smoke" | "--engine-save-close-smoke" | "--engine-async-smoke" | "--engine-stream-profile" | "--engine-stream-study" | "--engine-stream-smoke" | "--engine-stream-wire-smoke" | "--engine-smoke" | "--engine-palette-smoke" | "--engine-wire-smoke" | "--engine-window-smoke" | "--engine-edit-smoke" | "--engine-benchmark" | "--engine-profile" | "--engine-render-smoke" | "--engine-mesh-smoke" | "--engine-camera" | "--engine-inventory-study" | "--engine-inventory-smoke" | "--engine-seed" | "--engine-blocks" | "--engine-pack-root" => {
+            "--engine-chat-smoke" | "--engine-chat-case" | "--engine-dimensions-smoke" | "--engine-dimensions-case" | "--engine-dimension" | "--engine-entity-smoke" | "--engine-entity-case" | "--engine-controller-smoke" | "--engine-controller-case" | "--engine-parkour-smoke" | "--engine-parkour-case" | "--engine-lighting-smoke" | "--engine-lighting-case" | "--engine-renderer" | "--engine-bucket-smoke" | "--engine-bucket-case" | "--engine-fluid-smoke" | "--engine-fluid-case" | "--engine-terrain-smoke" | "--engine-terrain-case" | "--engine-player-smoke" | "--engine-player-case" | "--engine-table-smoke" | "--engine-furnace-smoke" | "--engine-ui-smoke" | "--engine-ui-lab-smoke" | "--engine-render-distance" | "--engine-home" | "--engine-load" | "--engine-study" | "--engine-distance-motion-smoke" | "--engine-distance-smoke" | "--engine-distance-settings-smoke" | "--engine-distance-shrink-smoke" | "--engine-features-smoke" | "--engine-settings-smoke" | "--engine-preview-smoke" | "--engine-preview-case" | "--engine-startup-gpu-close-smoke" | "--engine-startup-retry-smoke" | "--engine-startup-smoke" | "--engine-startup-close-smoke" | "--engine-startup-error-smoke" | "--engine-v1-study" | "--engine-v1-smoke" | "--engine-v1-wire-smoke" | "--engine-v1-fly-smoke" | "--engine-v1-noclip-smoke" | "--engine-v1-sneak-smoke" | "--engine-loading-study" | "--engine-loading-smoke" | "--engine-loading-close-smoke" | "--engine-save-study" | "--engine-save-smoke" | "--engine-save-close-smoke" | "--engine-async-smoke" | "--engine-stream-profile" | "--engine-stream-study" | "--engine-stream-smoke" | "--engine-stream-wire-smoke" | "--engine-smoke" | "--engine-palette-smoke" | "--engine-wire-smoke" | "--engine-window-smoke" | "--engine-edit-smoke" | "--engine-benchmark" | "--engine-profile" | "--engine-render-smoke" | "--engine-mesh-smoke" | "--engine-camera" | "--engine-inventory-study" | "--engine-inventory-smoke" | "--engine-seed" | "--engine-blocks" | "--engine-pack-root" => {
                 let flag = &args[i]; i+=1; let value = args.get(i).ok_or("Engine option requires a value")?;
                 match flag.as_str() {
+                    "--engine-chat-case"=>chat_case=value.clone(),
                     "--engine-entity-case"=>entity_case=value.clone(),
                     "--engine-controller-case"=>controller_case=value.clone(),
                     "--engine-parkour-case"=>parkour_case=value.clone(),
@@ -1311,6 +1314,9 @@ pub fn launch(args: &[String]) -> Result<()> {
             _ => return Err("Engine: --engine [--engine-home DIR] [--engine-load FILE] [--engine-seed INTEGER] [--engine-study NEW_OUT | --engine-smoke NEW_OUT]".into()),
         }
         i += 1;
+    }
+    if args.iter().any(|a| a == "--engine-chat-smoke") && dimension.is_none() {
+        dimension = Some("surface".into());
     }
     let startup_test = args.iter().any(|a| a.starts_with("--engine-startup-"));
     let streamed = !args.iter().any(|a| a == "--engine-finite")
@@ -1405,7 +1411,9 @@ pub fn launch(args: &[String]) -> Result<()> {
         app.frame_limit = 4;
     }
     if let Some(out) = &out {
-        if args.iter().any(|a| a == "--engine-dimensions-smoke") {
+        if args.iter().any(|a| a == "--engine-chat-smoke") {
+            crate::verification::chat::prepare(&mut app, out, &chat_case)?;
+        } else if args.iter().any(|a| a == "--engine-dimensions-smoke") {
             crate::verification::dimensions::prepare(&mut app, out, &dimension_case)?;
         } else if args.iter().any(|a| a == "--engine-entity-smoke") {
             crate::verification::entities::prepare(&mut app, out, &entity_case)?;

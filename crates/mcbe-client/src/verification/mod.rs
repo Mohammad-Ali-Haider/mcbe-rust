@@ -27,3 +27,5 @@ pub(crate) mod controller;
 pub(crate) mod entities;
 
 pub(crate) mod dimensions;
+
+pub(crate) mod chat;
