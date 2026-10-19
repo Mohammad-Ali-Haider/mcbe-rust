@@ -1,0 +1,269 @@
+{
+  "schema": 1,
+  "documentation_added": "2026-10-19",
+  "measurement_notice": "Preserved real measurements, not a new benchmark run. Current-source capture code/content hashes match; historical timing runs use an earlier build.",
+  "source_binding": {
+    "documentation_base_commit": "3f2bf16bba83beae36904299e8866cda10b07ee5",
+    "capture_audit_commit": "89594a350d3b6f1a4b3f2a6c94518e5c351a6d1e",
+    "code_and_content_hashes_matched": 436,
+    "selected_source_sha256": {
+      "crates/mcbe-client/src/engine/render/coverage.rs": "c58174d30b6b72ee72fb87dd7fcc39e871dddcd20538ae0e69093779313f8d28",
+      "crates/mcbe-client/src/engine/render/distance.rs": "460a3e5d315e9794d6e06229b2ae7a62200230ef6d9baeda641bbeaf64854f13",
+      "crates/mcbe-client/src/engine/render/gpu.rs": "178b8c8b551767fea4ffa26f8c05036a989b3452e578317849ca163a5f46f09b",
+      "crates/mcbe-client/src/engine/render/gpu/offscreen.rs": "66b8e96e9aa82922f2f66e60b89a45bc4febe8afd49d848f70f1912d28d55037",
+      "crates/mcbe-client/src/engine/render/mesh.rs": "613defec9cd1f15d7d6a59f67afaaa0c630df45e05942cf1aeaed1eb1746fff5",
+      "crates/mcbe-client/src/engine/render/meshing.rs": "a6c8a438acb6626ffe92fea025d58168402bca1f2c931c3b0e7a1ca016e87df9"
+    }
+  },
+  "current_source_geometry": {
+    "source_report": ".local/development/.local/verification/animation-world-final/coverage.json",
+    "source_report_sha256": "d6261de44f370daa4176fa52737749333bd4f21373748a737d4fb10140668660",
+    "adapter": "NVIDIA GeForce RTX 5070 Ti Laptop GPU",
+    "backend": "Dx12",
+    "resolution": [
+      512,
+      288
+    ],
+    "scope": "Final cached nearby terrain at the end of a 14-stage production offscreen transition test; counts exclude distant LOD, actors and UI. This fixture is not an FPS benchmark.",
+    "measured": {
+      "mesh_covered_blocks": 46970,
+      "exposed_faces": 6557,
+      "omitted_internal_faces": 275263,
+      "mesh_quads": 2452,
+      "two_sided_quads": 0,
+      "merged_faces": 4105,
+      "mesh_bytes": 588480,
+      "chunks": 21,
+      "visible_chunks": 7,
+      "range_culled_chunks": 14,
+      "frustum_culled_chunks": 0,
+      "submitted_vertices": 5274,
+      "async_meshing": false
+    },
+    "derived": {
+      "reference_exposed_face_quads": 6557,
+      "reference_exposed_face_triangles": 13114,
+      "reference_exposed_face_vertex_bytes": 1573680,
+      "greedy_cached_triangles": 4904,
+      "greedy_submitted_nearby_triangles": 1758,
+      "reduction_percent_vs_separate_exposed_faces": 62.604849778862295
+    },
+    "reference_notice": "The reference column is calculated from exposed-face counters, not a separately timed reference rerun.",
+    "coverage": {
+      "stages": 14,
+      "moving_stages": [
+        {
+          "stage": "moving--16-half",
+          "reference_pixels": 15243,
+          "missing_pixels": 1,
+          "stream_center": [
+            -4,
+            3
+          ]
+        },
+        {
+          "stage": "moving--16-full",
+          "reference_pixels": 15243,
+          "missing_pixels": 5,
+          "stream_center": [
+            -4,
+            3
+          ]
+        },
+        {
+          "stage": "moving--48-half",
+          "reference_pixels": 15473,
+          "missing_pixels": 1,
+          "stream_center": [
+            -6,
+            3
+          ]
+        },
+        {
+          "stage": "moving--48-full",
+          "reference_pixels": 15473,
+          "missing_pixels": 3,
+          "stream_center": [
+            -6,
+            3
+          ]
+        },
+        {
+          "stage": "moving--96-half",
+          "reference_pixels": 24296,
+          "missing_pixels": 0,
+          "stream_center": [
+            -9,
+            3
+          ]
+        },
+        {
+          "stage": "moving--96-full",
+          "reference_pixels": 24296,
+          "missing_pixels": 1,
+          "stream_center": [
+            -9,
+            3
+          ]
+        },
+        {
+          "stage": "moving--144-half",
+          "reference_pixels": 22318,
+          "missing_pixels": 0,
+          "stream_center": [
+            -12,
+            3
+          ]
+        },
+        {
+          "stage": "moving--144-full",
+          "reference_pixels": 22318,
+          "missing_pixels": 0,
+          "stream_center": [
+            -12,
+            3
+          ]
+        }
+      ],
+      "maximum_missing_pixels": 5
+    },
+    "settled_ui": {
+      "ui_uploads": 12,
+      "skipped_frame_settled": true,
+      "idle_uploads_stopped": true,
+      "disabled_uploads_stopped": true,
+      "inventory_preview_verified": true,
+      "renderer": {
+        "method": "forward",
+        "extra_bytes": 0,
+        "genuine_ray_tracing": false,
+        "requested_method": "forward",
+        "hardware_ray_tracing": true
+      }
+    }
+  },
+  "historical_finite_court_abba": {
+    "source_report_sha256": "cab85997520f35770ba409cf6e792c6263e37544a88023e004725e1c50d817cd",
+    "binary_sha256": "da0cf3c0c2697c9750fa2a249ddddff815171adffa8e8f1e251fa202325513b4",
+    "build": "Preserved checkpoint 48; earlier than the current source",
+    "adapter": "NVIDIA GeForce RTX 5070 Ti Laptop GPU",
+    "backend": "Dx12",
+    "resolution": [
+      2560,
+      1369
+    ],
+    "seconds_per_run": 10,
+    "warmup_frames": 120,
+    "mode_order": [
+      "reference",
+      "greedy",
+      "greedy",
+      "reference"
+    ],
+    "blocks": 42482,
+    "chunks": 36,
+    "performance": {
+      "reference_fps": 2359.8014512778896,
+      "greedy_fps": 2448.0114870676875,
+      "reference_run_spread_ratio": 1.02218141342511,
+      "greedy_run_spread_ratio": 1.0312061647449025,
+      "timing_comparison_inconclusive": false,
+      "observed_change_percent": 3.7380278642523024,
+      "reference_quads": 19586,
+      "greedy_quads": 1606,
+      "triangle_reduction_percent": 91.80026549576228,
+      "reference_mesh_bytes": 4700640,
+      "greedy_mesh_bytes": 385440
+    },
+    "profiles": [
+      {
+        "order": 1,
+        "mode": "reference",
+        "timing": {
+          "samples": 23339,
+          "median_frame_ms": 0.3252,
+          "p95_frame_ms": 1.0903,
+          "mean_presented_fps": 2333.916500789659,
+          "scope": "CPU event/present intervals with GPU backpressure; excludes warmup frames (statistics.warmup_frames) and screenshot capture; not physical display refresh or GPU timestamp duration"
+        }
+      },
+      {
+        "order": 2,
+        "mode": "greedy",
+        "timing": {
+          "samples": 24113,
+          "median_frame_ms": 0.2983,
+          "p95_frame_ms": 1.0312999999999999,
+          "mean_presented_fps": 2410.408100794544,
+          "scope": "CPU event/present intervals with GPU backpressure; excludes warmup frames (statistics.warmup_frames) and screenshot capture; not physical display refresh or GPU timestamp duration"
+        }
+      },
+      {
+        "order": 3,
+        "mode": "greedy",
+        "timing": {
+          "samples": 24857,
+          "median_frame_ms": 0.29619999999999996,
+          "p95_frame_ms": 0.9708,
+          "mean_presented_fps": 2485.6276930903864,
+          "scope": "CPU event/present intervals with GPU backpressure; excludes warmup frames (statistics.warmup_frames) and screenshot capture; not physical display refresh or GPU timestamp duration"
+        }
+      },
+      {
+        "order": 4,
+        "mode": "reference",
+        "timing": {
+          "samples": 23857,
+          "median_frame_ms": 0.2967,
+          "p95_frame_ms": 1.0629000000000002,
+          "mean_presented_fps": 2385.6860675933603,
+          "scope": "CPU event/present intervals with GPU backpressure; excludes warmup frames (statistics.warmup_frames) and screenshot capture; not physical display refresh or GPU timestamp duration"
+        }
+      }
+    ],
+    "scope": "Four static native GPU camera comparisons, selected-cell outline, CPU surface-coverage tests separately, live F8 roundtrip, and four 10-second ABBA rotating-camera runs after 120-frame warmup on this PC. CPU event/present intervals are not display refresh or GPU timestamps; no general FPS guarantee."
+  },
+  "historical_streaming_abba": {
+    "source_report_sha256": "aa3095974476417ab0d81b3cea58c1b20fd51856df292982a15668a99fa33663",
+    "build": "Preserved checkpoint 48; earlier than the current source",
+    "performance": {
+      "sync_fps": 1425.5484678151254,
+      "async_fps": 1626.988235188607,
+      "sync_p95_ms": [
+        2.4271000000000003,
+        2.483
+      ],
+      "async_p95_ms": [
+        1.4061,
+        1.5636999999999999
+      ]
+    },
+    "scope": "Owned 18-cubed halos; live edit/eviction/registry and F8/F2 races including last-block removal; uploaded vertex fingerprints and native pixels versus fresh synchronous geometry; four 1680-frame repeated routes in sync/async/async/sync order after initial meshes settle. CPU event/present intervals are not GPU timestamps or monitor refresh; no general FPS guarantee."
+  },
+  "screenshots": [
+    {
+      "file": "../media/terrain.png",
+      "width": 2560,
+      "height": 1369,
+      "sha256": "624a4b4134a0a863a694bbf9ea14078ec8d6238b8c0795a88a31fca8c4cc86d5",
+      "source_capture": ".local/development/.local/verification/terrain-final-06/forest/gpu.png",
+      "description": "Earlier native forest/terrain capture; Forward renderer; instantaneous HUD counters are not a benchmark."
+    },
+    {
+      "file": "../media/inventory.png",
+      "width": 512,
+      "height": 288,
+      "sha256": "ebd7d7dfba7da5ba29eaa7d8af5a5bbebb09acddda82b12d0e14fd0e5bc55644",
+      "source_capture": ".local/development/.local/verification/animation-ui-gpu-final/inventory-end.png",
+      "description": "Current-source production offscreen inventory frame with the real GPU player preview."
+    },
+    {
+      "file": "../media/wireframe.png",
+      "width": 2880,
+      "height": 1694,
+      "sha256": "cdf9c021a67a0c5462c1759a409f0662929cedb1a5c489853f326d75b3e8b711",
+      "source_capture": ".local/development/.local/verification/dimensions-final-02/islands-wire-16-forward/gpu.png",
+      "description": "Earlier native island wireframe capture; the green lines are actual triangle edges."
+    }
+  ]
+}

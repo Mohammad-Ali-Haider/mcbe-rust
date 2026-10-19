@@ -3,6 +3,69 @@
 An expandable Rust voxel engine for your own block game. This is the single
 active project; development versions now live in Git history.
 
+## Screenshots
+
+![Forest terrain with textured blocks, chunk statistics and the hotbar](docs/media/terrain.png)
+
+Terrain exploration in the Forward renderer. The gallery uses actual renderer
+captures; the terrain and wireframe images are earlier verification scenes, while
+the inventory image uses the current source. HUD FPS is an instantaneous sample.
+
+| Inventory and GPU player preview | F4 triangle wireframe |
+|---|---|
+| ![Original inventory UI with item search, crafting, storage and player preview](docs/media/inventory.png) | ![Island terrain with its actual triangle edges highlighted](docs/media/wireframe.png) |
+
+## Performance and triangle reduction
+
+One recorded **current-source** production GPU fixture represents **6,557 exposed
+faces with 2,452 greedy quads**: **62.6% fewer quads and terrain vertex bytes** than
+separate exposed faces. Its cached nearby geometry is:
+
+| Metric | Separate exposed faces (calculated) | Greedy mesh (captured) |
+|---|---:|---:|
+| Quads | 6,557 | 2,452 |
+| Triangles | 13,114 | 4,904 |
+| Terrain vertex payload | 1,573,680 bytes | 588,480 bytes |
+
+The same frame reports **275,263 internal faces omitted** and **7 of 21 cached
+nearby chunks drawn**, submitting **1,758 nearby triangles** after view/range
+tests. These counts exclude distant LOD, actors and UI. The fixture ran offscreen
+at 512 x 288 on an NVIDIA GeForce RTX 5070 Ti Laptop GPU through DX12; the
+reference column is derived from its counters, not a fresh A/B timing run.
+
+An earlier finite-court A/B benchmark reduced **39,172 to 3,212 triangles
+(91.8%)**, with **3.7% higher measured event/present throughput** in that small
+scene. Geometry savings and frame-rate gains are different measurements. See
+[performance evidence and reproduction](docs/PERFORMANCE.md) for the raw numbers,
+run conditions, historical timing results and measurement limits.
+
+### How the engine saves work
+
+| Algorithm / system | What it does | Implementation |
+|---|---|---|
+| Hidden-face removal | Tests neighboring block shapes and emits exposed surfaces, including across chunk boundaries. | [Shapes](crates/mcbe-client/src/engine/blocks/shapes.rs), [mesher](crates/mcbe-client/src/engine/render/mesh.rs) |
+| Greedy rectangle meshing | Sweeps six directions through each 16-cubed chunk; combines compatible full opaque/cutout faces of the same block state. Texture coordinates repeat per block. | [Mesh construction](crates/mcbe-client/src/engine/render/mesh.rs) |
+| Frustum and distance culling | Rejects chunk bounds outside the camera or range before submitting terrain draws. GPU back-face culling and depth testing handle surface visibility. | [Bounds tests](crates/mcbe-client/src/engine/render/mesh.rs), [draw selection](crates/mcbe-client/src/engine/render/gpu.rs) |
+| Dirty mesh caching | Reuses uploaded chunk buffers and rebuilds affected/version-changed meshes instead of rebuilding the world every frame. | [GPU mesh cache](crates/mcbe-client/src/engine/render/gpu.rs) |
+| Bounded asynchronous meshing | A worker builds owned 18-cubed halo snapshots; at most two jobs are in flight. Version/epoch checks reject stale work, and accepted uploads are paced. | [Worker scheduler](crates/mcbe-client/src/engine/render/meshing.rs) |
+| Adaptive distant terrain | Recursively subdivides terrain patches with distance and boundary constraints; stitches shared edges and retains coarser geometry for far views. | [LOD generation](crates/mcbe-client/src/engine/render/distance.rs) |
+| Readiness-based LOD handoff | Keeps fallback terrain until detailed GPU chunks are ready, with 240 ms detail fades and 180 ms distant-mesh crossfades. | [Coverage](crates/mcbe-client/src/engine/render/coverage.rs), [LOD cache](crates/mcbe-client/src/engine/render/distance.rs) |
+| Compact chunk storage | Allocates dense chunks sparsely, stores block IDs in 16 bits and shares chunk snapshots with copy-on-write. A 16-cubed block-ID payload is 8 KiB before overhead. | [Voxel storage](crates/mcbe-client/src/engine/world/storage.rs) |
+| Reused textures, instances and UI | Caches mipmapped textures and shared creature cuboids; uploads settled UI/player previews only when their inputs change. | [Textures](crates/mcbe-client/src/engine/render/texture.rs), [entities](crates/mcbe-client/src/engine/entities/), [UI renderer](crates/mcbe-client/src/engine/render/gpu_ui.rs) |
+| Incremental optional ray scene | Reuses mesh-part hashes and vertex ranges; rebuilds at most two BLAS parts per frame within quality budgets. Forward remains the default. | [Ray renderer](crates/mcbe-client/src/engine/render/methods/ray/) |
+
+For an **isolated, single-material solid 16 x 16 x 16 chunk**, independent cubes
+would use 49,152 triangles. Removing internal faces leaves 3,072; merging its six
+outer surfaces leaves just **12 triangles**. This is an idealized example, not a
+whole-world benchmark. Partial blocks and translucent faces follow their own
+geometry/sorting paths and do not all merge into those rectangles.
+
+**Inspect it yourself:** F3 shows rendering counters, F4 toggles triangle edges,
+F8 switches greedy/reference meshing, and F2 switches asynchronous/synchronous
+meshing. Chunk culling currently uses camera/range bounds rather than GPU
+occlusion queries or hierarchical-Z. See [Rendering](docs/RENDERING.md) for the
+Forward, Deferred and hardware-ray tradeoffs.
+
 ## Open and run manually
 
 Open `D:\Recontruction Projects\Minecraft Rust Edition` with VS Code → File → Open Folder.
