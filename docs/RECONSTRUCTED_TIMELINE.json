@@ -1,259 +1,305 @@
 {
-  "schema_version": 2,
-  "kind": "complete_preserved_milestones_with_assigned_dates",
-  "repaired_on": "2026-10-16T03:08:03.840192+05:30",
-  "date_notice": "Historical dates are assigned, not verified original development dates. Sources were imported on October 15-16, 2026.",
-  "previous_published_tip": "8a7737c8d4080557e22165fa06c75f5f67455dc2",
-  "previous_fragment_count": 1500,
-  "recovery_ref": "refs/recovery/pre-complete-milestones-20261016",
-  "verification_command": "cargo test --workspace --offline --locked --quiet",
-  "final_gameplay": "Byte-identical to the previous published tip; only three history/development documents change.",
+  "schema_version": 3,
+  "kind": "one_month_reconstructed_timeline",
+  "rewritten_on": "2026-10-19T17:37:20.300013+05:30",
+  "window": {
+    "start": "2026-09-19",
+    "end": "2026-10-19"
+  },
+  "date_notice": "The first 16 milestone dates are assigned, not verified development dates. Later actual dates remain unchanged.",
+  "previous_local_tip": "89594a350d3b6f1a4b3f2a6c94518e5c351a6d1e",
+  "previous_published_tip": "1354ddc7c64edbd7bf991128083ce2815d805485",
+  "recovery_ref": "refs/recovery/pre-one-month-20261019",
+  "snapshot_verification": "All 54 existing commit trees, messages, author identities and order are preserved exactly.",
+  "previous_reconstruction": {
+    "schema_version": 2,
+    "kind": "complete_preserved_milestones_with_assigned_dates",
+    "repaired_on": "2026-10-16T03:08:03.840192+05:30",
+    "date_notice": "Historical dates are assigned, not verified original development dates. Sources were imported on October 15-16, 2026.",
+    "previous_published_tip": "8a7737c8d4080557e22165fa06c75f5f67455dc2",
+    "previous_fragment_count": 1500,
+    "recovery_ref": "refs/recovery/pre-complete-milestones-20261016",
+    "verification_command": "cargo test --workspace --offline --locked --quiet",
+    "final_gameplay": "Byte-identical to the previous published tip; only three history/development documents change."
+  },
   "milestones": [
     {
       "sequence": 1,
       "source_commit": "6ac518127502e3de64698d3e99eca7e565a8b450",
       "source_tree": "5214592177930775cfd841afecc196e38120f8e2",
-      "commit": "d6f2b9e1c4871f1c4f901170356e839eec9b48b6",
+      "commit": "1de2da5d2a02629d8cd3cd4ea965049335469c5e",
       "tree": "5214592177930775cfd841afecc196e38120f8e2",
       "subject": "import(v1): playable engine, inventory, flight and JSON geometry",
       "author_name": "Mohammad Ali Haider",
       "author_email": "165472484+Mohammad-Ali-Haider@users.noreply.github.com",
       "original_author_date": "2026-10-15T21:46:42+05:30",
       "original_committer_date": "2026-10-15T21:46:42+05:30",
-      "assigned_date": "2026-06-16T10:48:41+05:30",
+      "assigned_date": "2026-09-19T14:52:30+05:30",
       "workspace_tests": "passed",
-      "test_seconds": 36.25
+      "test_seconds": 36.25,
+      "previous_commit": "d6f2b9e1c4871f1c4f901170356e839eec9b48b6",
+      "previous_assigned_date": "2026-06-16T10:48:41+05:30"
     },
     {
       "sequence": 2,
       "source_commit": "57a565e61bdc7374edeffb8484e1e6c965bc4764",
       "source_tree": "5f286845eaeee0211ce4df940e2e16d699b2e337",
-      "commit": "d44246c19a712aea7d40b88d9b63b5ce138080ae",
+      "commit": "1636f31a9d60e71658e697b89f458948198a2c23",
       "tree": "5f286845eaeee0211ce4df940e2e16d699b2e337",
       "subject": "feat(startup): show loading while preparing the world",
       "author_name": "Mohammad Ali Haider",
       "author_email": "165472484+Mohammad-Ali-Haider@users.noreply.github.com",
       "original_author_date": "2026-10-15T21:46:42+05:30",
       "original_committer_date": "2026-10-15T21:46:42+05:30",
-      "assigned_date": "2026-06-23T18:49:18+05:30",
+      "assigned_date": "2026-09-19T19:43:13+05:30",
       "workspace_tests": "passed",
-      "test_seconds": 8.24
+      "test_seconds": 8.24,
+      "previous_commit": "d44246c19a712aea7d40b88d9b63b5ce138080ae",
+      "previous_assigned_date": "2026-06-23T18:49:18+05:30"
     },
     {
       "sequence": 3,
       "source_commit": "f91e95ed9ffa2320037edeb880b885bcb0c1778c",
       "source_tree": "a867755406c2b45b48f291c1a301f8fcc43b88ab",
-      "commit": "e5375828a72db93a9d15451fc6079ada9cc1220a",
+      "commit": "7c1d8879e788b48cb63e3275b5971dfdd525e05d",
       "tree": "a867755406c2b45b48f291c1a301f8fcc43b88ab",
       "subject": "perf(startup): bound graphics copies per frame",
       "author_name": "Mohammad Ali Haider",
       "author_email": "165472484+Mohammad-Ali-Haider@users.noreply.github.com",
       "original_author_date": "2026-10-15T21:46:43+05:30",
       "original_committer_date": "2026-10-15T21:46:43+05:30",
-      "assigned_date": "2026-06-28T18:29:00+05:30",
+      "assigned_date": "2026-09-22T11:11:23+05:30",
       "workspace_tests": "passed",
-      "test_seconds": 15.59
+      "test_seconds": 15.59,
+      "previous_commit": "e5375828a72db93a9d15451fc6079ada9cc1220a",
+      "previous_assigned_date": "2026-06-28T18:29:00+05:30"
     },
     {
       "sequence": 4,
       "source_commit": "83afe6bea7b09f8f20745ffc94a4c88e45ee752a",
       "source_tree": "f4d8ebc2ae9876ef4569a64f038442cfaeaab1e0",
-      "commit": "b7b3a3d98310cc2dcee571275bc9854cc8f1fa42",
+      "commit": "04e537d5eb42dea8ee265fa5b8455e9bf8119083",
       "tree": "f4d8ebc2ae9876ef4569a64f038442cfaeaab1e0",
       "subject": "feat(inventory): render a depth-tested player preview",
       "author_name": "Mohammad Ali Haider",
       "author_email": "165472484+Mohammad-Ali-Haider@users.noreply.github.com",
       "original_author_date": "2026-10-15T21:46:43+05:30",
       "original_committer_date": "2026-10-15T21:46:43+05:30",
-      "assigned_date": "2026-06-30T10:33:33+05:30",
+      "assigned_date": "2026-09-25T12:51:30+05:30",
       "workspace_tests": "passed",
-      "test_seconds": 12.74
+      "test_seconds": 12.74,
+      "previous_commit": "b7b3a3d98310cc2dcee571275bc9854cc8f1fa42",
+      "previous_assigned_date": "2026-06-30T10:33:33+05:30"
     },
     {
       "sequence": 5,
       "source_commit": "024a0d55f9b39640fef68839fdd74411ff3a829e",
       "source_tree": "739fec2a3147b3d6b71571d872884bbe63fdd1ab",
-      "commit": "1eaf8021b029916492e81fd82478c7989df747fd",
+      "commit": "9f1bf2f1d6f973f218160ae2fbcde906f4da701f",
       "tree": "739fec2a3147b3d6b71571d872884bbe63fdd1ab",
       "subject": "feat(game): settings, sprint, slab states, stairs and glass",
       "author_name": "Mohammad Ali Haider",
       "author_email": "165472484+Mohammad-Ali-Haider@users.noreply.github.com",
       "original_author_date": "2026-10-15T21:46:43+05:30",
       "original_committer_date": "2026-10-15T21:46:43+05:30",
-      "assigned_date": "2026-07-02T21:28:09+05:30",
+      "assigned_date": "2026-09-25T17:33:26+05:30",
       "workspace_tests": "passed",
-      "test_seconds": 15.41
+      "test_seconds": 15.41,
+      "previous_commit": "1eaf8021b029916492e81fd82478c7989df747fd",
+      "previous_assigned_date": "2026-07-02T21:28:09+05:30"
     },
     {
       "sequence": 6,
       "source_commit": "17bd94e072ea2fe0ce642ca99cc3ac9d48725e4d",
       "source_tree": "b0d5c88aef809bba3da3e2a68bb01d737d587555",
-      "commit": "353d5088f82228dc8fbbf350f0c959d3d96299bf",
+      "commit": "fb195cc7444d9242d2f92f4f28840bb89f0e890d",
       "tree": "b0d5c88aef809bba3da3e2a68bb01d737d587555",
       "subject": "feat(player): toggle flight with a double jump",
       "author_name": "Mohammad Ali Haider",
       "author_email": "165472484+Mohammad-Ali-Haider@users.noreply.github.com",
       "original_author_date": "2026-10-15T21:46:44+05:30",
       "original_committer_date": "2026-10-15T21:46:44+05:30",
-      "assigned_date": "2026-07-10T10:48:36+05:30",
+      "assigned_date": "2026-09-25T18:49:02+05:30",
       "workspace_tests": "passed",
-      "test_seconds": 16.36
+      "test_seconds": 16.36,
+      "previous_commit": "353d5088f82228dc8fbbf350f0c959d3d96299bf",
+      "previous_assigned_date": "2026-07-10T10:48:36+05:30"
     },
     {
       "sequence": 7,
       "source_commit": "33326c616886b774fe6af5c4bd5a0a3c2a26f952",
       "source_tree": "6d2f28f2ab8d109df4dde2f864e7ac8fd31309bf",
-      "commit": "72f5cd08efc563a5253df0d18785f9e0cbe8b3b4",
+      "commit": "b3240eac9b3e1dfc93872b648ad168b2fd6ba128",
       "tree": "6d2f28f2ab8d109df4dde2f864e7ac8fd31309bf",
       "subject": "feat(world): extend render distance to 255 with distant terrain",
       "author_name": "Mohammad Ali Haider",
       "author_email": "165472484+Mohammad-Ali-Haider@users.noreply.github.com",
       "original_author_date": "2026-10-15T21:46:44+05:30",
       "original_committer_date": "2026-10-15T21:46:44+05:30",
-      "assigned_date": "2026-07-16T12:16:47+05:30",
+      "assigned_date": "2026-09-29T14:19:37+05:30",
       "workspace_tests": "passed",
-      "test_seconds": 14.92
+      "test_seconds": 14.92,
+      "previous_commit": "72f5cd08efc563a5253df0d18785f9e0cbe8b3b4",
+      "previous_assigned_date": "2026-07-16T12:16:47+05:30"
     },
     {
       "sequence": 8,
       "source_commit": "6cef75be45e6bce76c3f459fa6da2aed0dd8d09c",
       "source_tree": "7b78c19c332c4b00088ae33db53c6fb8d8fe47d1",
-      "commit": "9f2e3cb9a3515a9ca131dd79750724cd854e73a2",
+      "commit": "7ecd515c56bfb1f2a1181e44f61c4ccfb474c4ca",
       "tree": "7b78c19c332c4b00088ae33db53c6fb8d8fe47d1",
       "subject": "fix(lod): preserve detail and blend stitched terrain transitions",
       "author_name": "Mohammad Ali Haider",
       "author_email": "165472484+Mohammad-Ali-Haider@users.noreply.github.com",
       "original_author_date": "2026-10-15T21:46:44+05:30",
       "original_committer_date": "2026-10-15T21:46:44+05:30",
-      "assigned_date": "2026-07-21T22:14:09+05:30",
+      "assigned_date": "2026-10-01T09:30:14+05:30",
       "workspace_tests": "passed",
-      "test_seconds": 19.01
+      "test_seconds": 19.01,
+      "previous_commit": "9f2e3cb9a3515a9ca131dd79750724cd854e73a2",
+      "previous_assigned_date": "2026-07-21T22:14:09+05:30"
     },
     {
       "sequence": 9,
       "source_commit": "0331666734290f735c5f3fec7fb1c2e9d4135fdc",
       "source_tree": "b33feafd913727b44c08679b33f0a01ee123a61a",
-      "commit": "1b1e1271d9376d8f8f226dc058ee5e2ae1377809",
+      "commit": "8d27d13dc0f55bd39830e369d724bbdd2eaa1397",
       "tree": "b33feafd913727b44c08679b33f0a01ee123a61a",
       "subject": "refactor(engine): organize modules by responsibility",
       "author_name": "Mohammad Ali Haider",
       "author_email": "165472484+Mohammad-Ali-Haider@users.noreply.github.com",
       "original_author_date": "2026-10-15T22:00:15+05:30",
       "original_committer_date": "2026-10-15T22:00:15+05:30",
-      "assigned_date": "2026-07-22T18:17:32+05:30",
+      "assigned_date": "2026-10-01T13:51:25+05:30",
       "workspace_tests": "passed",
-      "test_seconds": 21.23
+      "test_seconds": 21.23,
+      "previous_commit": "1b1e1271d9376d8f8f226dc058ee5e2ae1377809",
+      "previous_assigned_date": "2026-07-22T18:17:32+05:30"
     },
     {
       "sequence": 10,
       "source_commit": "dfc58fb222a83948674a8fee783867f1e78a0231",
       "source_tree": "04f197dea25d668ffe68fd0eb662fa7feda1d917",
-      "commit": "e57c3c36cbe13074d668ea3f3ffe35ec6e988f36",
+      "commit": "4c197b48ad8a80ca83cd28280e30dec45b9acd87",
       "tree": "04f197dea25d668ffe68fd0eb662fa7feda1d917",
       "subject": "test(native): wait for LOD crossings before ending capture",
       "author_name": "Mohammad Ali Haider",
       "author_email": "165472484+Mohammad-Ali-Haider@users.noreply.github.com",
       "original_author_date": "2026-10-15T22:05:33+05:30",
       "original_committer_date": "2026-10-15T22:05:33+05:30",
-      "assigned_date": "2026-07-28T12:24:34+05:30",
+      "assigned_date": "2026-10-04T15:20:54+05:30",
       "workspace_tests": "passed",
-      "test_seconds": 12.33
+      "test_seconds": 12.33,
+      "previous_commit": "e57c3c36cbe13074d668ea3f3ffe35ec6e988f36",
+      "previous_assigned_date": "2026-07-28T12:24:34+05:30"
     },
     {
       "sequence": 11,
       "source_commit": "1cb1d843e7b2535c1aeabac813fd0b923d507f28",
       "source_tree": "2caae7b183132ce7950e1ba6deca527749fc0a0b",
-      "commit": "a042df9c8ec5282e5eb9d387348e4ac30bc584f3",
+      "commit": "e9ca7040338f8aaf620f545a808fbf7e61084ac2",
       "tree": "2caae7b183132ce7950e1ba6deca527749fc0a0b",
       "subject": "docs(dev): add manual Cargo workflow and VS Code setup",
       "author_name": "Mohammad Ali Haider",
       "author_email": "165472484+Mohammad-Ali-Haider@users.noreply.github.com",
       "original_author_date": "2026-10-15T22:05:33+05:30",
       "original_committer_date": "2026-10-15T22:05:33+05:30",
-      "assigned_date": "2026-08-12T10:02:49+05:30",
+      "assigned_date": "2026-10-08T09:06:03+05:30",
       "workspace_tests": "passed",
-      "test_seconds": 10.14
+      "test_seconds": 10.14,
+      "previous_commit": "a042df9c8ec5282e5eb9d387348e4ac30bc584f3",
+      "previous_assigned_date": "2026-08-12T10:02:49+05:30"
     },
     {
       "sequence": 12,
       "source_commit": "bf1ae798e9780429e9251d879c22a7a3619aa679",
       "source_tree": "67af31f6104e8d5e2a912f6cc11c44e0f631dca0",
-      "commit": "c233e32229ac908f5a34b84a577ce9c5a16c149d",
+      "commit": "314d97f5119888873306d4fd17d77d3279bdc68b",
       "tree": "67af31f6104e8d5e2a912f6cc11c44e0f631dca0",
       "subject": "fix(dev): use project data for direct Cargo launches",
       "author_name": "Mohammad Ali Haider",
       "author_email": "165472484+Mohammad-Ali-Haider@users.noreply.github.com",
       "original_author_date": "2026-10-15T22:08:43+05:30",
       "original_committer_date": "2026-10-15T22:08:43+05:30",
-      "assigned_date": "2026-08-21T16:22:53+05:30",
+      "assigned_date": "2026-10-08T11:30:29+05:30",
       "workspace_tests": "passed",
-      "test_seconds": 12.67
+      "test_seconds": 12.67,
+      "previous_commit": "c233e32229ac908f5a34b84a577ce9c5a16c149d",
+      "previous_assigned_date": "2026-08-21T16:22:53+05:30"
     },
     {
       "sequence": 13,
       "source_commit": "a1e8da6ce77259033e59d5afbbcad5b1a7d0c1c9",
       "source_tree": "2ce2249289f5fe64198edd263ade3ddb065555b6",
-      "commit": "6baf994bf1d40410bd1ce73a6e8de2225b62f00b",
+      "commit": "a07a5a3af2f5fa083f33a81efbce01fc061e2eda",
       "tree": "2ce2249289f5fe64198edd263ade3ddb065555b6",
       "subject": "docs(dev): clarify retained research records and cleanup",
       "author_name": "Mohammad Ali Haider",
       "author_email": "165472484+Mohammad-Ali-Haider@users.noreply.github.com",
       "original_author_date": "2026-10-15T22:14:23+05:30",
       "original_committer_date": "2026-10-15T22:14:23+05:30",
-      "assigned_date": "2026-08-22T22:09:33+05:30",
+      "assigned_date": "2026-10-08T18:55:37+05:30",
       "workspace_tests": "passed",
-      "test_seconds": 8.75
+      "test_seconds": 8.75,
+      "previous_commit": "6baf994bf1d40410bd1ce73a6e8de2225b62f00b",
+      "previous_assigned_date": "2026-08-22T22:09:33+05:30"
     },
     {
       "sequence": 14,
       "source_commit": "7fd9981afa78916b48af5c599eb5f11a16f4e6fa",
       "source_tree": "c42fa9a514d396104e8f9dcdfe5bcd8f72b0f4d0",
-      "commit": "1d979e7ae47f2dcb2dda1bdfa8521d794688321f",
+      "commit": "29bfd2b7c503bdd0b30e688997459cf532ffd3c7",
       "tree": "c42fa9a514d396104e8f9dcdfe5bcd8f72b0f4d0",
       "subject": "chore(project): rename to Minecraft Rust Edition",
       "author_name": "Mohammad Ali Haider",
       "author_email": "165472484+Mohammad-Ali-Haider@users.noreply.github.com",
       "original_author_date": "2026-10-15T23:17:59+05:30",
       "original_committer_date": "2026-10-15T23:17:59+05:30",
-      "assigned_date": "2026-08-26T11:00:32+05:30",
+      "assigned_date": "2026-10-12T14:21:12+05:30",
       "workspace_tests": "passed",
-      "test_seconds": 12.03
+      "test_seconds": 12.03,
+      "previous_commit": "1d979e7ae47f2dcb2dda1bdfa8521d794688321f",
+      "previous_assigned_date": "2026-08-26T11:00:32+05:30"
     },
     {
       "sequence": 15,
       "source_commit": "3e2e17168188f29a4b69a750c2ec0d3be97af97b",
       "source_tree": "5100eb6285ca48d06c43c595c7a09a786de3ce67",
-      "commit": "56ce71220cb383591401b85bb9338f2b3cd47374",
+      "commit": "84abfb1a4625422ab2345b1ae0c10672dcf124e1",
       "tree": "5100eb6285ca48d06c43c595c7a09a786de3ce67",
       "subject": "refactor(blocks): compile unified packs into shared component states",
       "author_name": "Mohammad Ali Haider",
       "author_email": "165472484+Mohammad-Ali-Haider@users.noreply.github.com",
       "original_author_date": "2026-10-16T00:13:12+05:30",
       "original_committer_date": "2026-10-16T00:26:20+05:30",
-      "assigned_date": "2026-09-24T13:21:25+05:30",
+      "assigned_date": "2026-10-14T17:00:49+05:30",
       "workspace_tests": "passed",
-      "test_seconds": 20.12
+      "test_seconds": 20.12,
+      "previous_commit": "56ce71220cb383591401b85bb9338f2b3cd47374",
+      "previous_assigned_date": "2026-09-24T13:21:25+05:30"
     },
     {
       "sequence": 16,
       "source_commit": "3d5fda2f03c10638cb951f4a2e9edf456575d319",
       "source_tree": "def1d1ebaa0938dc4138e23cb8d3a6d5e0ec7c64",
-      "commit": "5d6e09d7eeeaa41135f2cf5c3c211425a75752cf",
+      "commit": "76d849e923ef4599f9835f4fa78ab02ba62008e4",
       "tree": "def1d1ebaa0938dc4138e23cb8d3a6d5e0ec7c64",
       "subject": "feat(blocks): share placement behaviors and budget signal updates",
       "author_name": "Mohammad Ali Haider",
       "author_email": "165472484+Mohammad-Ali-Haider@users.noreply.github.com",
       "original_author_date": "2026-10-16T00:26:30+05:30",
       "original_committer_date": "2026-10-16T00:26:30+05:30",
-      "assigned_date": "2026-09-30T11:08:31+05:30",
+      "assigned_date": "2026-10-14T20:42:06+05:30",
       "workspace_tests": "passed",
-      "test_seconds": 21.14
+      "test_seconds": 21.14,
+      "previous_commit": "5d6e09d7eeeaa41135f2cf5c3c211425a75752cf",
+      "previous_assigned_date": "2026-09-30T11:08:31+05:30"
     },
     {
       "sequence": 17,
       "source_commit": "940d6b2d82c0cef8b038a87ad6a42a1d504d9135",
       "source_tree": "af8bc0cecd79c25233cd71452a88065206cd4dbf",
-      "commit": "130efc3820405210577246373ae0ea3b7b3dd224",
+      "commit": "2a66760ff3f5a41dab071bc7f5fde4de730cbb42",
       "tree": "af8bc0cecd79c25233cd71452a88065206cd4dbf",
       "subject": "docs(blocks): explain extension paths and verified migration",
       "author_name": "Mohammad Ali Haider",
@@ -262,13 +308,15 @@
       "original_committer_date": "2026-10-16T00:29:15+05:30",
       "assigned_date": "2026-10-16T00:29:15+05:30",
       "workspace_tests": "passed",
-      "test_seconds": 9.17
+      "test_seconds": 9.17,
+      "previous_commit": "130efc3820405210577246373ae0ea3b7b3dd224",
+      "previous_assigned_date": "2026-10-16T00:29:15+05:30"
     },
     {
       "sequence": 18,
       "source_commit": "909fe6443d020a7bda4a67126fba9ed99b231999",
       "source_tree": "b6a53e986edc924494dd6d359f9ea3b6685f117d",
-      "commit": "50047bb03eafe714c1609f17fc6ca7d9cfb829d2",
+      "commit": "08ed2e174daff8b41dc4acde78253b14b89768c4",
       "tree": "9a0a4ab63ec3b69eee8d543b34ec7cf8f08fd12c",
       "subject": "refactor(blocks): isolate mechanics and share placement rules",
       "author_name": "Mohammad Ali Haider",
@@ -277,13 +325,15 @@
       "original_committer_date": "2026-10-16T01:36:33+05:30",
       "assigned_date": "2026-10-16T01:36:33+05:30",
       "workspace_tests": "passed",
-      "test_seconds": 7.22
+      "test_seconds": 7.22,
+      "previous_commit": "50047bb03eafe714c1609f17fc6ca7d9cfb829d2",
+      "previous_assigned_date": "2026-10-16T01:36:33+05:30"
     },
     {
       "sequence": 19,
       "source_commit": "790997f7d11f27c03c746a3bce0dfa2582962d7e",
       "source_tree": "f19f19d765de851d48eeb9587e9054616aaa057a",
-      "commit": "e0c08302d7bddac7741078228b6423651fc6ba07",
+      "commit": "18982dda10dc9fb4ce0c9344e3b12b19979a066b",
       "tree": "03ab5c8b4208aaae091ed38e4026ff210e546d1a",
       "subject": "docs(dev): track engine systems and separate playable builds",
       "author_name": "Mohammad Ali Haider",
@@ -293,13 +343,15 @@
       "assigned_date": "2026-10-16T02:33:57+05:30",
       "date_kind": "actual",
       "workspace_tests": "passed",
-      "test_seconds": 6.84
+      "test_seconds": 6.84,
+      "previous_commit": "e0c08302d7bddac7741078228b6423651fc6ba07",
+      "previous_assigned_date": "2026-10-16T02:33:57+05:30"
     },
     {
       "sequence": 20,
       "source_commit": "466c3ffb19d13675a2b39d3115fda62a4746f4d8",
       "source_tree": "3bc4e102f9aba526d9191d8a6d6ddbab8390cd6e",
-      "commit": "a2ad11431db680bb5b7da8b5b75c8765ff8f7d76",
+      "commit": "2c68b8d8ff0018478540af3187048cde1b8413a7",
       "tree": "73ee6e055c0a6da31b414faa713b1e624619f8fc",
       "subject": "feat(ui): share themed widgets across inventory and code screens",
       "author_name": "Mohammad Ali Haider",
@@ -309,13 +361,15 @@
       "assigned_date": "2026-10-16T03:03:36+05:30",
       "date_kind": "actual",
       "workspace_tests": "passed",
-      "test_seconds": 19.31
+      "test_seconds": 19.31,
+      "previous_commit": "a2ad11431db680bb5b7da8b5b75c8765ff8f7d76",
+      "previous_assigned_date": "2026-10-16T03:03:36+05:30"
     },
     {
       "sequence": 21,
       "source_commit": "8a7737c8d4080557e22165fa06c75f5f67455dc2",
       "source_tree": "b2710611ba8d99707d3f4e638b499362823710d9",
-      "commit": "893e540ca76b125838f4611917ab248ea49d011c",
+      "commit": "58f9ad6243624afccfc7c4dc8b87baf32cf3f5e5",
       "tree": "71a0fb177300ae6df5046f3dc8cc020a7f00293f",
       "subject": "docs(ui): record verified framework and remaining systems",
       "author_name": "Mohammad Ali Haider",
@@ -325,7 +379,821 @@
       "assigned_date": "2026-10-16T03:03:36+05:30",
       "date_kind": "actual",
       "workspace_tests": "passed",
-      "test_seconds": 7.02
+      "test_seconds": 7.02,
+      "previous_commit": "893e540ca76b125838f4611917ab248ea49d011c",
+      "previous_assigned_date": "2026-10-16T03:03:36+05:30"
+    }
+  ],
+  "rewrite_mapping": [
+    {
+      "previous_commit": "d6f2b9e1c4871f1c4f901170356e839eec9b48b6",
+      "commit": "1de2da5d2a02629d8cd3cd4ea965049335469c5e",
+      "tree": "5214592177930775cfd841afecc196e38120f8e2",
+      "subject": "import(v1): playable engine, inventory, flight and JSON geometry",
+      "previous_dates": {
+        "author": "2026-06-16T10:48:41+05:30",
+        "committer": "2026-06-16T10:48:41+05:30"
+      },
+      "dates": {
+        "author": "2026-09-19T14:52:30+05:30",
+        "committer": "2026-09-19T14:52:30+05:30"
+      },
+      "date_kind": "reconstructed"
+    },
+    {
+      "previous_commit": "d44246c19a712aea7d40b88d9b63b5ce138080ae",
+      "commit": "1636f31a9d60e71658e697b89f458948198a2c23",
+      "tree": "5f286845eaeee0211ce4df940e2e16d699b2e337",
+      "subject": "feat(startup): show loading while preparing the world",
+      "previous_dates": {
+        "author": "2026-06-23T18:49:18+05:30",
+        "committer": "2026-06-23T18:49:18+05:30"
+      },
+      "dates": {
+        "author": "2026-09-19T19:43:13+05:30",
+        "committer": "2026-09-19T19:43:13+05:30"
+      },
+      "date_kind": "reconstructed"
+    },
+    {
+      "previous_commit": "e5375828a72db93a9d15451fc6079ada9cc1220a",
+      "commit": "7c1d8879e788b48cb63e3275b5971dfdd525e05d",
+      "tree": "a867755406c2b45b48f291c1a301f8fcc43b88ab",
+      "subject": "perf(startup): bound graphics copies per frame",
+      "previous_dates": {
+        "author": "2026-06-28T18:29:00+05:30",
+        "committer": "2026-06-28T18:29:00+05:30"
+      },
+      "dates": {
+        "author": "2026-09-22T11:11:23+05:30",
+        "committer": "2026-09-22T11:11:23+05:30"
+      },
+      "date_kind": "reconstructed"
+    },
+    {
+      "previous_commit": "b7b3a3d98310cc2dcee571275bc9854cc8f1fa42",
+      "commit": "04e537d5eb42dea8ee265fa5b8455e9bf8119083",
+      "tree": "f4d8ebc2ae9876ef4569a64f038442cfaeaab1e0",
+      "subject": "feat(inventory): render a depth-tested player preview",
+      "previous_dates": {
+        "author": "2026-06-30T10:33:33+05:30",
+        "committer": "2026-06-30T10:33:33+05:30"
+      },
+      "dates": {
+        "author": "2026-09-25T12:51:30+05:30",
+        "committer": "2026-09-25T12:51:30+05:30"
+      },
+      "date_kind": "reconstructed"
+    },
+    {
+      "previous_commit": "1eaf8021b029916492e81fd82478c7989df747fd",
+      "commit": "9f1bf2f1d6f973f218160ae2fbcde906f4da701f",
+      "tree": "739fec2a3147b3d6b71571d872884bbe63fdd1ab",
+      "subject": "feat(game): settings, sprint, slab states, stairs and glass",
+      "previous_dates": {
+        "author": "2026-07-02T21:28:09+05:30",
+        "committer": "2026-07-02T21:28:09+05:30"
+      },
+      "dates": {
+        "author": "2026-09-25T17:33:26+05:30",
+        "committer": "2026-09-25T17:33:26+05:30"
+      },
+      "date_kind": "reconstructed"
+    },
+    {
+      "previous_commit": "353d5088f82228dc8fbbf350f0c959d3d96299bf",
+      "commit": "fb195cc7444d9242d2f92f4f28840bb89f0e890d",
+      "tree": "b0d5c88aef809bba3da3e2a68bb01d737d587555",
+      "subject": "feat(player): toggle flight with a double jump",
+      "previous_dates": {
+        "author": "2026-07-10T10:48:36+05:30",
+        "committer": "2026-07-10T10:48:36+05:30"
+      },
+      "dates": {
+        "author": "2026-09-25T18:49:02+05:30",
+        "committer": "2026-09-25T18:49:02+05:30"
+      },
+      "date_kind": "reconstructed"
+    },
+    {
+      "previous_commit": "72f5cd08efc563a5253df0d18785f9e0cbe8b3b4",
+      "commit": "b3240eac9b3e1dfc93872b648ad168b2fd6ba128",
+      "tree": "6d2f28f2ab8d109df4dde2f864e7ac8fd31309bf",
+      "subject": "feat(world): extend render distance to 255 with distant terrain",
+      "previous_dates": {
+        "author": "2026-07-16T12:16:47+05:30",
+        "committer": "2026-07-16T12:16:47+05:30"
+      },
+      "dates": {
+        "author": "2026-09-29T14:19:37+05:30",
+        "committer": "2026-09-29T14:19:37+05:30"
+      },
+      "date_kind": "reconstructed"
+    },
+    {
+      "previous_commit": "9f2e3cb9a3515a9ca131dd79750724cd854e73a2",
+      "commit": "7ecd515c56bfb1f2a1181e44f61c4ccfb474c4ca",
+      "tree": "7b78c19c332c4b00088ae33db53c6fb8d8fe47d1",
+      "subject": "fix(lod): preserve detail and blend stitched terrain transitions",
+      "previous_dates": {
+        "author": "2026-07-21T22:14:09+05:30",
+        "committer": "2026-07-21T22:14:09+05:30"
+      },
+      "dates": {
+        "author": "2026-10-01T09:30:14+05:30",
+        "committer": "2026-10-01T09:30:14+05:30"
+      },
+      "date_kind": "reconstructed"
+    },
+    {
+      "previous_commit": "1b1e1271d9376d8f8f226dc058ee5e2ae1377809",
+      "commit": "8d27d13dc0f55bd39830e369d724bbdd2eaa1397",
+      "tree": "b33feafd913727b44c08679b33f0a01ee123a61a",
+      "subject": "refactor(engine): organize modules by responsibility",
+      "previous_dates": {
+        "author": "2026-07-22T18:17:32+05:30",
+        "committer": "2026-07-22T18:17:32+05:30"
+      },
+      "dates": {
+        "author": "2026-10-01T13:51:25+05:30",
+        "committer": "2026-10-01T13:51:25+05:30"
+      },
+      "date_kind": "reconstructed"
+    },
+    {
+      "previous_commit": "e57c3c36cbe13074d668ea3f3ffe35ec6e988f36",
+      "commit": "4c197b48ad8a80ca83cd28280e30dec45b9acd87",
+      "tree": "04f197dea25d668ffe68fd0eb662fa7feda1d917",
+      "subject": "test(native): wait for LOD crossings before ending capture",
+      "previous_dates": {
+        "author": "2026-07-28T12:24:34+05:30",
+        "committer": "2026-07-28T12:24:34+05:30"
+      },
+      "dates": {
+        "author": "2026-10-04T15:20:54+05:30",
+        "committer": "2026-10-04T15:20:54+05:30"
+      },
+      "date_kind": "reconstructed"
+    },
+    {
+      "previous_commit": "a042df9c8ec5282e5eb9d387348e4ac30bc584f3",
+      "commit": "e9ca7040338f8aaf620f545a808fbf7e61084ac2",
+      "tree": "2caae7b183132ce7950e1ba6deca527749fc0a0b",
+      "subject": "docs(dev): add manual Cargo workflow and VS Code setup",
+      "previous_dates": {
+        "author": "2026-08-12T10:02:49+05:30",
+        "committer": "2026-08-12T10:02:49+05:30"
+      },
+      "dates": {
+        "author": "2026-10-08T09:06:03+05:30",
+        "committer": "2026-10-08T09:06:03+05:30"
+      },
+      "date_kind": "reconstructed"
+    },
+    {
+      "previous_commit": "c233e32229ac908f5a34b84a577ce9c5a16c149d",
+      "commit": "314d97f5119888873306d4fd17d77d3279bdc68b",
+      "tree": "67af31f6104e8d5e2a912f6cc11c44e0f631dca0",
+      "subject": "fix(dev): use project data for direct Cargo launches",
+      "previous_dates": {
+        "author": "2026-08-21T16:22:53+05:30",
+        "committer": "2026-08-21T16:22:53+05:30"
+      },
+      "dates": {
+        "author": "2026-10-08T11:30:29+05:30",
+        "committer": "2026-10-08T11:30:29+05:30"
+      },
+      "date_kind": "reconstructed"
+    },
+    {
+      "previous_commit": "6baf994bf1d40410bd1ce73a6e8de2225b62f00b",
+      "commit": "a07a5a3af2f5fa083f33a81efbce01fc061e2eda",
+      "tree": "2ce2249289f5fe64198edd263ade3ddb065555b6",
+      "subject": "docs(dev): clarify retained research records and cleanup",
+      "previous_dates": {
+        "author": "2026-08-22T22:09:33+05:30",
+        "committer": "2026-08-22T22:09:33+05:30"
+      },
+      "dates": {
+        "author": "2026-10-08T18:55:37+05:30",
+        "committer": "2026-10-08T18:55:37+05:30"
+      },
+      "date_kind": "reconstructed"
+    },
+    {
+      "previous_commit": "1d979e7ae47f2dcb2dda1bdfa8521d794688321f",
+      "commit": "29bfd2b7c503bdd0b30e688997459cf532ffd3c7",
+      "tree": "c42fa9a514d396104e8f9dcdfe5bcd8f72b0f4d0",
+      "subject": "chore(project): rename to Minecraft Rust Edition",
+      "previous_dates": {
+        "author": "2026-08-26T11:00:32+05:30",
+        "committer": "2026-08-26T11:00:32+05:30"
+      },
+      "dates": {
+        "author": "2026-10-12T14:21:12+05:30",
+        "committer": "2026-10-12T14:21:12+05:30"
+      },
+      "date_kind": "reconstructed"
+    },
+    {
+      "previous_commit": "56ce71220cb383591401b85bb9338f2b3cd47374",
+      "commit": "84abfb1a4625422ab2345b1ae0c10672dcf124e1",
+      "tree": "5100eb6285ca48d06c43c595c7a09a786de3ce67",
+      "subject": "refactor(blocks): compile unified packs into shared component states",
+      "previous_dates": {
+        "author": "2026-09-24T13:21:25+05:30",
+        "committer": "2026-09-24T13:21:25+05:30"
+      },
+      "dates": {
+        "author": "2026-10-14T17:00:49+05:30",
+        "committer": "2026-10-14T17:00:49+05:30"
+      },
+      "date_kind": "reconstructed"
+    },
+    {
+      "previous_commit": "5d6e09d7eeeaa41135f2cf5c3c211425a75752cf",
+      "commit": "76d849e923ef4599f9835f4fa78ab02ba62008e4",
+      "tree": "def1d1ebaa0938dc4138e23cb8d3a6d5e0ec7c64",
+      "subject": "feat(blocks): share placement behaviors and budget signal updates",
+      "previous_dates": {
+        "author": "2026-09-30T11:08:31+05:30",
+        "committer": "2026-09-30T11:08:31+05:30"
+      },
+      "dates": {
+        "author": "2026-10-14T20:42:06+05:30",
+        "committer": "2026-10-14T20:42:06+05:30"
+      },
+      "date_kind": "reconstructed"
+    },
+    {
+      "previous_commit": "130efc3820405210577246373ae0ea3b7b3dd224",
+      "commit": "2a66760ff3f5a41dab071bc7f5fde4de730cbb42",
+      "tree": "af8bc0cecd79c25233cd71452a88065206cd4dbf",
+      "subject": "docs(blocks): explain extension paths and verified migration",
+      "previous_dates": {
+        "author": "2026-10-16T00:29:15+05:30",
+        "committer": "2026-10-16T00:29:15+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T00:29:15+05:30",
+        "committer": "2026-10-16T00:29:15+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "50047bb03eafe714c1609f17fc6ca7d9cfb829d2",
+      "commit": "08ed2e174daff8b41dc4acde78253b14b89768c4",
+      "tree": "9a0a4ab63ec3b69eee8d543b34ec7cf8f08fd12c",
+      "subject": "refactor(blocks): isolate mechanics and share placement rules",
+      "previous_dates": {
+        "author": "2026-10-16T01:36:33+05:30",
+        "committer": "2026-10-16T01:36:33+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T01:36:33+05:30",
+        "committer": "2026-10-16T01:36:33+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "e0c08302d7bddac7741078228b6423651fc6ba07",
+      "commit": "18982dda10dc9fb4ce0c9344e3b12b19979a066b",
+      "tree": "03ab5c8b4208aaae091ed38e4026ff210e546d1a",
+      "subject": "docs(dev): track engine systems and separate playable builds",
+      "previous_dates": {
+        "author": "2026-10-16T02:33:57+05:30",
+        "committer": "2026-10-16T02:33:57+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T02:33:57+05:30",
+        "committer": "2026-10-16T02:33:57+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "a2ad11431db680bb5b7da8b5b75c8765ff8f7d76",
+      "commit": "2c68b8d8ff0018478540af3187048cde1b8413a7",
+      "tree": "73ee6e055c0a6da31b414faa713b1e624619f8fc",
+      "subject": "feat(ui): share themed widgets across inventory and code screens",
+      "previous_dates": {
+        "author": "2026-10-16T03:03:36+05:30",
+        "committer": "2026-10-16T03:03:36+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T03:03:36+05:30",
+        "committer": "2026-10-16T03:03:36+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "893e540ca76b125838f4611917ab248ea49d011c",
+      "commit": "58f9ad6243624afccfc7c4dc8b87baf32cf3f5e5",
+      "tree": "71a0fb177300ae6df5046f3dc8cc020a7f00293f",
+      "subject": "docs(ui): record verified framework and remaining systems",
+      "previous_dates": {
+        "author": "2026-10-16T03:03:36+05:30",
+        "committer": "2026-10-16T03:03:36+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T03:03:36+05:30",
+        "committer": "2026-10-16T03:03:36+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "b46efd8cddd54d515d0a1ff15483c7e3ac3b3103",
+      "commit": "259584f1f07b36f1803306e6a83a34b5f5b7dfde",
+      "tree": "644605a497788a46ca824eaa49d9cce39088af54",
+      "subject": "docs(history): retain complete tested milestones",
+      "previous_dates": {
+        "author": "2026-10-16T03:08:04+05:30",
+        "committer": "2026-10-16T03:08:04+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T03:08:04+05:30",
+        "committer": "2026-10-16T03:08:04+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "9c5b17e5103640ed07dc5cbd12c72c28aa72c01c",
+      "commit": "03e3ac5c809e57ee9d169255a7cee6c04cb3ede9",
+      "tree": "e01d6574c72f1fb80b67acbd052ac6c8708f2be9",
+      "subject": "feat(stations): add persistent crafting tables and furnaces",
+      "previous_dates": {
+        "author": "2026-10-16T03:30:58+05:30",
+        "committer": "2026-10-16T03:32:20+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T03:30:58+05:30",
+        "committer": "2026-10-16T03:32:20+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "fc4d73c5092a1927f0c6e94a3b6f59746037d63c",
+      "commit": "a0a2301415c76d8ccfbddca1b3ded8d680be5a67",
+      "tree": "9b3c07bfb626a047bf0d9d664086caa8edfac8f4",
+      "subject": "docs(stations): document controls authoring and verified behavior",
+      "previous_dates": {
+        "author": "2026-10-16T03:31:25+05:30",
+        "committer": "2026-10-16T03:33:04+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T03:31:25+05:30",
+        "committer": "2026-10-16T03:33:04+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "1ecfebbe0dade55cb87ff2fe3e6255f747ce16cc",
+      "commit": "bb350f1dd1cab3ebf4835b657c056a12696953bf",
+      "tree": "fb54e9158c097530dd39e23e090a6983e10abf2f",
+      "subject": "feat(player): add free camera skins and held geometry",
+      "previous_dates": {
+        "author": "2026-10-16T04:11:45+05:30",
+        "committer": "2026-10-16T04:11:45+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T04:11:45+05:30",
+        "committer": "2026-10-16T04:11:45+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "732db42889d2bbf60fc238701f06d29b41f398fe",
+      "commit": "97b1bd189442ca59850abff720181fddc2797609",
+      "tree": "7e91d153874f7138800053ae5db3d14c2114f5af",
+      "subject": "docs(player): document camera controls and verified skin rendering",
+      "previous_dates": {
+        "author": "2026-10-16T04:11:45+05:30",
+        "committer": "2026-10-16T04:11:45+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T04:11:45+05:30",
+        "committer": "2026-10-16T04:11:45+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "8dd397371113fdf4ea972406bd8dc7d1378198d6",
+      "commit": "204bae2eb44be815721c6fbc7ccc84a34e23ee9d",
+      "tree": "4a2ab4dde1b12ce32a8a650c1a618092f9163cc8",
+      "subject": "feat(terrain): add biomes and vertical chunk streaming",
+      "previous_dates": {
+        "author": "2026-10-16T05:15:24+05:30",
+        "committer": "2026-10-16T05:15:24+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T05:15:24+05:30",
+        "committer": "2026-10-16T05:15:24+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "a9a412f952ab3693b2cb2207872e28999e6beb51",
+      "commit": "98724eb0395b82747977356b80cd838c54fd8057",
+      "tree": "9ce35cb5f97af69d526214c5221bed71edc00489",
+      "subject": "docs(terrain): document authoring and verified streaming",
+      "previous_dates": {
+        "author": "2026-10-16T05:15:25+05:30",
+        "committer": "2026-10-16T05:15:50+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T05:15:25+05:30",
+        "committer": "2026-10-16T05:15:50+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "3b9136e15af6e8da223e726db73bee482fcf1d3c",
+      "commit": "e8b7b52588a13d697b90226ae29bb36447c9e091",
+      "tree": "64b9e0ff6349fab7c6215a803a1c532026d204e5",
+      "subject": "feat(fluids): add conservative water and swimming",
+      "previous_dates": {
+        "author": "2026-10-16T07:24:49+05:30",
+        "committer": "2026-10-16T07:24:49+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T07:24:49+05:30",
+        "committer": "2026-10-16T07:24:49+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "9277d1fb20ca18f46dcf1d7142582935a8f0a12d",
+      "commit": "b4ffea0674e6f4a57b709309963f009686a4c54f",
+      "tree": "23c549422ea7fa36d3e6e3c89c4ccded7d2ca9b1",
+      "subject": "docs(fluids): document controls and verified transport",
+      "previous_dates": {
+        "author": "2026-10-16T07:24:50+05:30",
+        "committer": "2026-10-16T07:24:50+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T07:24:50+05:30",
+        "committer": "2026-10-16T07:24:50+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "3bdc7961ec795cf5870696f913e2cf21e335e8cf",
+      "commit": "013944e27ba4c9bc8a128eec739eb646ab1bf7b8",
+      "tree": "09e7918fb713b552a61f8501043ff66d5b7887dc",
+      "subject": "feat(items): add measured water buckets",
+      "previous_dates": {
+        "author": "2026-10-16T08:00:23+05:30",
+        "committer": "2026-10-16T08:00:23+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T08:00:23+05:30",
+        "committer": "2026-10-16T08:00:23+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "3678f3138bc6d43512ed66e9c20cd34c209b9967",
+      "commit": "a820f58314f25af73110a87b9e4c109c2caf9df9",
+      "tree": "a9fd7990703c9194bac2736bb274016ef45522c2",
+      "subject": "docs(items): document buckets and verified item data",
+      "previous_dates": {
+        "author": "2026-10-16T08:00:23+05:30",
+        "committer": "2026-10-16T08:00:23+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T08:00:23+05:30",
+        "committer": "2026-10-16T08:00:23+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "b495eb26b886958a92f16c575ab84655573b61c4",
+      "commit": "7ca7570cb53cb7ba23eb3564d5ad0ce51980ebb2",
+      "tree": "18f3dbabf027ca400f17550413e739ba93601f80",
+      "subject": "fix(docs): restore UTF-8 punctuation",
+      "previous_dates": {
+        "author": "2026-10-16T08:06:59+05:30",
+        "committer": "2026-10-16T08:07:28+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T08:06:59+05:30",
+        "committer": "2026-10-16T08:07:28+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "bc349defc80659b84e69075f129095dbe131d191",
+      "commit": "5b1eba55dffdf8a3186151f6869f88ccbc79dee7",
+      "tree": "9361b3775f61f3ad7d3488f43a205829df1df339",
+      "subject": "feat(render): add deferred material lighting",
+      "previous_dates": {
+        "author": "2026-10-16T08:55:15+05:30",
+        "committer": "2026-10-16T08:55:15+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T08:55:15+05:30",
+        "committer": "2026-10-16T08:55:15+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "efbd9c2a1032e76c313d829283017c8d57973630",
+      "commit": "7b697720c833b15f1ae6901b7fb2f7c52df3f933",
+      "tree": "3190ab0a0367df9c0a205ef6a6e79e814c5e44dc",
+      "subject": "docs(render): document deferred controls and verification",
+      "previous_dates": {
+        "author": "2026-10-16T08:55:15+05:30",
+        "committer": "2026-10-16T08:55:15+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T08:55:15+05:30",
+        "committer": "2026-10-16T08:55:15+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "dc6571a5343928ad1aa144158a365697c2616d11",
+      "commit": "f34d85cfe3577ab268727d63294dd421c0eab7d2",
+      "tree": "edaa4c83e1a341e083dc22e1db3bc817d2e6b774",
+      "subject": "test(render): accept explicit lighting proof input",
+      "previous_dates": {
+        "author": "2026-10-16T08:58:47+05:30",
+        "committer": "2026-10-16T08:58:47+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T08:58:47+05:30",
+        "committer": "2026-10-16T08:58:47+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "b35d2b70c43607f6c045fd941cee3d7333c2f185",
+      "commit": "4bf239cf91a076b2c310d7ab1ca264682b9f2d19",
+      "tree": "76348d7c744508f64b3957df5ec091115934ea62",
+      "subject": "fix(render): accept DXR 1.2 hardware",
+      "previous_dates": {
+        "author": "2026-10-16T09:59:54+05:30",
+        "committer": "2026-10-16T09:59:54+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T09:59:54+05:30",
+        "committer": "2026-10-16T09:59:54+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "27bc0ca4a52817d4f1b6b19b7b1591f57a228987",
+      "commit": "ea92e95c12b4d35b1445f938196bbb31c91173a1",
+      "tree": "be8658afc0d309c0675c760a8e97ac2a125cd325",
+      "subject": "feat(render): add bounded hardware ray lighting",
+      "previous_dates": {
+        "author": "2026-10-16T09:59:54+05:30",
+        "committer": "2026-10-16T09:59:54+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T09:59:54+05:30",
+        "committer": "2026-10-16T09:59:54+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "fe7c93327ae13ad02d980e306983a5f8563ec8f1",
+      "commit": "7c1447d1d075572c97d41c7dc16a9234183da10a",
+      "tree": "1cac497ff6b6d3447119aa89dd4013b9262233bf",
+      "subject": "docs(render): document verified ray lighting",
+      "previous_dates": {
+        "author": "2026-10-16T09:59:54+05:30",
+        "committer": "2026-10-16T09:59:54+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T09:59:54+05:30",
+        "committer": "2026-10-16T09:59:54+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "f055a8ff3867daa527569e218b58ec050f127a13",
+      "commit": "c8fa93055f99855fae1c40712055e6b982ec1a6b",
+      "tree": "dc2dc9e36fb1c79401ec855b496aa97d99a233f8",
+      "subject": "feat(player): add wall and ledge movement",
+      "previous_dates": {
+        "author": "2026-10-16T10:31:20+05:30",
+        "committer": "2026-10-16T10:31:20+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T10:31:20+05:30",
+        "committer": "2026-10-16T10:31:20+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "c23c5c1b3ec4179d823e2265a15d0bf9370a6b09",
+      "commit": "3cba9e5f34a7e024102ecd2e50325475888a2c73",
+      "tree": "3ef80c0df56dc143e835289820f657a714f76bac",
+      "subject": "docs(player): document verified wall traversal",
+      "previous_dates": {
+        "author": "2026-10-16T10:31:20+05:30",
+        "committer": "2026-10-16T10:31:20+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T10:31:20+05:30",
+        "committer": "2026-10-16T10:31:20+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "534dd7b8fccab0ded5c19656dc08846fd778ea34",
+      "commit": "e0c4e322aac3a95944353a776df71b61a4fbc94d",
+      "tree": "15fd950b7af891ea98890eaefc0f3f47a203db19",
+      "subject": "feat(input): add Xbox controls and contextual UI",
+      "previous_dates": {
+        "author": "2026-10-16T11:31:12+05:30",
+        "committer": "2026-10-16T11:31:12+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T11:31:12+05:30",
+        "committer": "2026-10-16T11:31:12+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "352a3cf001dfd961315fc78812bb722b01736737",
+      "commit": "a2cae1b8da7c85c50dd5af80cbfdc643ed8fcbfe",
+      "tree": "8557bd7f17ef0c3ac2cf8db14aa8a279fb8520ed",
+      "subject": "docs(input): document verified controller support",
+      "previous_dates": {
+        "author": "2026-10-16T11:31:12+05:30",
+        "committer": "2026-10-16T11:31:12+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T11:31:12+05:30",
+        "committer": "2026-10-16T11:31:12+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "5ad1aeeaa2321fdc605bf6569ee69aab4598ab82",
+      "commit": "05f96eadbeb797ae4ce87c17bff7fa37270f2786",
+      "tree": "ab0c6f21c6dbc2a9af7fd7ba45461e17ac92e60c",
+      "subject": "feat(entities): add persistent mobs and bounded AI",
+      "previous_dates": {
+        "author": "2026-10-16T14:04:35+05:30",
+        "committer": "2026-10-16T14:04:35+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T14:04:35+05:30",
+        "committer": "2026-10-16T14:04:35+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "433935b6d317703d2b8ceaf549061a90548d2faf",
+      "commit": "e4b72e1a46a84e071028f096088957aa88e9ce00",
+      "tree": "e85e23e1d931e9b261c21938b75bbf61dd50a1e1",
+      "subject": "docs(entities): document verified engine systems",
+      "previous_dates": {
+        "author": "2026-10-16T14:04:35+05:30",
+        "committer": "2026-10-16T14:06:33+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T14:04:35+05:30",
+        "committer": "2026-10-16T14:06:33+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "92a5ff02eb4ad192c6c799a7558cd480087a8284",
+      "commit": "c9326d57921096f9a414a504792fc282629132aa",
+      "tree": "44adfcf6125f9e02953ead5d4180f270a40cdb1c",
+      "subject": "feat(items): add persistent offhand support",
+      "previous_dates": {
+        "author": "2026-10-16T16:18:02+05:30",
+        "committer": "2026-10-16T16:18:02+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T16:18:02+05:30",
+        "committer": "2026-10-16T16:18:02+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "d7b310ab3529baf3255f1f001521680fa33c50d1",
+      "commit": "952d269e732a40b7488a458f92a0431da0f4f4fb",
+      "tree": "96d0864b91d6fbad71bb97776b3ac0ee07206978",
+      "subject": "feat(world): add editable dimensions",
+      "previous_dates": {
+        "author": "2026-10-16T19:26:01+05:30",
+        "committer": "2026-10-16T19:26:01+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T19:26:01+05:30",
+        "committer": "2026-10-16T19:26:01+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "1354ddc7c64edbd7bf991128083ce2815d805485",
+      "commit": "96a95f0f086cad36d8233da0eb614cccbb61e6e6",
+      "tree": "719a183b3b4d9e421cea64d5019db8302e89876b",
+      "subject": "feat(ui): add chat commands and correct avatar hands",
+      "previous_dates": {
+        "author": "2026-10-16T21:48:58+05:30",
+        "committer": "2026-10-16T21:48:58+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T21:48:58+05:30",
+        "committer": "2026-10-16T21:48:58+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "1e75c97d360941f3f16a4946a5ad2f49c2b8fbf1",
+      "commit": "1478e48bbeeeea9d3e0c49d0406a61bdfd25d22b",
+      "tree": "708f1e63b303a6b5f1c46d9f9183e25031646d35",
+      "subject": "fix(physics): keep rounded contacts outside solids",
+      "previous_dates": {
+        "author": "2026-10-16T23:59:15+05:30",
+        "committer": "2026-10-16T23:59:15+05:30"
+      },
+      "dates": {
+        "author": "2026-10-16T23:59:15+05:30",
+        "committer": "2026-10-16T23:59:15+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "551b1c452f7b61f36f218eaf9dcf818ac08764b3",
+      "commit": "b7ff8bcecbd14f577b3de1d764787a6f0f67134d",
+      "tree": "df6e39b284c1384801076b5c012a412c800b8d38",
+      "subject": "feat(engine): add connected blocks and streaming updates",
+      "previous_dates": {
+        "author": "2026-10-17T01:01:50+05:30",
+        "committer": "2026-10-17T01:01:50+05:30"
+      },
+      "dates": {
+        "author": "2026-10-17T01:01:50+05:30",
+        "committer": "2026-10-17T01:01:50+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "143f727b307a59805d24da59a6ac18a82cfcceb0",
+      "commit": "61d6f172e011a24089a01055bc6bf14badc075dc",
+      "tree": "82d67c3e40e8a5dc0f0956209f5f2132d2d0144d",
+      "subject": "feat(ui): make inventory and screens configurable",
+      "previous_dates": {
+        "author": "2026-10-17T01:50:23+05:30",
+        "committer": "2026-10-17T01:50:23+05:30"
+      },
+      "dates": {
+        "author": "2026-10-17T01:50:23+05:30",
+        "committer": "2026-10-17T01:50:23+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "86f84b6693bede959379c57e02470371a94bfa53",
+      "commit": "89e6a17e9a8b058c7fdae1600fad3afed501ad21",
+      "tree": "2e88f8e896c64de779b1961d76d3a1b231f30a7e",
+      "subject": "feat(entities): add reusable creature skins",
+      "previous_dates": {
+        "author": "2026-10-17T02:49:53+05:30",
+        "committer": "2026-10-17T02:49:53+05:30"
+      },
+      "dates": {
+        "author": "2026-10-17T02:49:53+05:30",
+        "committer": "2026-10-17T02:49:53+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "27965e951a4075087e1012db15cf00ca828a169e",
+      "commit": "be9237e2adbc3d4decf24ac28190bcb22ff76c6f",
+      "tree": "35c96d1374f8a147a4d3f6e535fa18fc48538b4f",
+      "subject": "fix(render): preserve terrain during detail streaming",
+      "previous_dates": {
+        "author": "2026-10-17T03:55:16+05:30",
+        "committer": "2026-10-17T03:55:16+05:30"
+      },
+      "dates": {
+        "author": "2026-10-17T03:55:16+05:30",
+        "committer": "2026-10-17T03:55:16+05:30"
+      },
+      "date_kind": "actual_preserved"
+    },
+    {
+      "previous_commit": "89594a350d3b6f1a4b3f2a6c94518e5c351a6d1e",
+      "commit": "c2913e4adf6a4bd7cd991dbd868f4ca84c84414f",
+      "tree": "3b1ab652e57c8b8d5fd9210b27303d07dd0ae51c",
+      "subject": "feat(engine): add authored animations",
+      "previous_dates": {
+        "author": "2026-10-17T04:33:58+05:30",
+        "committer": "2026-10-17T04:33:58+05:30"
+      },
+      "dates": {
+        "author": "2026-10-17T04:33:58+05:30",
+        "committer": "2026-10-17T04:33:58+05:30"
+      },
+      "date_kind": "actual_preserved"
     }
   ]
 }
