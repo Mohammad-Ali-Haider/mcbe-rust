@@ -14,3 +14,5 @@ __pycache__/
 *.dll
 *.pdb
 *.zip
+*.[mM][dD]
+!/README.md

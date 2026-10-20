@@ -1,7 +1,7 @@
 # Minecraft Rust Edition
 
-An expandable Rust voxel engine for your own block game. This is the single
-active project; development versions now live in Git history.
+A Rust voxel engine with editable block definitions, procedural worlds and
+multiple rendering paths. Built as a foundation for an expandable block game.
 
 ## Screenshots
 
@@ -36,8 +36,10 @@ reference column is derived from its counters, not a fresh A/B timing run.
 An earlier finite-court A/B benchmark reduced **39,172 to 3,212 triangles
 (91.8%)**, with **3.7% higher measured event/present throughput** in that small
 scene. Geometry savings and frame-rate gains are different measurements. See
-[performance evidence and reproduction](docs/PERFORMANCE.md) for the raw numbers,
-run conditions, historical timing results and measurement limits.
+[recorded performance data](docs/performance/metrics.json) for the raw counters
+and run conditions. The earlier timing used ten-second ABBA runs with 120 warmup
+frames; event/present intervals measure application throughput, not display
+refresh rate or GPU execution time.
 
 ### How the engine saves work
 
@@ -63,118 +65,106 @@ geometry/sorting paths and do not all merge into those rectangles.
 **Inspect it yourself:** F3 shows rendering counters, F4 toggles triangle edges,
 F8 switches greedy/reference meshing, and F2 switches asynchronous/synchronous
 meshing. Chunk culling currently uses camera/range bounds rather than GPU
-occlusion queries or hierarchical-Z. See [Rendering](docs/RENDERING.md) for the
-Forward, Deferred and hardware-ray tradeoffs.
+occlusion queries or hierarchical-Z. Forward is the default; Deferred and
+hardware ray-traced lighting are optional settings. Unsupported ray hardware
+falls back to Deferred.
 
-## Open and run manually
+## Build and run
 
-Open `D:\Recontruction Projects\Minecraft Rust Edition` with VS Code → File → Open Folder.
-Open Terminal → New Terminal, then run:
+Use Windows 11 with a Rust toolchain supporting edition 2024 and the Visual Studio
+C++ build tools/Windows SDK. The native renderer uses wgpu and Direct3D 12.
 
 ```powershell
-cargo run --release
+git clone git@github.com:Mohammad-Ali-Haider/mcbe-rust.git
+cd mcbe-rust
+cargo run --release --locked
 ```
 
-Cargo compiles changed Rust code in release mode and starts the game, loading
-editable assets from this folder and continuing its latest saved world. With no
-save, it creates a generated world. The window opens maximized; F11 toggles
-borderless fullscreen. Close the game before compiling another build.
-
-Plain `cargo run` also starts the game, using a slower debug build. Both commands
-use this folder’s assets and continue the latest save. No launcher script is needed.
-
-The complete explicit command is:
+Open the cloned folder in VS Code and run commands from its terminal. Cargo uses
+the project assets and continues the latest saved world, or generates one if no
+save exists. The window opens maximized; F11 toggles borderless fullscreen.
+Close the game before rebuilding its executable. Plain `cargo run` uses a slower
+debug build.
 
 ```powershell
-cargo run --release -p mcbe-client -- --engine --engine-home . --engine-continue
-```
-
-Other useful commands:
-
-```powershell
-cargo new-world     # start fresh with the current definitions
+cargo new-world     # generate a fresh world
 cargo original      # built-in colors without installed Minecraft textures
 cargo test --workspace --locked
-cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo fmt --all -- --check
 ```
 
-Rust and Windows MSVC build tools are already available on this PC. The project
-uses Rust 2024 and the checked-in Cargo.lock. Native rendering uses wgpu/Direct3D
-12. Minecraft textures are read from the installed Windows game; they are not
-stored in Git. Use `cargo original` without that installation.
+Minecraft textures can be read from a local Windows installation. They are not
+included in this repository; use `cargo original` to run without that installation.
+World saves, preferences and build output are stored locally.
 
-To build and run the executable directly:
+To run the compiled executable directly:
 
 ```powershell
 cargo build --release --locked
 .\target\release\mcbe-client.exe --engine --engine-home . --engine-continue
 ```
 
-## Find the code
+## Engine features
 
-- `crates/mcbe-client/src/main.rs`: app state, window events and frame loop.
-- `crates/mcbe-client/src/engine/`: playable engine, grouped by responsibility.
-- `content/base/blocks/`: one JSON definition per block family.
-- `content/base/models/` and `templates/`: shared models and component defaults.
-- `content/base/recipes/crafting.json`: editable crafting recipes.
-- `crates/mcbe-client/src/engine/blocks/`: typed components, state registry and compiled shapes.
-- `crates/mcbe-core/`: reusable physics/inventory and earlier Bedrock data readers.
-- `crates/mcbe-cli/`: optional research tools, separate from the playable entry point.
+- Procedural biomes, caves, ravines, oceans and rivers; editable dimensions with
+  separate world state and shared inventory.
+- Walking, sprinting, sneaking, flight, noclip, swimming and wall traversal.
+- Inventory, crafting, persistent furnaces, offhand items, measured buckets and
+  water flow; keyboard/mouse and Xbox/XInput controller support.
+- JSON block families, slab/stair states, glass, custom cuboid models and shared
+  behavior/component systems; reload content with F6.
+- Data-authored creatures, animation, personal skins, first/third-person views
+  and a free camera.
+- Settings for 2–255 chunk views, FOV, sensitivity, GUI scale, VSync and FPS limit.
 
-Start with [Architecture and source map](docs/ARCHITECTURE.md), then read
-[Edit, run and commit](docs/DEVELOPMENT.md), [Blocks](docs/BLOCKS.md),
-[Controls](docs/CONTROLS.md), [Chat and commands](docs/CHAT.md), [UI authoring](docs/UI.md), [Animations](docs/ANIMATIONS.md), [Inventory and storage](docs/INVENTORY.md), [Stations](docs/STATIONS.md), [Cameras and skins](docs/CAMERA.md), [Terrain](docs/TERRAIN.md), [Dimensions and generation](docs/DIMENSIONS.md), [Water and swimming](docs/FLUIDS.md), [Items and buckets](docs/ITEMS.md), [Movement](docs/MOVEMENT.md), [Rendering](docs/RENDERING.md) and [Milestone history](docs/HISTORY.md).
+Nearby blocks retain full collision and detail within 8 chunks. Far terrain uses
+stitched surface geometry and progressive transitions. That approximation does
+not fully represent caves, transparent buildings or edits to distant generated
+trees. Very large viewing distances require more memory and preparation time.
 
-Walking, sprinting, sneaking, flight/noclip, inventory/crafting, JSON models,
-slab/stair states, glass, unified component packs, optional signal behaviors,
-crafting tables, persistent furnaces, F5 perspectives/free camera, personal skins,
-first-person hands/held geometry, climate biomes/caves/ravines/oceans/rivers,
-dynamic vertical chunks, conservative water flow/currents/swimming and measured buckets, settings, own PNG materials, background saves/loading, optional deferred sun/material lighting
-and 2–255 chunk views are implemented. Nearby blocks retain full collision and
-detail within 8 chunks. Distant hills/trees use stitched, progressively blended
-geometry. Caves, transparent buildings and edits to distant generated trees are
-not fully represented by that surface approximation. Maximum-range LOD uses
-more memory than the earlier flat approximation.
+## Controls
 
-Local vanilla cow, pig, creeper and zombie models/skins are optional resource
-examples alongside the original creatures. Use `/spawn cow` (or another registered
-kind) to try one on clear ground. Own PNG skins use the same cached instanced
-renderer; see [Entities](docs/ENTITIES.md).
+| Input | Action |
+|---|---|
+| WASD / mouse | Move / look |
+| Space | Jump; double-tap toggles flight |
+| F / N | Toggle collision flight / noclip |
+| Shift / Ctrl | Sneak or descend / sprint |
+| Left / right mouse | Remove / place or interact |
+| Number keys / wheel | Select hotbar slot |
+| E / Escape | Inventory / pause and settings |
+| F5 / F11 | Camera perspective / borderless fullscreen |
+| F3 / F4 | Render statistics / triangle wireframe |
+| F6 | Reload content, UI and textures |
+| Ctrl+S / F9 | Save / reload world |
+| V / Alt+right mouse | Swap hands / use offhand |
+| U | Dimension picker |
+| T / slash | Local chat / commands |
 
-Run `cargo new-world` to try the three editable dimension examples. Press U or
-Escape -> Dimensions to visit the surface, caverns and floating islands. Worlds
-retain separate edits, fluids, furnaces, entities and return positions; inventory
-and offhand are shared. Add named worlds through JSON; see DIMENSIONS.md.
+Try `/give glass 64`, `/spawn cow` or `/travel islands`. Tab completes command
+names. In water, Space rises, Shift dives and Ctrl swims faster. Hold C at a wall
+to grip, W/S to climb, Ctrl plus movement to wall-run and Space to jump away.
 
-Run `cargo new-world` to try the new terrain. Continuing an older save keeps its
-original generator. Water flow, swimming and persistent measured buckets are implemented.
+## Source layout
 
-Runtime worlds, preferences, build output and verification captures are ignored
-by Git. No launcher scripts or copied checkpoint packages belong in this project.
+| Path | Responsibility |
+|---|---|
+| [Client entry point](crates/mcbe-client/src/main.rs) | Window events, application state and frame loop |
+| [Engine](crates/mcbe-client/src/engine/) | World simulation, movement, entities, UI and rendering |
+| [Block system](crates/mcbe-client/src/engine/blocks/) | Typed components, registered behavior, block states and collision shapes |
+| [Block definitions](content/base/blocks/) | One JSON definition per block family |
+| [Models](content/base/models/) and [templates](content/base/templates/) | Reusable geometry and component defaults |
+| [Crafting recipes](content/base/recipes/crafting.json) | Editable recipe data |
+| [Core library](crates/mcbe-core/) | Shared physics, inventory and Bedrock data readers |
+| [CLI](crates/mcbe-cli/) | Optional data inspection tools |
+| [Development dependencies](requirements-dev.txt) | Python tooling for image and verification tasks |
 
-The former `Blockwork` project was renamed in place. Retained MCBE research is
-under ignored `.local/legacy-research/`; there is no separate working project.
+Blocks share registered behaviors and reusable components rather than duplicating
+placement, collision or rendering code per material. Rust traits provide behavior
+interfaces; structs and enums compose the block state and components. Definitions,
+models and behavior selection live in one content pack.
 
-Ray-traced lighting is available through Escape -> Settings -> Rendering on
-supported DX12 hardware. Forward remains the default for maximum speed.
-Reflection/indirect switches and quality budgets are documented in
-[Rendering](docs/RENDERING.md); unsupported hardware uses Deferred lighting.
-
-Wall traversal: hold C to grip, W/S to climb, Ctrl plus movement to wall-run,
-Space to jump away or pull onto a ledge, and Shift to drop.
-
-Xbox/XInput controllers support gameplay, settings, inventory, station transfers
-and search. Contextual bottom-corner hints switch with the active input device.
-See [Controllers](docs/CONTROLLERS.md) for controls and UI glyph customization.
-
-Data-authored mobs now wander, flee, follow and approach players, with shared
-mouse/controller interaction, collision, instanced rendering and persistent saves.
-See [Entities and mob AI](docs/ENTITIES.md) to register models and behaviors.
-
-Offhand: equip the slot beside the inventory preview, V swaps hands, and Alt+RMB
-uses the offhand (Xbox: RS click + X / LT). Both items render in F5 views.
-Schema-12 saves preserve offhand contents and migrate older worlds.
-
-Press T for local chat or / to start a command. `/give glass 64` adds items;
-`/travel islands` visits a registered dimension. Tab completes names. See CHAT.md.
+The vendored [wgpu-hal](vendor/wgpu-hal/) 25.0.2 dependency retains its MIT and
+Apache-2.0 licenses. Its DX12 capability check accepts ray-tracing tiers at least
+1.1, including tier 1.2 devices, while retaining the shader-model and feature
+checks. Cargo selects this local patch through the workspace manifest.

@@ -16,5 +16,5 @@ sha2 = "0.10"
 flate2 = "1.1"
 
 [patch.crates-io]
-# wgpu 25 incorrectly excludes DXR 1.2 GPUs; see vendor/wgpu-hal/PATCH.md.
+# wgpu 25 excludes DXR 1.2 GPUs; the local patch accepts ray-tracing tiers >= 1.1.
 wgpu-hal = { path = "vendor/wgpu-hal" }
